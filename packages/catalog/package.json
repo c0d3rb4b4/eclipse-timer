@@ -1,0 +1,19 @@
+{
+  "name": "@eclipse-timer/catalog",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@eclipse-timer/shared": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"(add eslint later)\"",
+    "test": "echo \"(add tests later)\""
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

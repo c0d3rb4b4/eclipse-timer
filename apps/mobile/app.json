@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Eclipse Timer",
+    "slug": "eclipse-timer",
+    "scheme": "eclipsetimer",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Eclipse Timer to access your location to compute eclipse timings."
+        }
+      ]
+    ]
+  }
+}

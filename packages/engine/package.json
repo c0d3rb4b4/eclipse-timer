@@ -1,0 +1,23 @@
+{
+  "name": "@eclipse-timer/engine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@eclipse-timer/shared": "workspace:*",
+    "@eclipse-timer/catalog": "workspace:*"
+  },
+  "scripts": {
+    "dev:one": "tsx src/dev/run_one.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"(add eslint later)\"",
+    "test": "echo \"(add tests later)\""
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.4.0"
+  }
+}

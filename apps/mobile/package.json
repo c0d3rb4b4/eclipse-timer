@@ -1,0 +1,29 @@
+{
+  "name": "@eclipse-timer/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"(add eslint later)\"",
+    "test": "echo \"(add tests later)\"",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@eclipse-timer/catalog": "workspace:*",
+    "@eclipse-timer/engine": "workspace:*",
+    "@eclipse-timer/shared": "workspace:*",
+    "expo": "~54.0.33",
+    "expo-location": "~19.0.8",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-maps": "1.20.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.17",
+    "typescript": "^5.4.0"
+  }
+}
