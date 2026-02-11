@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
 import MapView, { Marker, MapPressEvent, Region } from "react-native-maps";
 import * as Location from "expo-location";
+import { Animated, ActivityIndicator } from "react-native";
 
 import { loadCatalog } from "@eclipse-timer/catalog";
 import { computeCircumstances } from "@eclipse-timer/engine";
@@ -52,10 +53,45 @@ function nextEventCountdown(c: Circumstances) {
 }
 
 export default function App() {
+  const mapRef = useRef<MapView>(null);
+  const [isComputing, setIsComputing] = useState(false);
+  const [didComputeFlash, setDidComputeFlash] = useState(false);
+
+  const resultFlash = useRef(new Animated.Value(0)).current; // 0..1
+
   const catalog = useMemo(() => loadCatalog(), []);
   const eclipse: EclipseRecord | undefined = catalog[0]; // MVP: first eclipse
 
   const [pin, setPin] = useState({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
+
+  type MapType3 = "standard" | "satellite" | "hybrid";
+  const [mapType, setMapType] = useState<MapType3>("standard");
+
+  const cycleMapType = () => {
+    setMapType((m) => (m === "standard" ? "satellite" : m === "satellite" ? "hybrid" : "standard"));
+  };
+
+  const jumpTo = (lat: number, lon: number, delta = 3) => {
+    setPin({ lat, lon });
+    setRegion((r) => ({
+      ...r,
+      latitude: lat,
+      longitude: lon,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
+    }));
+
+    // Imperative nudge (fixes “press twice”)
+    mapRef.current?.animateToRegion(
+      {
+        latitude: lat,
+        longitude: lon,
+        latitudeDelta: delta,
+        longitudeDelta: delta,
+      },
+      450
+    );
+  };
 
   const [region, setRegion] = useState<Region>({
     latitude: pin.lat,
@@ -79,30 +115,58 @@ export default function App() {
     }));
   };
 
+  const movePinKeepZoom = (lat: number, lon: number) => {
+    setPin({ lat, lon });
+    setRegion((r) => ({ ...r, latitude: lat, longitude: lon }));
+  };
+
   const onMapPress = (e: MapPressEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
-    setPinAndRegion(latitude, longitude);
-    setStatus("Pin set (tap)");
+    movePinKeepZoom(latitude, longitude);
   };
 
   const onDragEnd = (e: any) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
-    setPinAndRegion(latitude, longitude);
-    setStatus("Pin set (drag)");
+    movePinKeepZoom(latitude, longitude);
   };
 
   const useGps = async () => {
     try {
       setStatus("Requesting location permission…");
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (perm.status !== "granted") {
         setStatus("Location permission denied");
         return;
       }
-      setStatus("Getting GPS fix…");
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setPinAndRegion(loc.coords.latitude, loc.coords.longitude, 2);
-      setStatus("Pin set from GPS");
+
+      setStatus("Getting location…");
+
+      // 1) Instant-ish: last known
+      const last = await Location.getLastKnownPositionAsync();
+      if (last?.coords) {
+        jumpTo(last.coords.latitude, last.coords.longitude, 2);
+        setStatus("Pin set from last known location");
+      }
+
+      // 2) Better fix: current position, but don’t wait forever
+      const timeoutMs = 5000;
+
+      const currentPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), timeoutMs)
+      );
+
+      const current = (await Promise.race([currentPromise, timeoutPromise])) as any;
+
+      if (current?.coords) {
+        jumpTo(current.coords.latitude, current.coords.longitude, 2);
+        setStatus("Pin set from GPS");
+      } else if (!last) {
+        setStatus("GPS timed out (try again or move near a window)");
+      }
     } catch (err: any) {
       setStatus(`GPS error: ${err?.message ?? String(err)}`);
     }
@@ -113,18 +177,36 @@ export default function App() {
       setStatus("No eclipse in catalog");
       return;
     }
+
     const observer: Observer = { latDeg: pin.lat, lonDeg: pin.lon, elevM: 0 };
 
+    setIsComputing(true);
+    setDidComputeFlash(false);
     setStatus(`Computing for ${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}…`);
+
     try {
       const out = computeCircumstances(eclipse, observer);
       setResult(out);
       setStatus("Computed");
+
+      // Flash the results card
+      resultFlash.setValue(0);
+      Animated.sequence([
+        Animated.timing(resultFlash, { toValue: 1, duration: 160, useNativeDriver: true }),
+        Animated.timing(resultFlash, { toValue: 0, duration: 420, useNativeDriver: true }),
+      ]).start();
+
+      // Briefly show “Done” state on button
+      setDidComputeFlash(true);
+      setTimeout(() => setDidComputeFlash(false), 800);
     } catch (err: any) {
       setStatus(`Compute error: ${err?.message ?? String(err)}`);
       setResult(null);
+    } finally {
+      setIsComputing(false);
     }
   };
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -137,10 +219,12 @@ export default function App() {
 
       <View style={styles.mapWrap}>
         <MapView
+          ref={mapRef}
           style={styles.map}
           region={region}
           onRegionChangeComplete={(r) => setRegion(r)}
           onPress={onMapPress}
+          mapType={mapType}
         >
           <Marker
             coordinate={{ latitude: pin.lat, longitude: pin.lon }}
@@ -150,23 +234,41 @@ export default function App() {
             description={`${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}`}
           />
         </MapView>
+
+        {/* Overlay: map type toggle */}
+        <Pressable style={styles.mapOverlayBtn} onPress={cycleMapType}>
+          <Text style={styles.mapOverlayBtnText}>
+            {mapType === "standard" ? "Standard" : mapType === "satellite" ? "Satellite" : "Hybrid"}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.controls}>
-        <Pressable style={styles.btn} onPress={useGps}>
-          <Text style={styles.btnText}>Use GPS</Text>
-        </Pressable>
+        <View style={styles.btnRow}>
+          <Pressable style={styles.btn} onPress={useGps}>
+            <Text style={styles.btnText}>Use GPS</Text>
+          </Pressable>
 
-        <Pressable style={styles.btn} onPress={() => setPinAndRegion(GIBRALTAR.lat, GIBRALTAR.lon, 3)}>
-          <Text style={styles.btnText}>Gibraltar</Text>
-        </Pressable>
+          <Pressable style={styles.btn} onPress={() => jumpTo(GIBRALTAR.lat, GIBRALTAR.lon, 3)}>
+            <Text style={styles.btnText}>Gibraltar</Text>
+          </Pressable>
 
-        <Pressable style={styles.btn} onPress={() => setPinAndRegion(CENTRAL_1000.lat, CENTRAL_1000.lon, 3)}>
-          <Text style={styles.btnText}>Central 10:00</Text>
-        </Pressable>
+          <Pressable style={styles.btn} onPress={() => jumpTo(CENTRAL_1000.lat, CENTRAL_1000.lon, 3)}>
+            <Text style={styles.btnText}>Central 10:00</Text>
+          </Pressable>
+        </View>
 
-        <Pressable style={[styles.btn, styles.btnPrimary]} onPress={runCompute}>
-          <Text style={styles.btnText}>Compute</Text>
+        <Pressable
+          style={[styles.computeBtn, isComputing ? styles.computeBtnDisabled : null]}
+          onPress={runCompute}
+          disabled={isComputing}
+        >
+          <View style={styles.computeBtnInner}>
+            {isComputing ? <ActivityIndicator /> : null}
+            <Text style={styles.computeBtnText}>
+              {isComputing ? "Computing…" : didComputeFlash ? "Done" : "Compute"}
+            </Text>
+          </View>
         </Pressable>
       </View>
 
@@ -182,7 +284,25 @@ export default function App() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [
+                {
+                  scale: resultFlash.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.02],
+                  }),
+                },
+              ],
+              opacity: resultFlash.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 0.92],
+              }),
+            },
+          ]}
+        >
           <Text style={styles.cardTitle}>Results</Text>
           {!result ? (
             <Text style={styles.muted}>Press Compute to run the engine.</Text>
@@ -214,7 +334,7 @@ export default function App() {
               ) : null}
             </>
           )}
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -229,12 +349,54 @@ const styles = StyleSheet.create({
   mapWrap: { height: 260, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
 
+  computeBtnDisabled: {
+    opacity: 0.75,
+  },
+
+  computeBtnInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+
   controls: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    gap: 10,
+  },
+  btnRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  computeBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#2c3cff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  computeBtnText: {
+    color: "white",
+    fontWeight: "800",
+    fontSize: 16,
+  },
+
+  mapOverlayBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
-    paddingTop: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  mapOverlayBtnText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 12,
   },
   btn: {
     paddingVertical: 10,
