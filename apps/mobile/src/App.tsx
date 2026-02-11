@@ -73,7 +73,9 @@ export default function App() {
       ...r,
       latitude: lat,
       longitude: lon,
-      ...(zoomDelta ? { latitudeDelta: zoomDelta, longitudeDelta: zoomDelta } : null),
+      ...(zoomDelta
+        ? { latitudeDelta: zoomDelta, longitudeDelta: zoomDelta }
+        : {}), // <-- IMPORTANT: don't touch deltas
     }));
   };
 
