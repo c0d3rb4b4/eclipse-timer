@@ -188,6 +188,9 @@ export default function App() {
   const mapRef = useRef<MapView>(null);
   const landingListRef = useRef<ScrollView>(null);
   const didAutoScrollRef = useRef(false);
+  const prevScreenRef = useRef<AppScreen>("landing");
+  const landingListScrollYRef = useRef(0);
+  const landingRowYByIdRef = useRef<Record<string, number>>({});
   const [isComputing, setIsComputing] = useState(false);
   const [didComputeFlash, setDidComputeFlash] = useState(false);
   const [screen, setScreen] = useState<AppScreen>("landing");
@@ -251,12 +254,36 @@ export default function App() {
     if (screen !== "landing" || didAutoScrollRef.current) return;
     if (firstFutureRowY == null) return;
 
-    landingListRef.current?.scrollTo({
-      y: Math.max(0, firstFutureRowY - 8),
-      animated: false,
-    });
+    const y = Math.max(0, firstFutureRowY - 8);
+    landingListRef.current?.scrollTo({ y, animated: false });
+    landingListScrollYRef.current = y;
     didAutoScrollRef.current = true;
   }, [screen, firstFutureRowY]);
+
+  useEffect(() => {
+    const prev = prevScreenRef.current;
+    prevScreenRef.current = screen;
+
+    if (prev !== "timer" || screen !== "landing") return;
+
+    const restore = () => {
+      let targetY = Math.max(0, landingListScrollYRef.current);
+
+      if (targetY <= 1 && selectedLandingId) {
+        const rowY = landingRowYByIdRef.current[selectedLandingId];
+        if (typeof rowY === "number" && Number.isFinite(rowY)) {
+          targetY = Math.max(0, rowY - 8);
+        }
+      }
+
+      landingListRef.current?.scrollTo({ y: targetY, animated: false });
+      landingListScrollYRef.current = targetY;
+    };
+
+    restore();
+    const t = setTimeout(restore, 80);
+    return () => clearTimeout(t);
+  }, [screen, selectedLandingId]);
 
   const [pin, setPin] = useState({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
 
@@ -455,6 +482,7 @@ export default function App() {
 
   const goToTimer = () => {
     if (!canGo) return;
+    didAutoScrollRef.current = true;
     setActiveEclipseId(selectedLanding!.id);
     setResult(null);
     setStatus("Ready");
@@ -474,6 +502,18 @@ export default function App() {
                 nestedScrollEnabled
                 style={styles.landingListScroll}
                 contentContainerStyle={styles.landingListScrollContent}
+                onScroll={(e) => {
+                  const y = Math.max(0, e.nativeEvent.contentOffset.y);
+                  landingListScrollYRef.current = y;
+                  if (y > 0.5) didAutoScrollRef.current = true;
+                }}
+                onScrollEndDrag={(e) => {
+                  landingListScrollYRef.current = Math.max(0, e.nativeEvent.contentOffset.y);
+                }}
+                onMomentumScrollEnd={(e) => {
+                  landingListScrollYRef.current = Math.max(0, e.nativeEvent.contentOffset.y);
+                }}
+                scrollEventThrottle={16}
               >
                 {landingEclipses.map((item, index) => (
                   <Pressable
@@ -484,11 +524,12 @@ export default function App() {
                       selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
                     ]}
                     onPress={() => setSelectedLandingId(item.id)}
-                    onLayout={
-                      index === firstFutureIndex
-                        ? (e) => setFirstFutureRowY(e.nativeEvent.layout.y)
-                        : undefined
-                    }
+                    onLayout={(e) => {
+                      landingRowYByIdRef.current[item.id] = e.nativeEvent.layout.y;
+                      if (index === firstFutureIndex) {
+                        setFirstFutureRowY(e.nativeEvent.layout.y);
+                      }
+                    }}
                   >
                     <Text
                       style={[
