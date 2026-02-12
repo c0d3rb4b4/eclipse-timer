@@ -1,7 +1,10 @@
 import type { EclipseRecord } from "@eclipse-timer/shared";
 
 export function t0TtDate(e: EclipseRecord): Date {
-  const [Y, M, D] = e.dateYmd.split("-").map(Number);
+  const [yRaw = "", mRaw = "", dRaw = ""] = e.dateYmd.split("-");
+  const Y = Number(yRaw);
+  const M = Number(mRaw);
+  const D = Number(dRaw);
 
   const totalSeconds = e.t0TtHours * 3600;
   const hh = Math.floor(totalSeconds / 3600);

@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
+import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Platform, Switch } from "react-native";
 import MapView, { Marker, MapPressEvent, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { Animated, ActivityIndicator } from "react-native";
@@ -10,36 +10,58 @@ import type { Circumstances, Observer, EclipseRecord } from "@eclipse-timer/shar
 
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
 const CENTRAL_1000 = { lat: 26 + 53.3 / 60, lon: 31 + 0.8 / 60 };
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function fmtUtc(iso?: string) {
+type ContactKey = "c1" | "c2" | "max" | "c3" | "c4";
+type AlarmState = Record<ContactKey, boolean>;
+type ContactItem = {
+  key: ContactKey;
+  label: string;
+  iso?: string;
+};
+
+function fmtUtcHuman(iso?: string) {
   if (!iso) return "—";
-  // Keep it simple: ISO without milliseconds
-  return iso.replace(".000Z", "Z");
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+  const yyyy = d.getUTCFullYear();
+  const mon = MONTHS_SHORT[d.getUTCMonth()];
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${mon} ${dd}, ${yyyy} ${hh}:${mm}:${ss} UTC`;
 }
 
-function fmtDur(seconds?: number) {
-  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return "—";
-  const s = Math.round(seconds);
-  const mm = Math.floor(s / 60);
-  const ss = s % 60;
-  return `${mm}m ${ss.toString().padStart(2, "0")}s`;
+function buildContactItems(c: Circumstances): ContactItem[] {
+  if (c.kindAtLocation === "total") {
+    return [
+      { key: "c1", label: "Partial Eclipse Starts (C1)", iso: c.c1Utc },
+      { key: "c2", label: "Totality Starts (C2)", iso: c.c2Utc },
+      { key: "c3", label: "Totality Ends (C3)", iso: c.c3Utc },
+      { key: "c4", label: "Partial Eclipse Ends (C4)", iso: c.c4Utc },
+    ];
+  }
+
+  return [
+    { key: "c1", label: "First Contact (C1)", iso: c.c1Utc },
+    { key: "c2", label: "Second Contact (C2)", iso: c.c2Utc },
+    { key: "max", label: "Maximum Eclipse", iso: c.maxUtc },
+    { key: "c3", label: "Third Contact (C3)", iso: c.c3Utc },
+    { key: "c4", label: "Fourth Contact (C4)", iso: c.c4Utc },
+  ];
 }
 
 function nextEventCountdown(c: Circumstances) {
   const now = Date.now();
-  const events: { label: string; t: number }[] = [];
-
-  const push = (label: string, iso?: string) => {
-    if (!iso) return;
-    const t = Date.parse(iso);
-    if (Number.isFinite(t)) events.push({ label, t });
-  };
-
-  push("C1", c.c1Utc);
-  push("C2", c.c2Utc);
-  push("MAX", c.maxUtc);
-  push("C3", c.c3Utc);
-  push("C4", c.c4Utc);
+  const events = buildContactItems(c)
+    .map((item) => {
+      if (!item.iso) return null;
+      const t = Date.parse(item.iso);
+      if (!Number.isFinite(t)) return null;
+      return { label: item.label, t };
+    })
+    .filter((e): e is { label: string; t: number } => !!e);
 
   const future = events.filter((e) => e.t > now).sort((a, b) => a.t - b.t)[0];
   if (!future) return "No upcoming contact time (for this eclipse)";
@@ -102,6 +124,13 @@ export default function App() {
 
   const [status, setStatus] = useState("Ready");
   const [result, setResult] = useState<Circumstances | null>(null);
+  const [alarmState, setAlarmState] = useState<AlarmState>({
+    c1: true,
+    c2: true,
+    max: true,
+    c3: true,
+    c4: true,
+  });
 
   const setPinAndRegion = (lat: number, lon: number, zoomDelta?: number) => {
     setPin({ lat, lon });
@@ -207,6 +236,13 @@ export default function App() {
     }
   };
 
+  const toggleAlarm = (key: ContactKey, enabled: boolean) => {
+    setAlarmState((prev) => ({ ...prev, [key]: enabled }));
+  };
+
+  const contactItems = result ? buildContactItems(result) : [];
+  const isTotality = result?.kindAtLocation === "total";
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -277,13 +313,6 @@ export default function App() {
       </View>
 
       <ScrollView style={styles.results}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Selected Pin</Text>
-          <Text style={styles.mono}>
-            lat {pin.lat.toFixed(6)}{"\n"}lon {pin.lon.toFixed(6)}
-          </Text>
-        </View>
-
         <Animated.View
           style={[
             styles.card,
@@ -308,30 +337,44 @@ export default function App() {
             <Text style={styles.muted}>Press Compute to run the engine.</Text>
           ) : (
             <>
-              <Text style={styles.row}>Visible: {String(result.visible)}</Text>
-              <Text style={styles.row}>Kind: {result.kindAtLocation}</Text>
-              <Text style={styles.row}>Magnitude: {typeof result.magnitude === "number" ? result.magnitude.toFixed(3) : "—"}</Text>
-              <Text style={styles.row}>Totality: {fmtDur(result.durationSeconds)}</Text>
+              <View style={styles.summaryGrid}>
+                <Text style={styles.summaryItem}>Visible: {result.visible ? "Yes" : "No"}</Text>
+                <Text style={styles.summaryItem}>Kind: {result.kindAtLocation}</Text>
+                <Text style={styles.summaryItem}>
+                  Magnitude: {typeof result.magnitude === "number" ? result.magnitude.toFixed(3) : "—"}
+                </Text>
+                <Text style={styles.summaryItem}>Totality: {isTotality ? "Yes" : "No"}</Text>
+              </View>
 
               <View style={styles.sep} />
 
-              <Text style={styles.row}>C1: {fmtUtc(result.c1Utc)}</Text>
-              <Text style={styles.row}>C2: {fmtUtc(result.c2Utc)}</Text>
-              <Text style={styles.row}>MAX: {fmtUtc(result.maxUtc)}</Text>
-              <Text style={styles.row}>C3: {fmtUtc(result.c3Utc)}</Text>
-              <Text style={styles.row}>C4: {fmtUtc(result.c4Utc)}</Text>
+              {contactItems.map((item) => (
+                <View style={styles.contactRow} key={item.key}>
+                  <View style={styles.contactMain}>
+                    <Text style={styles.contactLabel}>{item.label}</Text>
+                    <Text style={styles.contactTime}>{fmtUtcHuman(item.iso)}</Text>
+                  </View>
+                  <View style={styles.contactAlarm}>
+                    <Text style={styles.alarmLabel}>Alarm</Text>
+                    <Switch
+                      value={alarmState[item.key]}
+                      onValueChange={(enabled) => toggleAlarm(item.key, enabled)}
+                      disabled={!item.iso}
+                    />
+                  </View>
+                </View>
+              ))}
 
               <View style={styles.sep} />
 
               <Text style={styles.row}>{nextEventCountdown(result)}</Text>
 
-              {result._debug ? (
-                <>
-                  <View style={styles.sep} />
-                  <Text style={styles.cardTitle}>Debug</Text>
-                  <Text style={styles.mono}>{JSON.stringify(result._debug, null, 2)}</Text>
-                </>
-              ) : null}
+              <View style={styles.sep} />
+              <Text style={styles.cardTitle}>Debug</Text>
+              <Text style={styles.mono}>
+                {`Selected pin: lat ${pin.lat.toFixed(6)}, lon ${pin.lon.toFixed(6)}`}
+              </Text>
+              {result._debug ? <Text style={styles.mono}>{JSON.stringify(result._debug, null, 2)}</Text> : null}
             </>
           )}
         </Animated.View>
@@ -414,6 +457,20 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "#121212", borderRadius: 12, padding: 12, marginBottom: 10 },
   cardTitle: { color: "white", fontSize: 14, fontWeight: "700", marginBottom: 6 },
   row: { color: "#e6e6e6", fontSize: 13, marginBottom: 4 },
+  summaryGrid: { flexDirection: "row", flexWrap: "wrap" },
+  summaryItem: { width: "50%", color: "#e6e6e6", fontSize: 13, marginBottom: 4 },
+  contactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 10,
+  },
+  contactMain: { flex: 1 },
+  contactLabel: { color: "#e6e6e6", fontSize: 13, fontWeight: "600" },
+  contactTime: { color: "#bdbdbd", fontSize: 12, marginTop: 2 },
+  contactAlarm: { alignItems: "center", justifyContent: "center" },
+  alarmLabel: { color: "#bdbdbd", fontSize: 11, marginBottom: 2 },
   muted: { color: "#bdbdbd", fontSize: 13 },
   mono: { color: "#d0d0d0", fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }), fontSize: 11 },
   sep: { height: 1, backgroundColor: "#2a2a2a", marginVertical: 10 },
