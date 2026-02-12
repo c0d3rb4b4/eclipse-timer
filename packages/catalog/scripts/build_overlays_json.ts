@@ -35,7 +35,7 @@ const TIME_STEP_VISIBLE = 6 / 60;
 /** Time step for umbra sweep (hours). ~3 min since umbra moves faster & is narrower. */
 const TIME_STEP_CENTRAL = 3 / 60;
 /** Number of bearing samples around 360° for each timestep. */
-const BEARING_SAMPLES_VISIBLE = 72;
+const BEARING_SAMPLES_VISIBLE = 120;
 const BEARING_SAMPLES_CENTRAL = 72;
 /** Bisection iterations to find the shadow edge at a given bearing. */
 const BISECT_ITERS = 22;
@@ -43,7 +43,7 @@ const BISECT_ITERS = 22;
 const PEN_SEARCH_DEG = 80;
 const UMB_SEARCH_DEG = 10;
 /** Douglas-Peucker simplification tolerance (degrees). */
-const SIMPLIFY_VIS_DEG = 0.5;
+const SIMPLIFY_VIS_DEG = 0.15;
 const SIMPLIFY_CEN_DEG = 0.08;
 
 const DEG2RAD = Math.PI / 180;
@@ -283,20 +283,207 @@ function simplifyPath(
 }
 
 // ---------------------------------------------------------------------------
-// Build band polygon from per-timestep outlines
+// Build visible (penumbra) polygon — outer envelope tracing
+// ---------------------------------------------------------------------------
+
+/**
+ * For the visible (penumbra) overlay, the shadow is a large ≈4 000 km wide
+ * circle at each timestep. The union of these overlapping circles over time
+ * forms a smooth elongated oval.
+ *
+ * We trace the **outer envelope** directly:
+ *   1. At each timestep, trace the full penumbra outline (boundary points
+ *      at evenly-spaced bearings from that timestep's shadow-axis center).
+ *   2. For every boundary point, compute its bearing from the overall
+ *      centroid and bin it into one of N angular buckets.
+ *   3. In each bucket, keep only the point farthest from the centroid.
+ *
+ * This produces a smooth closed polygon with at most N vertices that
+ * accurately represents the outer boundary of the penumbra union.
+ */
+function buildVisiblePolygon(
+  e: EclipseRecord,
+  outlines: { t: number; center: OverlayPoint }[],
+  tolerance: number
+): OverlayPoint[][] {
+  if (outlines.length === 0) return [];
+
+  // Overall centroid of all shadow-axis positions (spherical mean)
+  const centroid = outlineCenter(outlines.map((o) => o.center));
+
+  const numBuckets = BEARING_SAMPLES_VISIBLE;
+  // Each bucket: best point and its distance from centroid
+  const buckets: { pt: OverlayPoint; dist: number }[] = new Array(numBuckets);
+
+  for (const frame of outlines) {
+    // Trace the penumbra outline at this timestep
+    const outline = traceOutlineAtTime(
+      e,
+      frame.t,
+      frame.center[0],
+      frame.center[1],
+      PEN_SEARCH_DEG,
+      penumbraMetric,
+      numBuckets
+    );
+
+    for (const pt of outline) {
+      // Bearing from centroid to this boundary point
+      const bearing = bearingFromTo(
+        centroid[0],
+        centroid[1],
+        pt[0],
+        pt[1]
+      );
+      // Map bearing [0, 360) into a bucket index
+      const bucketIdx =
+        Math.floor((bearing / 360) * numBuckets) % numBuckets;
+
+      const dist = angularDistance(centroid[0], centroid[1], pt[0], pt[1]);
+
+      if (!buckets[bucketIdx] || dist > buckets[bucketIdx].dist) {
+        buckets[bucketIdx] = { pt, dist };
+      }
+    }
+  }
+
+  // Fill empty buckets by interpolating between nearest filled neighbors
+  // (great-circle interpolation to handle wide spherical spans).
+  for (let i = 0; i < numBuckets; i++) {
+    if (buckets[i]) continue;
+
+    // Find nearest filled bucket before and after
+    let prevIdx = -1;
+    for (let d = 1; d < numBuckets; d++) {
+      const idx = (i - d + numBuckets) % numBuckets;
+      if (buckets[idx]) { prevIdx = idx; break; }
+    }
+    let nextIdx = -1;
+    for (let d = 1; d < numBuckets; d++) {
+      const idx = (i + d) % numBuckets;
+      if (buckets[idx]) { nextIdx = idx; break; }
+    }
+    if (prevIdx < 0 || nextIdx < 0) continue;
+
+    // How far are we between prevIdx and nextIdx?
+    const gapSize =
+      ((nextIdx - prevIdx + numBuckets) % numBuckets) || numBuckets;
+    const pos = ((i - prevIdx + numBuckets) % numBuckets) || numBuckets;
+    const frac = pos / gapSize;
+
+    // Spherical linear interpolation (SLERP) between the two filled points
+    const p1 = buckets[prevIdx].pt;
+    const p2 = buckets[nextIdx].pt;
+    const interp = sphericalInterp(p1[0], p1[1], p2[0], p2[1], frac);
+    buckets[i] = {
+      pt: interp,
+      dist: angularDistance(centroid[0], centroid[1], interp[0], interp[1]),
+    };
+  }
+
+  // Collect the envelope points in bearing order
+  const envelope: OverlayPoint[] = [];
+  for (let i = 0; i < numBuckets; i++) {
+    if (buckets[i]) envelope.push(buckets[i].pt);
+  }
+
+  if (envelope.length < 3) return [];
+
+  // The envelope is already a smooth closed polygon ordered by bearing
+  // from the centroid. We skip Douglas-Peucker simplification because the
+  // perpDist function uses Euclidean distance in the lat/lon plane, which
+  // corrupts polygons spanning >180° of longitude.
+  return [envelope];
+}
+
+/**
+ * Initial bearing (forward azimuth) from point 1 to point 2, in degrees [0, 360).
+ */
+function bearingFromTo(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const dLon = (lon2 - lon1) * DEG2RAD;
+  const la1 = lat1 * DEG2RAD;
+  const la2 = lat2 * DEG2RAD;
+  const y = Math.sin(dLon) * Math.cos(la2);
+  const x =
+    Math.cos(la1) * Math.sin(la2) -
+    Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * RAD2DEG) + 360) % 360;
+}
+
+/**
+ * Spherical linear interpolation between two lat/lon points.
+ * frac=0 → p1, frac=1 → p2.
+ */
+function sphericalInterp(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+  frac: number
+): OverlayPoint {
+  const la1 = lat1 * DEG2RAD;
+  const lo1 = lon1 * DEG2RAD;
+  const la2 = lat2 * DEG2RAD;
+  const lo2 = lon2 * DEG2RAD;
+
+  // Convert to unit-sphere Cartesian
+  const x1 = Math.cos(la1) * Math.cos(lo1);
+  const y1 = Math.cos(la1) * Math.sin(lo1);
+  const z1 = Math.sin(la1);
+  const x2 = Math.cos(la2) * Math.cos(lo2);
+  const y2 = Math.cos(la2) * Math.sin(lo2);
+  const z2 = Math.sin(la2);
+
+  // Linear interpolation on Cartesian coords (good enough for our purposes)
+  const xm = x1 + frac * (x2 - x1);
+  const ym = y1 + frac * (y2 - y1);
+  const zm = z1 + frac * (z2 - z1);
+
+  // Back to lat/lon
+  const lat = Math.atan2(zm, Math.sqrt(xm * xm + ym * ym)) * RAD2DEG;
+  const lon = Math.atan2(ym, xm) * RAD2DEG;
+  return [clamp(lat, -89.9, 89.9), normLon(lon)];
+}
+
+/**
+ * Angular distance between two lat/lon points in degrees (Haversine).
+ */
+function angularDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const dLat = (lat2 - lat1) * DEG2RAD;
+  const dLon = (lon2 - lon1) * DEG2RAD;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * DEG2RAD) *
+      Math.cos(lat2 * DEG2RAD) *
+      Math.sin(dLon / 2) ** 2;
+  return 2 * Math.asin(Math.sqrt(a)) * RAD2DEG;
+}
+
+// ---------------------------------------------------------------------------
+// Build band polygon from per-timestep outlines (for central/umbra path)
 // ---------------------------------------------------------------------------
 
 /**
  * From an array of per-timestep shadow outlines sorted by time, build a
  * continuous band polygon. Strategy:
  *
- *   1. At each timestep, find the northernmost and southernmost edge points.
- *   2. Band = north-edge going forward → trailing cap → south-edge reversed
+ *   1. At each timestep, find the "left" and "right" edge points
+ *      (perpendicular to the sweep direction).
+ *   2. Band = left-edge going forward → trailing cap → right-edge reversed
  *      → leading cap (closed).
  *
- * The leading cap uses the first outline's points sorted N→S on the "back"
- * side (behind the sweep direction), and the trailing cap uses the last
- * outline's points sorted S→N on the "front" side.
+ * This approach works well for narrow band shapes like the umbra/antumbra
+ * central path.
  */
 function buildBandPolygon(
   outlines: { t: number; points: OverlayPoint[] }[],
@@ -441,9 +628,12 @@ function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
   const isPartial = kind === "P";
 
   // ------------------------------------------------------------------
-  // Visible (penumbra) overlay — ray-traced band
+  // Visible (penumbra) overlay — outer envelope tracing
   // ------------------------------------------------------------------
-  const visOutlines: { t: number; points: OverlayPoint[] }[] = [];
+  // Collect timesteps where the penumbra touches Earth, with their
+  // shadow-axis center positions. buildVisiblePolygon will do its own
+  // edge-finding per bearing across all these timesteps.
+  const visFrames: { t: number; center: OverlayPoint }[] = [];
 
   for (let t = T_MIN; t <= T_MAX + 1e-9; t += TIME_STEP_VISIBLE) {
     const center = shadowAxisLatLon(e, t);
@@ -457,21 +647,10 @@ function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
     );
     if (cVal >= 0) continue;
 
-    const outline = traceOutlineAtTime(
-      e,
-      t,
-      center[0],
-      center[1],
-      PEN_SEARCH_DEG,
-      penumbraMetric,
-      BEARING_SAMPLES_VISIBLE
-    );
-    if (outline.length >= 3) {
-      visOutlines.push({ t, points: outline });
-    }
+    visFrames.push({ t, center });
   }
 
-  const visiblePolygons = buildBandPolygon(visOutlines, SIMPLIFY_VIS_DEG);
+  const visiblePolygons = buildVisiblePolygon(e, visFrames, SIMPLIFY_VIS_DEG);
 
   // ------------------------------------------------------------------
   // Central (umbra/antumbra) overlay — ray-traced band
