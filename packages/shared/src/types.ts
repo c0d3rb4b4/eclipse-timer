@@ -31,6 +31,8 @@ export type EclipseRecord = {
   // Optional metadata (handy for validation)
   greatestEclipseUtc?: string;
   greatestDurationUtc?: string;
+  greatestEclipseLatDeg?: number;
+  greatestEclipseLonDeg?: number;
 };
 
 export type Circumstances = {

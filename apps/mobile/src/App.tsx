@@ -10,7 +10,6 @@ import { computeCircumstances } from "@eclipse-timer/engine";
 import type { Circumstances, Observer, EclipseRecord } from "@eclipse-timer/shared";
 
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
-const CENTRAL_1000 = { lat: 26 + 53.3 / 60, lon: 31 + 0.8 / 60 };
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 type ContactKey = "c1" | "c2" | "max" | "c3" | "c4";
@@ -122,6 +121,15 @@ function nextEventCountdown(c: Circumstances) {
   return `${eventLabel} in ${dd}d ${hh}h ${mm}m ${ss}s`;
 }
 
+function eclipseCenterForRecord(e: EclipseRecord | null): { lat: number; lon: number } | null {
+  if (!e) return null;
+  const lat = e.greatestEclipseLatDeg;
+  const lon = e.greatestEclipseLonDeg;
+  if (typeof lat !== "number" || !Number.isFinite(lat)) return null;
+  if (typeof lon !== "number" || !Number.isFinite(lon)) return null;
+  return { lat, lon };
+}
+
 export default function App() {
   const mapRef = useRef<MapView>(null);
   const landingListRef = useRef<ScrollView>(null);
@@ -165,6 +173,7 @@ export default function App() {
     () => catalog.find((e) => e.id === activeEclipseId) ?? null,
     [catalog, activeEclipseId]
   );
+  const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -496,11 +505,16 @@ export default function App() {
                 <Text style={styles.btnText}>Use GPS</Text>
               </Pressable>
 
-              <Pressable style={styles.btn} onPress={() => jumpTo(GIBRALTAR.lat, GIBRALTAR.lon, 3)}>
-                <Text style={styles.btnText}>Gibraltar</Text>
-              </Pressable>
-
-              <Pressable style={styles.btn} onPress={() => jumpTo(CENTRAL_1000.lat, CENTRAL_1000.lon, 3)}>
+              <Pressable
+                style={styles.btn}
+                onPress={() => {
+                  if (!activeEclipseCenter) {
+                    setStatus("No center coordinates available for this eclipse");
+                    return;
+                  }
+                  jumpTo(activeEclipseCenter.lat, activeEclipseCenter.lon, 3);
+                }}
+              >
                 <Text style={styles.btnText}>Central 10:00</Text>
               </Pressable>
             </View>

@@ -35,6 +35,8 @@ const catalog = rows.map((r) => {
   const id = `${ymd}T`;
 
   const kind = (String(r.eclipse_type || r.etype || "P").trim() as EclipseKind);
+  const greatestEclipseLatDeg = toNum(r.lat_dd_ge);
+  const greatestEclipseLonDeg = toNum(r.lng_dd_ge);
 
   const record = {
     id,
@@ -58,6 +60,8 @@ const catalog = rows.map((r) => {
     // optional
     greatestEclipseUtc: undefined,
     greatestDurationUtc: undefined,
+    greatestEclipseLatDeg: Number.isFinite(greatestEclipseLatDeg) ? greatestEclipseLatDeg : undefined,
+    greatestEclipseLonDeg: Number.isFinite(greatestEclipseLonDeg) ? greatestEclipseLonDeg : undefined,
   };
 
   return record;
