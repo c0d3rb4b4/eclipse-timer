@@ -34,6 +34,91 @@
 5. Engine returns contact times, visibility, local eclipse kind, magnitude, duration, and debug info.
 6. UI renders results and a next-event countdown.
 
+## Architecture Diagrams
+
+### Component Diagram
+
+```mermaid
+flowchart LR
+  U[User]
+  GPS[Device Location Services]
+
+  subgraph APP["apps/mobile"]
+    APPUI[App.tsx UI and State]
+    MAP[react-native-maps]
+  end
+
+  subgraph CATALOG["packages/catalog"]
+    CLOAD[loadCatalog]
+    CJSON[catalog.sample.json]
+  end
+
+  subgraph ENGINE["packages/engine"]
+    COMP[computeCircumstances]
+    FUN[evaluateAtT and contact functions]
+    MATH[bracket/root/poly]
+    GEO[observerToFundamental]
+    TIME[t0 and UTC conversion]
+  end
+
+  subgraph SHARED["packages/shared"]
+    TYPES[Type Contracts]
+  end
+
+  U --> APPUI
+  APPUI --> MAP
+  APPUI --> CLOAD
+  CLOAD --> CJSON
+  APPUI --> COMP
+  COMP --> FUN
+  FUN --> MATH
+  FUN --> GEO
+  COMP --> TIME
+  APPUI -. types .-> TYPES
+  CLOAD -. types .-> TYPES
+  COMP -. types .-> TYPES
+  APPUI --> GPS
+  GPS --> APPUI
+```
+
+### Sequence Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant App as Mobile App (App.tsx)
+  participant Loc as Expo Location API
+  participant Catalog as Catalog Loader
+  participant Engine as Engine computeCircumstances
+  participant Math as Root + Geometry + Time Helpers
+
+  App->>Catalog: loadCatalog()
+  Catalog-->>App: EclipseRecord[]
+  App->>App: select catalog[0] (MVP)
+
+  User->>App: Tap map / drag pin / preset / Use GPS
+  alt Use GPS path
+    App->>Loc: requestForegroundPermissionsAsync()
+    Loc-->>App: granted/denied
+    App->>Loc: getLastKnownPositionAsync()
+    Loc-->>App: last known coords (optional)
+    App->>Loc: getCurrentPositionAsync() with timeout race
+    Loc-->>App: current coords or timeout
+  else Manual map path
+    App->>App: update pin and region
+  end
+
+  User->>App: Press Compute
+  App->>Engine: computeCircumstances(eclipse, observer)
+  Engine->>Math: evaluateAtT, fPenumbra, fUmbraAbs
+  Engine->>Math: findBrackets + bisectRoot
+  Engine->>Math: TT->UTC conversion using deltaTSeconds
+  Math-->>Engine: contacts + derived values
+  Engine-->>App: Circumstances
+  App-->>User: render status, contact times, countdown, debug
+```
+
 ## Operational Constraints (Current State)
 
 - Catalog selection is hardcoded to the first record.

@@ -9,6 +9,7 @@ This folder contains the project documentation for the `eclipse-timer` monorepo.
 
 ### High-Level
 - `documents/high-level/system-overview.md`
+  - Includes Mermaid component and sequence architecture diagrams.
 - `documents/high-level/user-flow-and-product-behavior.md`
 - `documents/high-level/development-workflow.md`
 
