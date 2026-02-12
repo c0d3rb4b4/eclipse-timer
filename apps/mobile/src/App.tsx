@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
-import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Switch, Alert, Vibration, Image } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Switch, Alert, Vibration, Image, BackHandler } from "react-native";
 import MapView, { Marker, MapPressEvent, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { Animated, ActivityIndicator } from "react-native";
@@ -141,6 +141,17 @@ export default function App() {
     () => LANDING_ECLIPSES.find((e) => e.id === selectedLandingId) ?? null,
     [selectedLandingId]
   );
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (screen === "timer") {
+        setScreen("landing");
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [screen]);
 
   const [pin, setPin] = useState({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
 
@@ -337,7 +348,6 @@ export default function App() {
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.landingWrap}>
           <Text style={styles.landingTitle}>Eclipse Timer</Text>
-          <Text style={styles.landingSubtitle}>Select Eclipse</Text>
 
           <View style={styles.landingListBox}>
             {LANDING_ECLIPSES.map((item) => (
@@ -365,9 +375,7 @@ export default function App() {
                 resizeMode="contain"
               />
             </View>
-          ) : (
-            <Text style={styles.muted}>Select the eclipse to preview NASA animation.</Text>
-          )}
+          ) : null}
 
           <Pressable
             style={[styles.goBtn, !canGo ? styles.goBtnDisabled : null]}
@@ -519,7 +527,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
-  landingSubtitle: { color: "#bdbdbd", fontSize: 14 },
   landingListBox: {
     backgroundColor: "#121212",
     borderRadius: 12,
