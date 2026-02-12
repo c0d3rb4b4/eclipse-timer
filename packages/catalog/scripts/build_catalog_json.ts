@@ -32,8 +32,18 @@ type GridEdge = { a: GridVertex; b: GridVertex; aId: string; bId: string };
 
 type EclipseKind = "T" | "A" | "P" | "H";
 
-const OVERLAY_ROWS = clamp(Math.round(toNum(process.env.OVERLAY_ROWS ?? 18)), 8, 64);
-const OVERLAY_COLS = clamp(Math.round(toNum(process.env.OVERLAY_COLS ?? 36)), 16, 128);
+const OVERLAY_VISIBLE_ROWS = clamp(Math.round(toNum(process.env.OVERLAY_VISIBLE_ROWS ?? 18)), 8, 96);
+const OVERLAY_VISIBLE_COLS = clamp(Math.round(toNum(process.env.OVERLAY_VISIBLE_COLS ?? 36)), 16, 192);
+const OVERLAY_CENTRAL_ROWS = clamp(
+  Math.round(toNum(process.env.OVERLAY_CENTRAL_ROWS ?? OVERLAY_VISIBLE_ROWS * 4)),
+  16,
+  256
+);
+const OVERLAY_CENTRAL_COLS = clamp(
+  Math.round(toNum(process.env.OVERLAY_CENTRAL_COLS ?? OVERLAY_VISIBLE_COLS * 4)),
+  32,
+  512
+);
 const COARSE_STEP_H = Math.max(0.25, toNum(process.env.OVERLAY_COARSE_STEP_H ?? 0.5));
 const FINE_STEP_H = Math.max(0.05, toNum(process.env.OVERLAY_FINE_STEP_H ?? 0.1));
 const FINE_WINDOW_H = Math.max(0.2, toNum(process.env.OVERLAY_FINE_WINDOW_H ?? 0.5));
@@ -230,34 +240,57 @@ function buildOverlayPolygons(e: EclipseRecord): {
   const lonWest = -180;
   const lonEast = 180;
 
-  const rows = OVERLAY_ROWS;
-  const cols = OVERLAY_COLS;
-  const latStep = (latNorth - latSouth) / rows;
-  const lonStep = (lonEast - lonWest) / cols;
   const includeCentral = String((e as any).kind ?? "").toUpperCase()[0] !== "P";
 
-  const visibleMask: boolean[][] = Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => false)
-  );
-  const centralMask: boolean[][] = Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => false)
-  );
+  const visibleRows = OVERLAY_VISIBLE_ROWS;
+  const visibleCols = OVERLAY_VISIBLE_COLS;
+  const visibleLatStep = (latNorth - latSouth) / visibleRows;
+  const visibleLonStep = (lonEast - lonWest) / visibleCols;
 
-  for (let r = 0; r < rows; r++) {
-    const lat = latNorth - (r + 0.5) * latStep;
-    for (let c = 0; c < cols; c++) {
-      const lon = lonWest + (c + 0.5) * lonStep;
-      const out = classifyLocationFast(e, lat, lon, includeCentral);
-      if (out.visible) {
-        visibleMask[r]![c] = true;
+  const visibleMask: boolean[][] = Array.from({ length: visibleRows }, () =>
+    Array.from({ length: visibleCols }, () => false)
+  );
+  for (let r = 0; r < visibleRows; r++) {
+    const lat = latNorth - (r + 0.5) * visibleLatStep;
+    for (let c = 0; c < visibleCols; c++) {
+      const lon = lonWest + (c + 0.5) * visibleLonStep;
+      const out = classifyLocationFast(e, lat, lon, false);
+      if (out.visible) visibleMask[r]![c] = true;
+    }
+  }
+
+  let centralMask: boolean[][] = [];
+  if (includeCentral) {
+    const centralRows = OVERLAY_CENTRAL_ROWS;
+    const centralCols = OVERLAY_CENTRAL_COLS;
+    const centralLatStep = (latNorth - latSouth) / centralRows;
+    const centralLonStep = (lonEast - lonWest) / centralCols;
+
+    centralMask = Array.from({ length: centralRows }, () =>
+      Array.from({ length: centralCols }, () => false)
+    );
+
+    for (let r = 0; r < centralRows; r++) {
+      const lat = latNorth - (r + 0.5) * centralLatStep;
+      for (let c = 0; c < centralCols; c++) {
+        const lon = lonWest + (c + 0.5) * centralLonStep;
+        const out = classifyLocationFast(e, lat, lon, true);
         if (out.central) centralMask[r]![c] = true;
       }
     }
   }
 
   return {
-    overlayVisiblePolygons: contourPolygonsFromMask(visibleMask, latNorth, lonWest, latStep, lonStep),
-    overlayCentralPolygons: contourPolygonsFromMask(centralMask, latNorth, lonWest, latStep, lonStep),
+    overlayVisiblePolygons: contourPolygonsFromMask(visibleMask, latNorth, lonWest, visibleLatStep, visibleLonStep),
+    overlayCentralPolygons: includeCentral
+      ? contourPolygonsFromMask(
+          centralMask,
+          latNorth,
+          lonWest,
+          (latNorth - latSouth) / OVERLAY_CENTRAL_ROWS,
+          (lonEast - lonWest) / OVERLAY_CENTRAL_COLS
+        )
+      : [],
   };
 }
 
@@ -342,5 +375,5 @@ fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify(withOverlays, null, 0), "utf8");
 
 console.log(
-  `Wrote ${withOverlays.length} eclipses with overlays (${OVERLAY_ROWS}x${OVERLAY_COLS}, coarse=${COARSE_STEP_H}h, fine=${FINE_STEP_H}h) -> ${outPath}`
+  `Wrote ${withOverlays.length} eclipses with overlays (visible ${OVERLAY_VISIBLE_ROWS}x${OVERLAY_VISIBLE_COLS}, central ${OVERLAY_CENTRAL_ROWS}x${OVERLAY_CENTRAL_COLS}, coarse=${COARSE_STEP_H}h, fine=${FINE_STEP_H}h) -> ${outPath}`
 );

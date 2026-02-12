@@ -172,7 +172,7 @@ function clamp(n: number, lo: number, hi: number) {
 
 function overlayTuplesToCells(polygons: [number, number][][] | undefined): OverlayCell[] {
   if (!polygons?.length) return [];
-  return polygons
+  const cells = polygons
     .map((poly) =>
       poly
         .map(([lat, lon]) => ({
@@ -182,6 +182,49 @@ function overlayTuplesToCells(polygons: [number, number][][] | undefined): Overl
         .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
     )
     .filter((poly) => poly.length >= 3);
+  return cells.flatMap((poly) => splitPolygonOnDateline(poly));
+}
+
+function splitPolygonOnDateline(poly: OverlayCell): OverlayCell[] {
+  if (poly.length < 3) return [];
+  const out: OverlayCell[] = [];
+  let current: OverlayCell = [];
+
+  const pushCurrent = () => {
+    if (current.length >= 3) out.push(current);
+    current = [];
+  };
+
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    if (!current.length) current.push({ ...a });
+
+    const delta = b.longitude - a.longitude;
+    if (Math.abs(delta) <= 180) {
+      current.push({ ...b });
+      continue;
+    }
+
+    const crossingLon = delta > 180 ? -180 : 180;
+    let lonB = b.longitude;
+    if (delta > 180) lonB -= 360;
+    else lonB += 360;
+
+    const t = (crossingLon - a.longitude) / (lonB - a.longitude);
+    const latCross = a.latitude + t * (b.latitude - a.latitude);
+    const crossPoint = { latitude: latCross, longitude: crossingLon };
+
+    current.push(crossPoint);
+    pushCurrent();
+
+    const oppositeLon = crossingLon === 180 ? -180 : 180;
+    current.push({ latitude: latCross, longitude: oppositeLon });
+    current.push({ ...b });
+  }
+
+  pushCurrent();
+  return out;
 }
 
 export default function App() {
