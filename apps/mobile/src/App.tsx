@@ -60,9 +60,9 @@ function nextEventCountdown(c: Circumstances) {
       if (!item.iso) return null;
       const t = Date.parse(item.iso);
       if (!Number.isFinite(t)) return null;
-      return { label: item.label, t };
+      return { key: item.key, t };
     })
-    .filter((e): e is { label: string; t: number } => !!e);
+    .filter((e): e is { key: ContactKey; t: number } => !!e);
 
   const future = events.filter((e) => e.t > now).sort((a, b) => a.t - b.t)[0];
   if (!future) return "No upcoming contact time (for this eclipse)";
@@ -71,8 +71,9 @@ function nextEventCountdown(c: Circumstances) {
   const hh = Math.floor(diffSec / 3600);
   const mm = Math.floor((diffSec % 3600) / 60);
   const ss = diffSec % 60;
+  const eventLabel = future.key === "max" ? "MAX" : future.key.toUpperCase();
 
-  return `Next: ${future.label} in ${hh}h ${mm}m ${ss}s`;
+  return `${eventLabel} in ${hh}h ${mm}m ${ss}s`;
 }
 
 export default function App() {
