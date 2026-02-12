@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Platform, Switch } from "react-native";
+import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Switch } from "react-native";
 import MapView, { Marker, MapPressEvent, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { Animated, ActivityIndicator } from "react-native";
@@ -38,6 +38,7 @@ function buildContactItems(c: Circumstances): ContactItem[] {
     return [
       { key: "c1", label: "Partial Eclipse Starts (C1)", iso: c.c1Utc },
       { key: "c2", label: "Totality Starts (C2)", iso: c.c2Utc },
+      { key: "max", label: "Maximum Eclipse", iso: c.maxUtc },
       { key: "c3", label: "Totality Ends (C3)", iso: c.c3Utc },
       { key: "c4", label: "Partial Eclipse Ends (C4)", iso: c.c4Utc },
     ];
@@ -241,7 +242,26 @@ export default function App() {
   };
 
   const contactItems = result ? buildContactItems(result) : [];
-  const isTotality = result?.kindAtLocation === "total";
+
+  const runAlarmTest = () => {
+    if (!result) {
+      setStatus("Compute first to test alarms");
+      return;
+    }
+
+    const enabledItems = buildContactItems(result).filter((item) => alarmState[item.key]);
+    if (!enabledItems.length) {
+      setStatus("Alarm test skipped: no alarms enabled");
+      return;
+    }
+
+    const target = enabledItems.find((item) => !!item.iso) ?? enabledItems[0]!;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    setStatus(`Test alarm fired: ${target.label} at ${hh}:${mm}:${ss}`);
+  };
 
 
   return (
@@ -337,14 +357,14 @@ export default function App() {
             <Text style={styles.muted}>Press Compute to run the engine.</Text>
           ) : (
             <>
-              <View style={styles.summaryGrid}>
-                <Text style={styles.summaryItem}>Visible: {result.visible ? "Yes" : "No"}</Text>
-                <Text style={styles.summaryItem}>Kind: {result.kindAtLocation}</Text>
-                <Text style={styles.summaryItem}>
-                  Magnitude: {typeof result.magnitude === "number" ? result.magnitude.toFixed(3) : "—"}
-                </Text>
-                <Text style={styles.summaryItem}>Totality: {isTotality ? "Yes" : "No"}</Text>
+              <View style={styles.timerHero}>
+                <Text style={styles.timerHeroLabel}>Next Event Timer</Text>
+                <Text style={styles.timerHeroText}>{nextEventCountdown(result)}</Text>
               </View>
+
+              <Pressable style={styles.testAlarmBtn} onPress={runAlarmTest}>
+                <Text style={styles.testAlarmBtnText}>Test Alarm</Text>
+              </Pressable>
 
               <View style={styles.sep} />
 
@@ -364,17 +384,6 @@ export default function App() {
                   </View>
                 </View>
               ))}
-
-              <View style={styles.sep} />
-
-              <Text style={styles.row}>{nextEventCountdown(result)}</Text>
-
-              <View style={styles.sep} />
-              <Text style={styles.cardTitle}>Debug</Text>
-              <Text style={styles.mono}>
-                {`Selected pin: lat ${pin.lat.toFixed(6)}, lon ${pin.lon.toFixed(6)}`}
-              </Text>
-              {result._debug ? <Text style={styles.mono}>{JSON.stringify(result._debug, null, 2)}</Text> : null}
             </>
           )}
         </Animated.View>
@@ -456,9 +465,25 @@ const styles = StyleSheet.create({
   results: { flex: 1, paddingHorizontal: 12, paddingTop: 10 },
   card: { backgroundColor: "#121212", borderRadius: 12, padding: 12, marginBottom: 10 },
   cardTitle: { color: "white", fontSize: 14, fontWeight: "700", marginBottom: 6 },
-  row: { color: "#e6e6e6", fontSize: 13, marginBottom: 4 },
-  summaryGrid: { flexDirection: "row", flexWrap: "wrap" },
-  summaryItem: { width: "50%", color: "#e6e6e6", fontSize: 13, marginBottom: 4 },
+  timerHero: {
+    backgroundColor: "#1a2056",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#3744b8",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  timerHeroLabel: { color: "#a8b1ff", fontSize: 11, fontWeight: "700", marginBottom: 4, textTransform: "uppercase" },
+  timerHeroText: { color: "white", fontSize: 16, fontWeight: "800", lineHeight: 22 },
+  testAlarmBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#2c3cff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  testAlarmBtnText: { color: "white", fontSize: 13, fontWeight: "700" },
   contactRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -472,6 +497,5 @@ const styles = StyleSheet.create({
   contactAlarm: { alignItems: "center", justifyContent: "center" },
   alarmLabel: { color: "#bdbdbd", fontSize: 11, marginBottom: 2 },
   muted: { color: "#bdbdbd", fontSize: 13 },
-  mono: { color: "#d0d0d0", fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }), fontSize: 11 },
   sep: { height: 1, backgroundColor: "#2a2a2a", marginVertical: 10 },
 });
