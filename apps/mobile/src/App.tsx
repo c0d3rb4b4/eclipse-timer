@@ -16,12 +16,12 @@ const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 type ContactKey = "c1" | "c2" | "max" | "c3" | "c4";
 type AppScreen = "landing" | "timer";
 type AlarmState = Record<ContactKey, boolean>;
-type LandingEclipse = {
+type LandingEclipseItem = {
   id: string;
   dateYmd: string;
   kindLabel: string;
   gifUrl: string;
-  goEnabled: boolean;
+  isPast: boolean;
 };
 type ContactItem = {
   key: ContactKey;
@@ -29,43 +29,41 @@ type ContactItem = {
   iso?: string;
 };
 
-const LANDING_ECLIPSES: LandingEclipse[] = [
-  {
-    id: "2026-08-12T",
-    dateYmd: "2026-08-12",
-    kindLabel: "Total Solar Eclipse",
-    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2026Aug12T.GIF",
-    goEnabled: false,
-  },
-  {
-    id: "2027-02-06A",
-    dateYmd: "2027-02-06",
-    kindLabel: "Annular Solar Eclipse",
-    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2027Feb06A.GIF",
-    goEnabled: false,
-  },
-  {
-    id: "2027-08-02T",
-    dateYmd: "2027-08-02",
-    kindLabel: "Total Solar Eclipse",
-    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2027Aug02T.GIF",
-    goEnabled: true,
-  },
-  {
-    id: "2028-01-26A",
-    dateYmd: "2028-01-26",
-    kindLabel: "Annular Solar Eclipse",
-    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2028Jan26A.GIF",
-    goEnabled: false,
-  },
-  {
-    id: "2028-07-22T",
-    dateYmd: "2028-07-22",
-    kindLabel: "Total Solar Eclipse",
-    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2028Jul22T.GIF",
-    goEnabled: false,
-  },
-];
+function localYmdNow() {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function kindCodeForRecord(e: EclipseRecord): "T" | "A" | "H" | "P" {
+  const idSuffix = e.id.match(/[A-Za-z]+$/)?.[0]?.toUpperCase();
+  const fromId = idSuffix?.[0];
+  if (fromId === "T" || fromId === "A" || fromId === "H" || fromId === "P") return fromId;
+
+  const rawKind = String((e as any).kind ?? "").toUpperCase();
+  const fromKind = rawKind[0];
+  if (fromKind === "T" || fromKind === "A" || fromKind === "H" || fromKind === "P") return fromKind;
+  return "P";
+}
+
+function kindLabelFromCode(code: "T" | "A" | "H" | "P") {
+  if (code === "T") return "Total Solar Eclipse";
+  if (code === "A") return "Annular Solar Eclipse";
+  if (code === "H") return "Hybrid Solar Eclipse";
+  return "Partial Solar Eclipse";
+}
+
+function nasaGifUrlForRecord(e: EclipseRecord) {
+  const [yyyy = "2001", mm = "01", dd = "01"] = e.dateYmd.split("-");
+  const monthIndex = Number(mm) - 1;
+  const month = MONTHS_SHORT[monthIndex] ?? "Jan";
+  const yearNum = Number(yyyy);
+  const blockStartYear = Number.isFinite(yearNum) ? Math.floor((yearNum - 1) / 100) * 100 + 1 : 2001;
+  const kindCode = kindCodeForRecord(e);
+  return `https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate${blockStartYear}/SE${yyyy}${month}${dd}${kindCode}.GIF`;
+}
 
 function fmtUtcHuman(iso?: string) {
   if (!iso) return "—";
@@ -126,21 +124,46 @@ function nextEventCountdown(c: Circumstances) {
 
 export default function App() {
   const mapRef = useRef<MapView>(null);
+  const landingListRef = useRef<ScrollView>(null);
+  const didAutoScrollRef = useRef(false);
   const [isComputing, setIsComputing] = useState(false);
   const [didComputeFlash, setDidComputeFlash] = useState(false);
   const [screen, setScreen] = useState<AppScreen>("landing");
   const [selectedLandingId, setSelectedLandingId] = useState<string | null>(null);
+  const [activeEclipseId, setActiveEclipseId] = useState<string | null>(null);
+  const [firstFutureRowY, setFirstFutureRowY] = useState<number | null>(null);
 
   const resultFlash = useRef(new Animated.Value(0)).current; // 0..1
 
   const catalog = useMemo(() => loadCatalog(), []);
-  const timerEclipse: EclipseRecord | undefined = useMemo(
-    () => catalog.find((e) => e.id === "2027-08-02T") ?? catalog.find((e) => e.dateYmd === "2027-08-02"),
-    [catalog]
+  const todayYmd = useMemo(() => localYmdNow(), []);
+  const landingEclipses: LandingEclipseItem[] = useMemo(
+    () =>
+      [...catalog]
+        .sort((a, b) => a.dateYmd.localeCompare(b.dateYmd))
+        .map((e) => {
+          const kindCode = kindCodeForRecord(e);
+          return {
+            id: e.id,
+            dateYmd: e.dateYmd,
+            kindLabel: kindLabelFromCode(kindCode),
+            gifUrl: nasaGifUrlForRecord(e),
+            isPast: e.dateYmd < todayYmd,
+          };
+        }),
+    [catalog, todayYmd]
+  );
+  const firstFutureIndex = useMemo(
+    () => landingEclipses.findIndex((e) => !e.isPast),
+    [landingEclipses]
   );
   const selectedLanding = useMemo(
-    () => LANDING_ECLIPSES.find((e) => e.id === selectedLandingId) ?? null,
-    [selectedLandingId]
+    () => landingEclipses.find((e) => e.id === selectedLandingId) ?? null,
+    [landingEclipses, selectedLandingId]
+  );
+  const activeEclipse = useMemo(
+    () => catalog.find((e) => e.id === activeEclipseId) ?? null,
+    [catalog, activeEclipseId]
   );
 
   useEffect(() => {
@@ -153,6 +176,17 @@ export default function App() {
     });
     return () => sub.remove();
   }, [screen]);
+
+  useEffect(() => {
+    if (screen !== "landing" || didAutoScrollRef.current) return;
+    if (firstFutureRowY == null) return;
+
+    landingListRef.current?.scrollTo({
+      y: Math.max(0, firstFutureRowY - 8),
+      animated: false,
+    });
+    didAutoScrollRef.current = true;
+  }, [screen, firstFutureRowY]);
 
   const [pin, setPin] = useState({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
 
@@ -272,8 +306,8 @@ export default function App() {
   };
 
   const runCompute = () => {
-    if (!timerEclipse) {
-      setStatus("2027 eclipse not found in catalog");
+    if (!activeEclipse) {
+      setStatus("Select an eclipse from the landing page first");
       return;
     }
 
@@ -284,7 +318,7 @@ export default function App() {
     setStatus(`Computing for ${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}…`);
 
     try {
-      const out = computeCircumstances(timerEclipse, observer);
+      const out = computeCircumstances(activeEclipse, observer);
       setResult(out);
       setStatus("Computed");
 
@@ -336,10 +370,12 @@ export default function App() {
     Vibration.vibrate([0, 250, 120, 250]);
   };
 
-  const canGo = !!selectedLanding && selectedLanding.goEnabled && !!timerEclipse;
+  const canGo = !!selectedLanding;
 
   const goToTimer = () => {
     if (!canGo) return;
+    setActiveEclipseId(selectedLanding!.id);
+    setResult(null);
     setStatus("Ready");
     setScreen("timer");
   };
@@ -352,21 +388,46 @@ export default function App() {
             <Text style={styles.landingTitle}>Eclipse Timer</Text>
 
             <View style={styles.landingListBox}>
-              {LANDING_ECLIPSES.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={[
-                    styles.landingListItem,
-                    selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
-                  ]}
-                  onPress={() => setSelectedLandingId(item.id)}
-                >
-                  <Text style={styles.landingListItemTitle}>{item.dateYmd} {item.kindLabel}</Text>
-                  <Text style={styles.landingListItemMeta}>
-                    {item.id} {item.goEnabled ? "• Available" : "• Coming soon"}
-                  </Text>
-                </Pressable>
-              ))}
+              <ScrollView
+                ref={landingListRef}
+                nestedScrollEnabled
+                style={styles.landingListScroll}
+                contentContainerStyle={styles.landingListScrollContent}
+              >
+                {landingEclipses.map((item, index) => (
+                  <Pressable
+                    key={item.id}
+                    style={[
+                      styles.landingListItem,
+                      item.isPast ? styles.landingListItemPast : null,
+                      selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
+                    ]}
+                    onPress={() => setSelectedLandingId(item.id)}
+                    onLayout={
+                      index === firstFutureIndex
+                        ? (e) => setFirstFutureRowY(e.nativeEvent.layout.y)
+                        : undefined
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.landingListItemTitle,
+                        item.isPast ? styles.landingListItemTitlePast : null,
+                      ]}
+                    >
+                      {item.dateYmd} {item.kindLabel}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.landingListItemMeta,
+                        item.isPast ? styles.landingListItemMetaPast : null,
+                      ]}
+                    >
+                      {item.id} • {item.isPast ? "Past" : "Upcoming"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
 
             {selectedLanding ? (
@@ -399,7 +460,7 @@ export default function App() {
           <View style={styles.header}>
             <Text style={styles.title}>Eclipse Timer (MVP)</Text>
             <Text style={styles.subtitle}>
-              {timerEclipse ? `${timerEclipse.id} • ${timerEclipse.dateYmd}` : "No eclipse loaded"}
+              {activeEclipse ? `${activeEclipse.id} • ${activeEclipse.dateYmd}` : "No eclipse loaded"}
             </Text>
           </View>
 
@@ -532,25 +593,37 @@ export default function App() {
       gap: 12,
     },
     landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
-    landingListBox: {
-      backgroundColor: "#121212",
-      borderRadius: 12,
-      padding: 10,
-    },
-    landingListItem: {
-      backgroundColor: "#1f1f1f",
-      borderRadius: 10,
-      borderWidth: 1,
+  landingListBox: {
+    backgroundColor: "#121212",
+    borderRadius: 12,
+    padding: 8,
+  },
+  landingListScroll: {
+    maxHeight: 360,
+  },
+  landingListScrollContent: {
+    gap: 8,
+  },
+  landingListItem: {
+    backgroundColor: "#1f1f1f",
+    borderRadius: 10,
+    borderWidth: 1,
       borderColor: "#2b2b2b",
       paddingVertical: 12,
       paddingHorizontal: 12,
     },
     landingListItemSelected: {
-      borderColor: "#2c3cff",
-      backgroundColor: "#1a2056",
-    },
-    landingListItemTitle: { color: "white", fontSize: 14, fontWeight: "700" },
-    landingListItemMeta: { color: "#bdbdbd", fontSize: 12, marginTop: 4 },
+    borderColor: "#2c3cff",
+    backgroundColor: "#1a2056",
+  },
+  landingListItemPast: {
+    backgroundColor: "#171717",
+    borderColor: "#272727",
+  },
+  landingListItemTitle: { color: "white", fontSize: 14, fontWeight: "700" },
+  landingListItemTitlePast: { color: "#9b9b9b" },
+  landingListItemMeta: { color: "#bdbdbd", fontSize: 12, marginTop: 4 },
+  landingListItemMetaPast: { color: "#7f7f7f" },
     previewCard: {
       backgroundColor: "#121212",
       borderRadius: 12,
