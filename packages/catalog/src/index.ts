@@ -1,4 +1,4 @@
-import catalog from "./catalog.sample.json";
+import catalog from "../generated/catalog.generated.json";
 import type { EclipseRecord } from "@eclipse-timer/shared";
 
 export function loadCatalog(): EclipseRecord[] {
