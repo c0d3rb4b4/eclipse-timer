@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, Switch, Alert, Vibration, Image, BackHandler } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import MapView, { Marker, MapPressEvent, Region } from "react-native-maps";
+import MapView, { Marker, MapPressEvent, Polygon, Region, type LatLng } from "react-native-maps";
 import * as Location from "expo-location";
 import { Animated, ActivityIndicator } from "react-native";
 
@@ -11,10 +11,14 @@ import type { Circumstances, Observer, EclipseRecord } from "@eclipse-timer/shar
 
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
+const TOTALITY_PATH_COLOR = "rgba(255, 82, 82, 0.28)";
+const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 
 type ContactKey = "c1" | "c2" | "max" | "c3" | "c4";
 type AppScreen = "landing" | "timer";
 type AlarmState = Record<ContactKey, boolean>;
+type OverlayCell = LatLng[];
 type LandingEclipseItem = {
   id: string;
   dateYmd: string;
@@ -37,13 +41,13 @@ function localYmdNow() {
 }
 
 function kindCodeForRecord(e: EclipseRecord): "T" | "A" | "H" | "P" {
-  const idSuffix = e.id.match(/[A-Za-z]+$/)?.[0]?.toUpperCase();
-  const fromId = idSuffix?.[0];
-  if (fromId === "T" || fromId === "A" || fromId === "H" || fromId === "P") return fromId;
-
   const rawKind = String((e as any).kind ?? "").toUpperCase();
   const fromKind = rawKind[0];
   if (fromKind === "T" || fromKind === "A" || fromKind === "H" || fromKind === "P") return fromKind;
+
+  const idSuffix = e.id.match(/[A-Za-z]+$/)?.[0]?.toUpperCase();
+  const fromId = idSuffix?.[0];
+  if (fromId === "T" || fromId === "A" || fromId === "H" || fromId === "P") return fromId;
   return "P";
 }
 
@@ -130,6 +134,56 @@ function eclipseCenterForRecord(e: EclipseRecord | null): { lat: number; lon: nu
   return { lat, lon };
 }
 
+function normalizeLongitude(lonDeg: number): number {
+  let lon = lonDeg;
+  while (lon > 180) lon -= 360;
+  while (lon < -180) lon += 360;
+  return lon;
+}
+
+function sanitizeLatitude(latDeg: number): number {
+  return clamp(latDeg, -85, 85);
+}
+
+function sanitizeDelta(delta: number, fallback: number): number {
+  if (!Number.isFinite(delta)) return fallback;
+  return clamp(Math.abs(delta), 0.02, 180);
+}
+
+function sanitizeRegion(region: Region, fallback?: Region): Region {
+  const fb = fallback ?? {
+    latitude: 0,
+    longitude: 0,
+    latitudeDelta: 8,
+    longitudeDelta: 8,
+  };
+
+  return {
+    latitude: sanitizeLatitude(Number.isFinite(region.latitude) ? region.latitude : fb.latitude),
+    longitude: normalizeLongitude(Number.isFinite(region.longitude) ? region.longitude : fb.longitude),
+    latitudeDelta: sanitizeDelta(region.latitudeDelta, fb.latitudeDelta),
+    longitudeDelta: sanitizeDelta(region.longitudeDelta, fb.longitudeDelta),
+  };
+}
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function overlayTuplesToCells(polygons: [number, number][][] | undefined): OverlayCell[] {
+  if (!polygons?.length) return [];
+  return polygons
+    .map((poly) =>
+      poly
+        .map(([lat, lon]) => ({
+          latitude: sanitizeLatitude(lat),
+          longitude: normalizeLongitude(lon),
+        }))
+        .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+    )
+    .filter((poly) => poly.length >= 3);
+}
+
 export default function App() {
   const mapRef = useRef<MapView>(null);
   const landingListRef = useRef<ScrollView>(null);
@@ -174,6 +228,13 @@ export default function App() {
     [catalog, activeEclipseId]
   );
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
+  const activeKindCode = useMemo(
+    () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),
+    [activeEclipse]
+  );
+  const centralOverlayColor = activeKindCode === "A" ? ANNULARITY_PATH_COLOR : TOTALITY_PATH_COLOR;
+  const centralLegendLabel =
+    activeKindCode === "A" ? "Annularity Path" : activeKindCode === "H" ? "Central Path" : "Totality Path";
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -207,36 +268,41 @@ export default function App() {
   };
 
   const jumpTo = (lat: number, lon: number, delta = 3) => {
-    setPin({ lat, lon });
-    setRegion((r) => ({
-      ...r,
-      latitude: lat,
-      longitude: lon,
-      latitudeDelta: delta,
-      longitudeDelta: delta,
-    }));
+    const safeLat = sanitizeLatitude(lat);
+    const safeLon = normalizeLongitude(lon);
+    const safeDelta = sanitizeDelta(delta, 3);
+    const nextRegion: Region = {
+      latitude: safeLat,
+      longitude: safeLon,
+      latitudeDelta: safeDelta,
+      longitudeDelta: safeDelta,
+    };
+
+    setPin({ lat: safeLat, lon: safeLon });
+    setRegion((r) => sanitizeRegion(nextRegion, r));
 
     // Imperative nudge (fixes “press twice”)
-    mapRef.current?.animateToRegion(
-      {
-        latitude: lat,
-        longitude: lon,
-        latitudeDelta: delta,
-        longitudeDelta: delta,
-      },
-      450
-    );
+    mapRef.current?.animateToRegion(nextRegion, 450);
   };
 
   const [region, setRegion] = useState<Region>({
-    latitude: pin.lat,
-    longitude: pin.lon,
+    latitude: sanitizeLatitude(pin.lat),
+    longitude: normalizeLongitude(pin.lon),
     latitudeDelta: 8,
     longitudeDelta: 8,
   });
 
   const [status, setStatus] = useState("Ready");
   const [result, setResult] = useState<Circumstances | null>(null);
+  const overlayVisiblePolygons = useMemo(
+    () => overlayTuplesToCells(activeEclipse?.overlayVisiblePolygons),
+    [activeEclipse]
+  );
+  const overlayCentralPolygons = useMemo(
+    () => overlayTuplesToCells(activeEclipse?.overlayCentralPolygons),
+    [activeEclipse]
+  );
+  const hasOverlayData = overlayVisiblePolygons.length > 0 || overlayCentralPolygons.length > 0;
   const [alarmState, setAlarmState] = useState<AlarmState>({
     c1: true,
     c2: true,
@@ -246,29 +312,35 @@ export default function App() {
   });
 
   const setPinAndRegion = (lat: number, lon: number, zoomDelta?: number) => {
-    setPin({ lat, lon });
+    const safeLat = sanitizeLatitude(lat);
+    const safeLon = normalizeLongitude(lon);
+    setPin({ lat: safeLat, lon: safeLon });
     setRegion((r) => ({
-      ...r,
-      latitude: lat,
-      longitude: lon,
+      ...sanitizeRegion(r),
+      latitude: safeLat,
+      longitude: safeLon,
       ...(zoomDelta
-        ? { latitudeDelta: zoomDelta, longitudeDelta: zoomDelta }
+        ? { latitudeDelta: sanitizeDelta(zoomDelta, r.latitudeDelta), longitudeDelta: sanitizeDelta(zoomDelta, r.longitudeDelta) }
         : {}), // <-- IMPORTANT: don't touch deltas
     }));
   };
 
   const movePinKeepZoom = (lat: number, lon: number) => {
-    setPin({ lat, lon });
-    setRegion((r) => ({ ...r, latitude: lat, longitude: lon }));
+    const safeLat = sanitizeLatitude(lat);
+    const safeLon = normalizeLongitude(lon);
+    setPin({ lat: safeLat, lon: safeLon });
+    setRegion((r) => ({ ...sanitizeRegion(r), latitude: safeLat, longitude: safeLon }));
   };
 
   const onMapPress = (e: MapPressEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
     movePinKeepZoom(latitude, longitude);
   };
 
   const onDragEnd = (e: any) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
     movePinKeepZoom(latitude, longitude);
   };
 
@@ -478,10 +550,28 @@ export default function App() {
               ref={mapRef}
               style={styles.map}
               region={region}
-              onRegionChangeComplete={(r) => setRegion(r)}
+              onRegionChangeComplete={(r) => setRegion((prev) => sanitizeRegion(r, prev))}
               onPress={onMapPress}
               mapType={mapType}
             >
+              {overlayVisiblePolygons.map((coordinates, idx) => (
+                <Polygon
+                  key={`visible-${idx}`}
+                  coordinates={coordinates}
+                  fillColor={VISIBLE_PATH_COLOR}
+                  strokeColor="rgba(79, 195, 247, 0.05)"
+                  strokeWidth={0.5}
+                />
+              ))}
+              {overlayCentralPolygons.map((coordinates, idx) => (
+                <Polygon
+                  key={`central-${idx}`}
+                  coordinates={coordinates}
+                  fillColor={centralOverlayColor}
+                  strokeColor="rgba(255,255,255,0.08)"
+                  strokeWidth={0.5}
+                />
+              ))}
               <Marker
                 coordinate={{ latitude: pin.lat, longitude: pin.lon }}
                 draggable
@@ -497,6 +587,20 @@ export default function App() {
                 {mapType === "standard" ? "Standard" : mapType === "satellite" ? "Satellite" : "Hybrid"}
               </Text>
             </Pressable>
+
+            <View style={styles.mapLegend}>
+              <View style={styles.mapLegendRow}>
+                <View style={[styles.mapLegendSwatch, { backgroundColor: VISIBLE_PATH_COLOR }]} />
+                <Text style={styles.mapLegendText}>Eclipse Visible</Text>
+              </View>
+              <View style={styles.mapLegendRow}>
+                <View style={[styles.mapLegendSwatch, { backgroundColor: centralOverlayColor }]} />
+                <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
+              </View>
+              {!hasOverlayData ? (
+                <Text style={styles.mapLegendHint}>No precomputed overlay for this eclipse.</Text>
+              ) : null}
+            </View>
           </View>
 
           <View style={styles.controls}>
@@ -724,6 +828,38 @@ export default function App() {
       color: "white",
       fontWeight: "700",
       fontSize: 12,
+    },
+    mapLegend: {
+      position: "absolute",
+      left: 10,
+      bottom: 10,
+      paddingVertical: 7,
+      paddingHorizontal: 8,
+      borderRadius: 10,
+      backgroundColor: "rgba(0,0,0,0.62)",
+      gap: 4,
+    },
+    mapLegendRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    mapLegendSwatch: {
+      width: 12,
+      height: 12,
+      borderRadius: 3,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.25)",
+    },
+    mapLegendText: {
+      color: "white",
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    mapLegendHint: {
+      color: "#c6c6c6",
+      fontSize: 10,
+      marginTop: 1,
     },
     btn: {
       paddingVertical: 10,

@@ -1,5 +1,6 @@
 export type EclipseKind = "total" | "annular" | "partial" | "hybrid";
 export type EclipseKindAtLocation = "none" | "partial" | "total" | "annular";
+export type OverlayPoint = [number, number]; // [latDeg, lonDeg]
 
 export type Observer = {
   latDeg: number;
@@ -33,6 +34,8 @@ export type EclipseRecord = {
   greatestDurationUtc?: string;
   greatestEclipseLatDeg?: number;
   greatestEclipseLonDeg?: number;
+  overlayVisiblePolygons?: OverlayPoint[][];
+  overlayCentralPolygons?: OverlayPoint[][];
 };
 
 export type Circumstances = {
