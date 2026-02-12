@@ -14,7 +14,8 @@
     "test": "echo \"(add tests later)\"",
     "data:filter": "tsx scripts/filter_csv_1900_2100.ts",
     "data:build": "tsx scripts/build_catalog_json.ts",
-    "data:all": "pnpm data:filter && pnpm data:build"
+    "data:overlays": "tsx scripts/build_overlays_json.ts",
+    "data:all": "pnpm data:filter && pnpm data:build && pnpm data:overlays"
   },
   "devDependencies": {
     "csv-parse": "^6.1.0",
