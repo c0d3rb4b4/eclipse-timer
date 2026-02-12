@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Switch } from "react-native";
+import { SafeAreaView, View, Text, Pressable, ScrollView, StyleSheet, Switch, Alert, Vibration, Image } from "react-native";
 import MapView, { Marker, MapPressEvent, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { Animated, ActivityIndicator } from "react-native";
@@ -13,12 +13,58 @@ const CENTRAL_1000 = { lat: 26 + 53.3 / 60, lon: 31 + 0.8 / 60 };
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 type ContactKey = "c1" | "c2" | "max" | "c3" | "c4";
+type AppScreen = "landing" | "timer";
 type AlarmState = Record<ContactKey, boolean>;
+type LandingEclipse = {
+  id: string;
+  dateYmd: string;
+  kindLabel: string;
+  gifUrl: string;
+  goEnabled: boolean;
+};
 type ContactItem = {
   key: ContactKey;
   label: string;
   iso?: string;
 };
+
+const LANDING_ECLIPSES: LandingEclipse[] = [
+  {
+    id: "2026-08-12T",
+    dateYmd: "2026-08-12",
+    kindLabel: "Total Solar Eclipse",
+    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2026Aug12T.GIF",
+    goEnabled: false,
+  },
+  {
+    id: "2027-02-06A",
+    dateYmd: "2027-02-06",
+    kindLabel: "Annular Solar Eclipse",
+    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2027Feb06A.GIF",
+    goEnabled: false,
+  },
+  {
+    id: "2027-08-02T",
+    dateYmd: "2027-08-02",
+    kindLabel: "Total Solar Eclipse",
+    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2027Aug02T.GIF",
+    goEnabled: true,
+  },
+  {
+    id: "2028-01-26A",
+    dateYmd: "2028-01-26",
+    kindLabel: "Annular Solar Eclipse",
+    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2028Jan26A.GIF",
+    goEnabled: false,
+  },
+  {
+    id: "2028-07-22T",
+    dateYmd: "2028-07-22",
+    kindLabel: "Total Solar Eclipse",
+    gifUrl: "https://eclipse.gsfc.nasa.gov/SEanimate/SEanimate2001/SE2028Jul22T.GIF",
+    goEnabled: false,
+  },
+];
 
 function fmtUtcHuman(iso?: string) {
   if (!iso) return "—";
@@ -68,23 +114,33 @@ function nextEventCountdown(c: Circumstances) {
   if (!future) return "No upcoming contact time (for this eclipse)";
 
   const diffSec = Math.max(0, Math.floor((future.t - now) / 1000));
-  const hh = Math.floor(diffSec / 3600);
+  const dd = Math.floor(diffSec / 86400);
+  const hh = Math.floor((diffSec % 86400) / 3600);
   const mm = Math.floor((diffSec % 3600) / 60);
   const ss = diffSec % 60;
   const eventLabel = future.key === "max" ? "MAX" : future.key.toUpperCase();
 
-  return `${eventLabel} in ${hh}h ${mm}m ${ss}s`;
+  return `${eventLabel} in ${dd}d ${hh}h ${mm}m ${ss}s`;
 }
 
 export default function App() {
   const mapRef = useRef<MapView>(null);
   const [isComputing, setIsComputing] = useState(false);
   const [didComputeFlash, setDidComputeFlash] = useState(false);
+  const [screen, setScreen] = useState<AppScreen>("landing");
+  const [selectedLandingId, setSelectedLandingId] = useState<string | null>(null);
 
   const resultFlash = useRef(new Animated.Value(0)).current; // 0..1
 
   const catalog = useMemo(() => loadCatalog(), []);
-  const eclipse: EclipseRecord | undefined = catalog[0]; // MVP: first eclipse
+  const timerEclipse: EclipseRecord | undefined = useMemo(
+    () => catalog.find((e) => e.id === "2027-08-02T") ?? catalog.find((e) => e.dateYmd === "2027-08-02"),
+    [catalog]
+  );
+  const selectedLanding = useMemo(
+    () => LANDING_ECLIPSES.find((e) => e.id === selectedLandingId) ?? null,
+    [selectedLandingId]
+  );
 
   const [pin, setPin] = useState({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
 
@@ -204,8 +260,8 @@ export default function App() {
   };
 
   const runCompute = () => {
-    if (!eclipse) {
-      setStatus("No eclipse in catalog");
+    if (!timerEclipse) {
+      setStatus("2027 eclipse not found in catalog");
       return;
     }
 
@@ -216,7 +272,7 @@ export default function App() {
     setStatus(`Computing for ${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}…`);
 
     try {
-      const out = computeCircumstances(eclipse, observer);
+      const out = computeCircumstances(timerEclipse, observer);
       setResult(out);
       setStatus("Computed");
 
@@ -247,12 +303,14 @@ export default function App() {
   const runAlarmTest = () => {
     if (!result) {
       setStatus("Compute first to test alarms");
+      Alert.alert("Test Alarm", "Compute first to test alarms.");
       return;
     }
 
     const enabledItems = buildContactItems(result).filter((item) => alarmState[item.key]);
     if (!enabledItems.length) {
       setStatus("Alarm test skipped: no alarms enabled");
+      Alert.alert("Test Alarm", "No alarms are enabled.");
       return;
     }
 
@@ -262,7 +320,66 @@ export default function App() {
     const mm = String(now.getMinutes()).padStart(2, "0");
     const ss = String(now.getSeconds()).padStart(2, "0");
     setStatus(`Test alarm fired: ${target.label} at ${hh}:${mm}:${ss}`);
+    Alert.alert("Test Alarm", `${target.label}\n${hh}:${mm}:${ss}`);
+    Vibration.vibrate([0, 250, 120, 250]);
   };
+
+  const canGo = !!selectedLanding && selectedLanding.goEnabled && !!timerEclipse;
+
+  const goToTimer = () => {
+    if (!canGo) return;
+    setStatus("Ready");
+    setScreen("timer");
+  };
+
+  if (screen === "landing") {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.landingWrap}>
+          <Text style={styles.landingTitle}>Eclipse Timer</Text>
+          <Text style={styles.landingSubtitle}>Select Eclipse</Text>
+
+          <View style={styles.landingListBox}>
+            {LANDING_ECLIPSES.map((item) => (
+              <Pressable
+                key={item.id}
+                style={[
+                  styles.landingListItem,
+                  selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
+                ]}
+                onPress={() => setSelectedLandingId(item.id)}
+              >
+                <Text style={styles.landingListItemTitle}>{item.dateYmd} {item.kindLabel}</Text>
+                <Text style={styles.landingListItemMeta}>
+                  {item.id} {item.goEnabled ? "• Available" : "• Coming soon"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {selectedLanding ? (
+            <View style={styles.previewCard}>
+              <Image
+                source={{ uri: selectedLanding.gifUrl }}
+                style={styles.previewGif}
+                resizeMode="contain"
+              />
+            </View>
+          ) : (
+            <Text style={styles.muted}>Select the eclipse to preview NASA animation.</Text>
+          )}
+
+          <Pressable
+            style={[styles.goBtn, !canGo ? styles.goBtnDisabled : null]}
+            onPress={goToTimer}
+            disabled={!canGo}
+          >
+            <Text style={styles.goBtnText}>GO</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
 
   return (
@@ -270,7 +387,7 @@ export default function App() {
       <View style={styles.header}>
         <Text style={styles.title}>Eclipse Timer (MVP)</Text>
         <Text style={styles.subtitle}>
-          {eclipse ? `${eclipse.id} • ${eclipse.dateYmd}` : "No eclipse loaded"}
+          {timerEclipse ? `${timerEclipse.id} • ${timerEclipse.dateYmd}` : "No eclipse loaded"}
         </Text>
       </View>
 
@@ -395,6 +512,64 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0b0b0b" },
+  landingWrap: {
+    paddingHorizontal: 12,
+    paddingTop: 24,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
+  landingSubtitle: { color: "#bdbdbd", fontSize: 14 },
+  landingListBox: {
+    backgroundColor: "#121212",
+    borderRadius: 12,
+    padding: 10,
+  },
+  landingListItem: {
+    backgroundColor: "#1f1f1f",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2b2b2b",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  landingListItemSelected: {
+    borderColor: "#2c3cff",
+    backgroundColor: "#1a2056",
+  },
+  landingListItemTitle: { color: "white", fontSize: 14, fontWeight: "700" },
+  landingListItemMeta: { color: "#bdbdbd", fontSize: 12, marginTop: 4 },
+  previewCard: {
+    backgroundColor: "#121212",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2b2b2b",
+    padding: 8,
+  },
+  previewGif: {
+    width: "100%",
+    height: 220,
+    borderRadius: 8,
+    backgroundColor: "#0b0b0b",
+  },
+  goBtn: {
+    marginTop: 4,
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#2c3cff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goBtnDisabled: {
+    backgroundColor: "#26306f",
+    opacity: 0.55,
+  },
+  goBtnText: {
+    color: "white",
+    fontWeight: "800",
+    fontSize: 16,
+  },
   header: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6 },
   title: { color: "white", fontSize: 18, fontWeight: "700" },
   subtitle: { color: "#bdbdbd", fontSize: 12 },
