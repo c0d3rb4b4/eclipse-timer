@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,7 +22,7 @@ export default function LandingScreen({
 }: LandingScreenProps) {
   const selectedLanding = useMemo(
     () => eclipses.find((e) => e.id === selectedId) ?? null,
-    [eclipses, selectedId]
+    [eclipses, selectedId],
   );
   const canGo = !!selectedLanding;
   const renderItem = useCallback(
@@ -44,16 +44,13 @@ export default function LandingScreen({
           {item.dateYmd} {item.kindLabel}
         </Text>
         <Text
-          style={[
-            styles.landingListItemMeta,
-            item.isPast ? styles.landingListItemMetaPast : null,
-          ]}
+          style={[styles.landingListItemMeta, item.isPast ? styles.landingListItemMetaPast : null]}
         >
           {item.id} - {item.isPast ? "Past" : "Upcoming"}
         </Text>
       </Pressable>
     ),
-    [onSelect, selectedLanding?.id]
+    [onSelect, selectedLanding?.id],
   );
 
   return (

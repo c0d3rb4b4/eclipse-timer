@@ -1,6 +1,9 @@
-import React, { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { NavigationContainer, useFocusEffect, useIsFocused } from "@react-navigation/native";
-import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  createNativeStackNavigator,
+  type NativeStackScreenProps,
+} from "@react-navigation/native-stack";
 import { enableScreens } from "react-native-screens";
 
 import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
@@ -31,8 +34,11 @@ function LandingRoute({ navigation, catalog }: LandingRouteProps) {
   const isFocused = useIsFocused();
   const { landingEclipses, firstFutureIndex } = useLandingEclipses(catalog);
   const selectedIndex = useMemo(
-    () => (state.selectedLandingId ? landingEclipses.findIndex((item) => item.id === state.selectedLandingId) : -1),
-    [landingEclipses, state.selectedLandingId]
+    () =>
+      state.selectedLandingId
+        ? landingEclipses.findIndex((item) => item.id === state.selectedLandingId)
+        : -1,
+    [landingEclipses, state.selectedLandingId],
   );
   const landingScroll = useLandingScroll({
     isFocused,
@@ -61,15 +67,16 @@ function LandingRoute({ navigation, catalog }: LandingRouteProps) {
 function TimerRoute(_props: NativeStackScreenProps<RootStackParamList, "Timer">) {
   const { state } = useAppState();
   const activeEclipse = useMemo(
-    () => (state.activeEclipseId ? loadCatalogEntryWithOverlays(state.activeEclipseId) ?? null : null),
-    [state.activeEclipseId]
+    () =>
+      state.activeEclipseId ? (loadCatalogEntryWithOverlays(state.activeEclipseId) ?? null) : null,
+    [state.activeEclipseId],
   );
   const timerState = useTimerState(activeEclipse);
 
   useFocusEffect(
     useCallback(() => {
       timerState.resetForNewEclipse();
-    }, [timerState.resetForNewEclipse, state.activeEclipseId])
+    }, [timerState.resetForNewEclipse, state.activeEclipseId]),
   );
 
   return <TimerScreen activeEclipse={activeEclipse} timer={timerState} />;
@@ -84,9 +91,7 @@ export default function RootNavigator() {
         <Stack.Screen name="Landing">
           {(props) => <LandingRoute {...props} catalog={catalog} />}
         </Stack.Screen>
-        <Stack.Screen name="Timer">
-          {(props) => <TimerRoute {...props} />}
-        </Stack.Screen>
+        <Stack.Screen name="Timer">{(props) => <TimerRoute {...props} />}</Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
   );

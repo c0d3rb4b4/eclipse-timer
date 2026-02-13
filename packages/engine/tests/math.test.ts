@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evalPoly } from "../src/math/poly";
 import { findBrackets } from "../src/math/bracket";
-import { bisectRoot } from "../src/math/root";
+import { bisectRoot, type RootResult } from "../src/math/root";
 
 function evalPolyNaive(coeffs: readonly number[], t: number): number {
   return coeffs.reduce((sum, c, i) => sum + c * t ** i, 0);
@@ -13,6 +13,12 @@ function createRng(seed: number): () => number {
     state = (1664525 * state + 1013904223) >>> 0;
     return state / 0x100000000;
   };
+}
+
+function requireRootResult(value: RootResult | null): RootResult {
+  expect(value).not.toBeNull();
+  if (!value) throw new Error("Expected bisection result to be non-null");
+  return value;
 }
 
 describe("evalPoly", () => {
@@ -28,7 +34,7 @@ describe("evalPoly", () => {
 
     for (let n = 0; n < 200; n++) {
       const degree = 1 + Math.floor(rand() * 6);
-      const coeffs = Array.from({ length: degree }, () => (rand() * 20 - 10));
+      const coeffs = Array.from({ length: degree }, () => rand() * 20 - 10);
       const t = rand() * 8 - 4;
 
       const horner = evalPoly(coeffs, t);
@@ -43,7 +49,7 @@ describe("evalPoly", () => {
     const tail = coeffs.slice(1);
 
     const left = evalPoly(coeffs, t);
-    const right = coeffs[0]! + t * evalPoly(tail, t);
+    const right = (coeffs[0] ?? 0) + t * evalPoly(tail, t);
     expect(left).toBeCloseTo(right, 12);
   });
 });
@@ -67,7 +73,9 @@ describe("findBrackets", () => {
     const brackets = findBrackets(f, 0, 2, 0.25);
 
     expect(brackets).toHaveLength(1);
-    const b = brackets[0]!;
+    const b = brackets[0];
+    expect(b).toBeDefined();
+    if (!b) throw new Error("Expected a bracket around sqrt(2)");
     expect(b.a).toBeLessThan(Math.SQRT2);
     expect(b.b).toBeGreaterThan(Math.SQRT2);
     expect(b.fa * b.fb).toBeLessThan(0);
@@ -115,21 +123,19 @@ describe("bisectRoot", () => {
   });
 
   it("converges to sqrt(2) within tolerance", () => {
-    const result = bisectRoot((t) => t * t - 2, 1, 2, 1e-12);
-    expect(result).not.toBeNull();
-    expect(result!.ok).toBe(true);
-    expect(result!.iterations).toBeGreaterThan(0);
-    expect(result!.tHours).toBeCloseTo(Math.SQRT2, 10);
-    expect(Math.abs(result!.tHours * result!.tHours - 2)).toBeLessThan(1e-10);
+    const result = requireRootResult(bisectRoot((t) => t * t - 2, 1, 2, 1e-12));
+    expect(result.ok).toBe(true);
+    expect(result.iterations).toBeGreaterThan(0);
+    expect(result.tHours).toBeCloseTo(Math.SQRT2, 10);
+    expect(Math.abs(result.tHours * result.tHours - 2)).toBeLessThan(1e-10);
   });
 
   it("reports ok=false when max iterations are exhausted", () => {
-    const result = bisectRoot((t) => t - 0.123456, 0, 1, 1e-30, 3);
-    expect(result).not.toBeNull();
-    expect(result!.ok).toBe(false);
-    expect(result!.iterations).toBe(3);
-    expect(result!.tHours).toBeGreaterThan(0);
-    expect(result!.tHours).toBeLessThan(1);
+    const result = requireRootResult(bisectRoot((t) => t - 0.123456, 0, 1, 1e-30, 3));
+    expect(result.ok).toBe(false);
+    expect(result.iterations).toBe(3);
+    expect(result.tHours).toBeGreaterThan(0);
+    expect(result.tHours).toBeLessThan(1);
   });
 
   it("converges for deterministic random linear roots", () => {
@@ -139,12 +145,11 @@ describe("bisectRoot", () => {
       const slope = rand() > 0.5 ? 1 : -1;
       const f = (t: number) => slope * (t - root);
       const tol = 1e-9;
-      const result = bisectRoot(f, root - 5, root + 5, tol, 120);
+      const result = requireRootResult(bisectRoot(f, root - 5, root + 5, tol, 120));
 
-      expect(result).not.toBeNull();
-      expect(result!.ok).toBe(true);
-      expect(Math.abs(result!.tHours - root)).toBeLessThanOrEqual(1.1 * tol);
-      expect(Math.abs(f(result!.tHours))).toBeLessThan(1e-7);
+      expect(result.ok).toBe(true);
+      expect(Math.abs(result.tHours - root)).toBeLessThanOrEqual(1.1 * tol);
+      expect(Math.abs(f(result.tHours))).toBeLessThan(1e-7);
     }
   });
 });

@@ -38,7 +38,7 @@ function readCsvRows(pathname: string): CsvRow[] {
   return parse(text, {
     columns: true,
     skip_empty_lines: true,
-    trim: true
+    trim: true,
   }) as CsvRow[];
 }
 
@@ -47,7 +47,8 @@ function sha256(pathname: string): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-const filteredCsvPath = new URL("../generated/eclipse_besselian_1900_2100.csv", import.meta.url).pathname;
+const filteredCsvPath = new URL("../generated/eclipse_besselian_1900_2100.csv", import.meta.url)
+  .pathname;
 const catalogPath = new URL("../generated/catalog.generated.json", import.meta.url).pathname;
 const overlaysPath = new URL("../generated/overlays.generated.json", import.meta.url).pathname;
 
@@ -113,7 +114,9 @@ describe("catalog scripts integration outputs", () => {
     expect(overlayIds.length).toBe(catalogIds.size);
     for (const id of overlayIds) {
       expect(catalogIds.has(id), `${id} must exist in catalog`).toBe(true);
-      const entry = overlayEntries[id]!;
+      const entry = overlayEntries[id];
+      expect(entry, `${id} overlay entry must be defined`).toBeDefined();
+      if (!entry) continue;
       expect(Array.isArray(entry.overlayVisiblePolygons)).toBe(true);
       expect(Array.isArray(entry.overlayCentralPolygons)).toBe(true);
 
@@ -132,8 +135,14 @@ describe("catalog scripts integration outputs", () => {
   });
 
   it("keeps generated artifact snapshots stable", () => {
-    expect(sha256(filteredCsvPath)).toBe("f9ff6b47bfc82be42e019b3560f369e827da8f71651eea7ffc962e4a90021883");
-    expect(sha256(catalogPath)).toBe("80ce7678d77111d542c5a330485863402aaad3b6b2bb81d5de31274893df4e19");
-    expect(sha256(overlaysPath)).toBe("64c5ab99c04b5546c141b4f8a1395a5cfe048fcd7c0942983c618ca1827e870b");
+    expect(sha256(filteredCsvPath)).toBe(
+      "f9ff6b47bfc82be42e019b3560f369e827da8f71651eea7ffc962e4a90021883",
+    );
+    expect(sha256(catalogPath)).toBe(
+      "80ce7678d77111d542c5a330485863402aaad3b6b2bb81d5de31274893df4e19",
+    );
+    expect(sha256(overlaysPath)).toBe(
+      "64c5ab99c04b5546c141b4f8a1395a5cfe048fcd7c0942983c618ca1827e870b",
+    );
   });
 });

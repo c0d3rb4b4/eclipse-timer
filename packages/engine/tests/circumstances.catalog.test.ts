@@ -5,6 +5,8 @@ import sampleCatalog from "../../catalog/src/catalog.sample.json";
 import { computeCircumstances } from "../src/circumstances/compute";
 import { fPenumbra, fUmbraAbs } from "../src/circumstances/functions";
 
+type CatalogJsonRecord = Omit<EclipseRecord, "kind"> & { kind: string };
+
 function normalizeKind(kind: string): EclipseKind {
   if (kind.startsWith("T")) return "total";
   if (kind.startsWith("A")) return "annular";
@@ -12,10 +14,19 @@ function normalizeKind(kind: string): EclipseKind {
   return "partial";
 }
 
-function normalizeRecord(raw: any): EclipseRecord {
+function normalizeRecord(raw: CatalogJsonRecord): EclipseRecord {
   return {
     ...raw,
-    kind: normalizeKind(String(raw.kind))
+    kind: normalizeKind(String(raw.kind)),
+  };
+}
+
+function greatestObserverFor(e: EclipseRecord): { latDeg: number; lonDeg: number } {
+  expect(e.greatestEclipseLatDeg, `${e.id}.greatestEclipseLatDeg should be defined`).toBeDefined();
+  expect(e.greatestEclipseLonDeg, `${e.id}.greatestEclipseLonDeg should be defined`).toBeDefined();
+  return {
+    latDeg: e.greatestEclipseLatDeg as number,
+    lonDeg: e.greatestEclipseLonDeg as number,
   };
 }
 
@@ -26,23 +37,31 @@ function parseUtc(iso: string | undefined, label: string): number {
   return ms;
 }
 
-function rootsFromDebug(c: ReturnType<typeof computeCircumstances>): { pen: number[]; umb: number[]; bestT?: number } {
-  const debug = (c._debug ?? {}) as { penRoots?: number[]; umbRoots?: number[]; bestT_hours?: number };
+function rootsFromDebug(c: ReturnType<typeof computeCircumstances>): {
+  pen: number[];
+  umb: number[];
+  bestT?: number;
+} {
+  const debug = (c._debug ?? {}) as {
+    penRoots?: number[];
+    umbRoots?: number[];
+    bestT_hours?: number;
+  };
   return {
     pen: debug.penRoots ?? [],
     umb: debug.umbRoots ?? [],
-    bestT: debug.bestT_hours
+    bestT: debug.bestT_hours,
   };
 }
 
-const catalog = (generatedCatalog as any[]).map(normalizeRecord);
+const catalog = (generatedCatalog as CatalogJsonRecord[]).map(normalizeRecord);
 
 describe("computeCircumstances catalog sweeps", () => {
   it("satisfies invariant checks across every generated eclipse at greatest-point coordinates", () => {
     const counts = { total: 0, annular: 0, partial: 0, none: 0 };
 
     for (const e of catalog) {
-      const observer = { latDeg: e.greatestEclipseLatDeg!, lonDeg: e.greatestEclipseLonDeg! };
+      const observer = greatestObserverFor(e);
       const c = computeCircumstances(e, observer);
       const roots = rootsFromDebug(c);
 
@@ -52,10 +71,16 @@ describe("computeCircumstances catalog sweeps", () => {
       expect(parseUtc(c.maxUtc, `${e.id}.maxUtc`)).toBeTypeOf("number");
 
       for (const t of roots.pen) {
-        expect(Math.abs(fPenumbra(e, observer, t)), `${e.id} pen root should satisfy fPenumbra≈0`).toBeLessThan(1e-6);
+        expect(
+          Math.abs(fPenumbra(e, observer, t)),
+          `${e.id} pen root should satisfy fPenumbra≈0`,
+        ).toBeLessThan(1e-6);
       }
       for (const t of roots.umb) {
-        expect(Math.abs(fUmbraAbs(e, observer, t)), `${e.id} umb root should satisfy fUmbraAbs≈0`).toBeLessThan(1e-6);
+        expect(
+          Math.abs(fUmbraAbs(e, observer, t)),
+          `${e.id} umb root should satisfy fUmbraAbs≈0`,
+        ).toBeLessThan(1e-6);
       }
 
       const c1 = parseUtc(c.c1Utc, `${e.id}.c1Utc`);
@@ -92,7 +117,7 @@ describe("computeCircumstances catalog sweeps", () => {
 
     for (const e of catalog) {
       if (e.kind === "hybrid") continue;
-      const c = computeCircumstances(e, { latDeg: e.greatestEclipseLatDeg!, lonDeg: e.greatestEclipseLonDeg! });
+      const c = computeCircumstances(e, greatestObserverFor(e));
       const expected = e.kind === "total" ? "total" : e.kind === "annular" ? "annular" : "partial";
       if (c.kindAtLocation !== expected) {
         mismatches.push(e.id);
@@ -115,7 +140,7 @@ describe("computeCircumstances catalog sweeps", () => {
       "2071-03-31T",
       "2085-12-16T",
       "2089-04-10T",
-      "2092-02-07T"
+      "2092-02-07T",
     ]);
   });
 });
@@ -128,7 +153,7 @@ describe("computeCircumstances robustness", () => {
     const malformed: EclipseRecord[] = [
       { ...base, x: [], y: [], d: [], mu: [], l1: [], l2: [] },
       { ...base, x: [NaN], y: [NaN], d: [NaN], mu: [NaN], l1: [NaN], l2: [NaN] },
-      { ...base, x: [0], y: [0], d: [0], mu: [0], l1: [0], l2: [0] }
+      { ...base, x: [0], y: [0], d: [0], mu: [0], l1: [0], l2: [0] },
     ];
 
     for (const rec of malformed) {
@@ -151,7 +176,11 @@ describe("computeCircumstances robustness", () => {
 
   it("changes computed contacts when observer elevation changes", () => {
     const seaLevel = computeCircumstances(base, { latDeg: 36.1408, lonDeg: -5.3536, elevM: 0 });
-    const highAltitude = computeCircumstances(base, { latDeg: 36.1408, lonDeg: -5.3536, elevM: 3000 });
+    const highAltitude = computeCircumstances(base, {
+      latDeg: 36.1408,
+      lonDeg: -5.3536,
+      elevM: 3000,
+    });
 
     expect(seaLevel.kindAtLocation).toBe("total");
     expect(highAltitude.kindAtLocation).toBe("total");

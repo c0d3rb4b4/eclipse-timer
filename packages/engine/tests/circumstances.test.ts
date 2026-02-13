@@ -8,6 +8,7 @@ import { evaluateAtT, fPenumbra, fUmbraAbs } from "../src/circumstances/function
 const gibraltar = { latDeg: 36.1408, lonDeg: -5.3536 };
 const centralAt1000 = { latDeg: 26 + 53.3 / 60, lonDeg: 31 + 0.8 / 60 };
 const sampleRecord = (sampleCatalog as EclipseRecord[])[0];
+type CatalogJsonRecord = Omit<EclipseRecord, "kind"> & { kind: string };
 
 function requireDefined<T>(value: T | undefined, label: string): T {
   expect(value, `${label} should be defined`).toBeDefined();
@@ -28,15 +29,15 @@ function normalizeKind(kind: string): EclipseKind {
   return "partial";
 }
 
-function normalizeRecord(raw: any): EclipseRecord {
+function normalizeRecord(raw: CatalogJsonRecord): EclipseRecord {
   return {
     ...raw,
-    kind: normalizeKind(String(raw.kind))
+    kind: normalizeKind(String(raw.kind)),
   };
 }
 
 const generatedById = new Map(
-  (generatedCatalog as any[]).map((raw) => [raw.id as string, normalizeRecord(raw)])
+  (generatedCatalog as CatalogJsonRecord[]).map((raw) => [raw.id, normalizeRecord(raw)]),
 );
 
 function getRecord(id: string): EclipseRecord {
@@ -46,7 +47,7 @@ function getRecord(id: string): EclipseRecord {
 function getGreatestObserver(e: EclipseRecord): { latDeg: number; lonDeg: number } {
   return {
     latDeg: requireDefined(e.greatestEclipseLatDeg, `${e.id}.greatestEclipseLatDeg`),
-    lonDeg: requireDefined(e.greatestEclipseLonDeg, `${e.id}.greatestEclipseLonDeg`)
+    lonDeg: requireDefined(e.greatestEclipseLonDeg, `${e.id}.greatestEclipseLonDeg`),
   };
 }
 
@@ -77,7 +78,11 @@ function expectOrderedContacts(c: Circumstances): void {
   }
 }
 
-function expectRootsNearZero(e: EclipseRecord, observer: { latDeg: number; lonDeg: number }, c: Circumstances): void {
+function expectRootsNearZero(
+  e: EclipseRecord,
+  observer: { latDeg: number; lonDeg: number },
+  c: Circumstances,
+): void {
   const debug = (c._debug ?? {}) as {
     penRoots?: number[];
     umbRoots?: number[];
@@ -95,17 +100,30 @@ function expectRootsNearZero(e: EclipseRecord, observer: { latDeg: number; lonDe
 
   if ((c.kindAtLocation === "total" || c.kindAtLocation === "annular") && umbRoots.length >= 2) {
     const bestT = requireDefined(debug.bestT_hours, "bestT_hours");
-    expect(bestT).toBeGreaterThan(umbRoots[0]!);
-    expect(bestT).toBeLessThan(umbRoots[umbRoots.length - 1]!);
+    const firstUmbraRoot = umbRoots[0];
+    const lastUmbraRoot = umbRoots[umbRoots.length - 1];
+    expect(firstUmbraRoot, "first umbra root should be defined").toBeDefined();
+    expect(lastUmbraRoot, "last umbra root should be defined").toBeDefined();
+    if (typeof firstUmbraRoot !== "number" || typeof lastUmbraRoot !== "number") return;
+    expect(bestT).toBeGreaterThan(firstUmbraRoot);
+    expect(bestT).toBeLessThan(lastUmbraRoot);
   }
 }
 
-function getDebug(c: Circumstances): { penRoots: number[]; umbRoots: number[]; bestT_hours?: number } {
-  const debug = (c._debug ?? {}) as { penRoots?: number[]; umbRoots?: number[]; bestT_hours?: number };
+function getDebug(c: Circumstances): {
+  penRoots: number[];
+  umbRoots: number[];
+  bestT_hours?: number;
+} {
+  const debug = (c._debug ?? {}) as {
+    penRoots?: number[];
+    umbRoots?: number[];
+    bestT_hours?: number;
+  };
   return {
     penRoots: debug.penRoots ?? [],
     umbRoots: debug.umbRoots ?? [],
-    bestT_hours: debug.bestT_hours
+    bestT_hours: debug.bestT_hours,
   };
 }
 
@@ -212,7 +230,14 @@ describe("computeCircumstances", () => {
   });
 
   it("keeps contact invariants across mixed eclipse kinds at greatest points", () => {
-    const ids = ["1900-05-28T", "1900-11-22T", "1902-05-07T", "1908-12-23T", "1919-05-29T", "2027-08-02T"];
+    const ids = [
+      "1900-05-28T",
+      "1900-11-22T",
+      "1902-05-07T",
+      "1908-12-23T",
+      "1919-05-29T",
+      "2027-08-02T",
+    ];
     for (const id of ids) {
       const e = getRecord(id);
       const c = computeCircumstances(e, getGreatestObserver(e));
@@ -225,12 +250,16 @@ describe("computeCircumstances", () => {
   });
 
   it("matches modern regression vectors across recent and upcoming eclipses", () => {
-    const cases: Array<{ id: string; kindAtLocation: Circumstances["kindAtLocation"]; maxUtc: string }> = [
+    const cases: Array<{
+      id: string;
+      kindAtLocation: Circumstances["kindAtLocation"];
+      maxUtc: string;
+    }> = [
       { id: "2012-05-20T", kindAtLocation: "annular", maxUtc: "2012-05-19T23:53:20.584Z" },
       { id: "2017-08-21T", kindAtLocation: "total", maxUtc: "2017-08-21T18:26:05.961Z" },
       { id: "2023-10-14T", kindAtLocation: "annular", maxUtc: "2023-10-14T18:00:05.069Z" },
       { id: "2024-04-08T", kindAtLocation: "total", maxUtc: "2024-04-08T18:17:47.715Z" },
-      { id: "2045-08-12T", kindAtLocation: "total", maxUtc: "2045-08-12T17:41:51.790Z" }
+      { id: "2045-08-12T", kindAtLocation: "total", maxUtc: "2045-08-12T17:41:51.790Z" },
     ];
 
     for (const tc of cases) {
@@ -245,7 +274,13 @@ describe("computeCircumstances", () => {
   });
 
   it("enforces root-count semantics by kind at greatest points", () => {
-    const totalOrAnnularIds = ["1900-05-28T", "1900-11-22T", "2012-05-20T", "2017-08-21T", "2023-10-14T"];
+    const totalOrAnnularIds = [
+      "1900-05-28T",
+      "1900-11-22T",
+      "2012-05-20T",
+      "2017-08-21T",
+      "2023-10-14T",
+    ];
     for (const id of totalOrAnnularIds) {
       const c = computeCircumstances(getRecord(id), getGreatestObserver(getRecord(id)));
       const debug = getDebug(c);

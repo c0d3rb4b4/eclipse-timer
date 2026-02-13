@@ -14,7 +14,7 @@ export type EclipseRecord = {
   kind: EclipseKind;
 
   // Polynomial reference time
-  t0TtHours: number;     // 10.000
+  t0TtHours: number; // 10.000
   deltaTSeconds: number; // 71.7
 
   // “tan f1 / tan f2”
@@ -22,9 +22,9 @@ export type EclipseRecord = {
   tanF2: number;
 
   // Polynomials in tHours = t1 - t0 (decimal hours)
-  x: number[];  // up to cubic
+  x: number[]; // up to cubic
   y: number[];
-  d: number[];  // typically up to quadratic
+  d: number[]; // typically up to quadratic
   mu: number[]; // typically linear/quadratic
   l1: number[];
   l2: number[];
@@ -53,5 +53,5 @@ export type Circumstances = {
   durationSeconds?: number;
 
   // Optional debug
-  _debug?: any;
+  _debug?: Record<string, unknown>;
 };

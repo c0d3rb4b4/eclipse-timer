@@ -1,5 +1,14 @@
-import React, { useMemo } from "react";
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useMemo } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,11 +31,15 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
     () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),
-    [activeEclipse]
+    [activeEclipse],
   );
   const centralOverlayColor = activeKindCode === "A" ? ANNULARITY_PATH_COLOR : TOTALITY_PATH_COLOR;
   const centralLegendLabel =
-    activeKindCode === "A" ? "Annularity Path" : activeKindCode === "H" ? "Central Path" : "Totality Path";
+    activeKindCode === "A"
+      ? "Annularity Path"
+      : activeKindCode === "H"
+        ? "Central Path"
+        : "Totality Path";
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -75,7 +88,11 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
 
         <Pressable style={styles.mapOverlayBtn} onPress={timer.cycleMapType}>
           <Text style={styles.mapOverlayBtnText}>
-            {timer.mapType === "standard" ? "Standard" : timer.mapType === "satellite" ? "Satellite" : "Hybrid"}
+            {timer.mapType === "standard"
+              ? "Standard"
+              : timer.mapType === "satellite"
+                ? "Satellite"
+                : "Hybrid"}
           </Text>
         </Pressable>
 
@@ -297,7 +314,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
   },
-  timerHeroLabel: { color: "#a8b1ff", fontSize: 11, fontWeight: "700", marginBottom: 4, textTransform: "uppercase" },
+  timerHeroLabel: {
+    color: "#a8b1ff",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
   timerHeroText: { color: "white", fontSize: 16, fontWeight: "800", lineHeight: 22 },
   testAlarmBtn: {
     marginTop: 10,

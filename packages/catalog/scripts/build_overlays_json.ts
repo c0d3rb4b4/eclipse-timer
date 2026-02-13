@@ -46,8 +46,7 @@ const BISECT_ITERS = 22;
 /** Max search radius in degrees from shadow axis. */
 const PEN_SEARCH_DEG = 80;
 const UMB_SEARCH_DEG = 10;
-/** Douglas-Peucker simplification tolerance (degrees). */
-const SIMPLIFY_VIS_DEG = 0.15;
+/** Douglas-Peucker simplification tolerance (degrees) for central band. */
 const SIMPLIFY_CEN_DEG = 0.08;
 
 const DEG2RAD = Math.PI / 180;
@@ -61,7 +60,7 @@ function destPoint(
   latDeg: number,
   lonDeg: number,
   bearingDeg: number,
-  distDeg: number
+  distDeg: number,
 ): [number, number] {
   const lat1 = latDeg * DEG2RAD;
   const brng = bearingDeg * DEG2RAD;
@@ -72,16 +71,12 @@ function destPoint(
   const cosD = Math.cos(d);
   const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * Math.cos(brng));
   const lon2 =
-    lonDeg * DEG2RAD +
-    Math.atan2(
-      Math.sin(brng) * sinD * cosLat1,
-      cosD - sinLat1 * Math.sin(lat2)
-    );
+    lonDeg * DEG2RAD + Math.atan2(Math.sin(brng) * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
   return [lat2 * RAD2DEG, ((lon2 * RAD2DEG + 540) % 360) - 180];
 }
 
 function normLon(lon: number): number {
-  return ((lon % 360) + 540) % 360 - 180;
+  return (((lon % 360) + 540) % 360) - 180;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -92,10 +87,7 @@ function clamp(v: number, lo: number, hi: number): number {
 // Shadow-axis position at time t
 // ---------------------------------------------------------------------------
 
-function shadowAxisLatLon(
-  e: EclipseRecord,
-  tHours: number
-): [number, number] | null {
+function shadowAxisLatLon(e: EclipseRecord, tHours: number): [number, number] | null {
   const v = evaluateAtT(e, { latDeg: 0, lonDeg: 0, elevM: 0 }, tHours);
   const sinD = Math.sin(v.d * DEG2RAD);
   const cosD = Math.cos(v.d * DEG2RAD);
@@ -131,7 +123,7 @@ function shadowAxisLatLon(
 function penumbraMetric(
   e: EclipseRecord,
   obs: { latDeg: number; lonDeg: number; elevM: number },
-  tHours: number
+  tHours: number,
 ): number {
   const v = evaluateAtT(e, obs, tHours);
   return v.delta - v.L1obs;
@@ -140,7 +132,7 @@ function penumbraMetric(
 function umbraMetric(
   e: EclipseRecord,
   obs: { latDeg: number; lonDeg: number; elevM: number },
-  tHours: number
+  tHours: number,
 ): number {
   const v = evaluateAtT(e, obs, tHours);
   return v.delta - Math.abs(v.L2obs);
@@ -159,28 +151,14 @@ function findEdgeAlongBearing(
   centerLon: number,
   bearingDeg: number,
   maxRadiusDeg: number,
-  metricFn: MetricFn
+  metricFn: MetricFn,
 ): OverlayPoint | null {
-  const loVal0 = metricFn(
-    e,
-    { latDeg: centerLat, lonDeg: centerLon, elevM: 0 },
-    tHours
-  );
-  const [farLat, farLon] = destPoint(
-    centerLat,
-    centerLon,
-    bearingDeg,
-    maxRadiusDeg
-  );
-  const hiVal0 = metricFn(
-    e,
-    { latDeg: farLat, lonDeg: farLon, elevM: 0 },
-    tHours
-  );
+  const loVal0 = metricFn(e, { latDeg: centerLat, lonDeg: centerLon, elevM: 0 }, tHours);
+  const [farLat, farLon] = destPoint(centerLat, centerLon, bearingDeg, maxRadiusDeg);
+  const hiVal0 = metricFn(e, { latDeg: farLat, lonDeg: farLon, elevM: 0 }, tHours);
 
   if (loVal0 >= 0 && hiVal0 >= 0) return null;
-  if (loVal0 < 0 && hiVal0 < 0)
-    return [clamp(farLat, -89.9, 89.9), normLon(farLon)];
+  if (loVal0 < 0 && hiVal0 < 0) return [clamp(farLat, -89.9, 89.9), normLon(farLon)];
 
   let lo = 0;
   let hi = maxRadiusDeg;
@@ -189,12 +167,8 @@ function findEdgeAlongBearing(
   for (let i = 0; i < BISECT_ITERS; i++) {
     const mid = (lo + hi) / 2;
     const [mLat, mLon] = destPoint(centerLat, centerLon, bearingDeg, mid);
-    const mVal = metricFn(
-      e,
-      { latDeg: mLat, lonDeg: mLon, elevM: 0 },
-      tHours
-    );
-    if ((loVal < 0) === (mVal < 0)) {
+    const mVal = metricFn(e, { latDeg: mLat, lonDeg: mLon, elevM: 0 }, tHours);
+    if (loVal < 0 === mVal < 0) {
       lo = mid;
       loVal = mVal;
     } else {
@@ -218,7 +192,7 @@ function traceOutlineAtTime(
   centerLon: number,
   maxRadiusDeg: number,
   metricFn: MetricFn,
-  numBearings: number
+  numBearings: number,
 ): OverlayPoint[] {
   const points: OverlayPoint[] = [];
   for (let i = 0; i < numBearings; i++) {
@@ -230,7 +204,7 @@ function traceOutlineAtTime(
       centerLon,
       bearing,
       maxRadiusDeg,
-      metricFn
+      metricFn,
     );
     if (pt) points.push(pt);
   }
@@ -241,11 +215,7 @@ function traceOutlineAtTime(
 // Douglas-Peucker simplification
 // ---------------------------------------------------------------------------
 
-function perpDist(
-  p: OverlayPoint,
-  a: OverlayPoint,
-  b: OverlayPoint
-): number {
+function perpDist(p: OverlayPoint, a: OverlayPoint, b: OverlayPoint): number {
   const dx = b[1] - a[1];
   const dy = b[0] - a[0];
   const lenSq = dx * dx + dy * dy;
@@ -254,17 +224,17 @@ function perpDist(
   return Math.hypot(p[0] - (a[0] + t * dy), p[1] - (a[1] + t * dx));
 }
 
-function douglasPeucker(
-  points: OverlayPoint[],
-  tolerance: number
-): OverlayPoint[] {
+function douglasPeucker(points: OverlayPoint[], tolerance: number): OverlayPoint[] {
   if (points.length <= 2) return points;
   let maxDist = 0;
   let maxIdx = 0;
-  const first = points[0]!;
-  const last = points[points.length - 1]!;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return points;
   for (let i = 1; i < points.length - 1; i++) {
-    const d = perpDist(points[i]!, first, last);
+    const point = points[i];
+    if (!point) continue;
+    const d = perpDist(point, first, last);
     if (d > maxDist) {
       maxDist = d;
       maxIdx = i;
@@ -278,10 +248,7 @@ function douglasPeucker(
   return [first, last];
 }
 
-function simplifyPath(
-  pts: OverlayPoint[],
-  tolerance: number
-): OverlayPoint[] {
+function simplifyPath(pts: OverlayPoint[], tolerance: number): OverlayPoint[] {
   if (pts.length <= 2) return pts;
   return douglasPeucker(pts, tolerance);
 }
@@ -308,7 +275,6 @@ function simplifyPath(
 function buildVisiblePolygon(
   e: EclipseRecord,
   outlines: { t: number; center: OverlayPoint }[],
-  tolerance: number
 ): OverlayPoint[][] {
   if (outlines.length === 0) return [];
 
@@ -328,20 +294,14 @@ function buildVisiblePolygon(
       frame.center[1],
       PEN_SEARCH_DEG,
       penumbraMetric,
-      numBuckets
+      numBuckets,
     );
 
     for (const pt of outline) {
       // Bearing from centroid to this boundary point
-      const bearing = bearingFromTo(
-        centroid[0],
-        centroid[1],
-        pt[0],
-        pt[1]
-      );
+      const bearing = bearingFromTo(centroid[0], centroid[1], pt[0], pt[1]);
       // Map bearing [0, 360) into a bucket index
-      const bucketIdx =
-        Math.floor((bearing / 360) * numBuckets) % numBuckets;
+      const bucketIdx = Math.floor((bearing / 360) * numBuckets) % numBuckets;
 
       const dist = angularDistance(centroid[0], centroid[1], pt[0], pt[1]);
 
@@ -360,19 +320,24 @@ function buildVisiblePolygon(
     let prevIdx = -1;
     for (let d = 1; d < numBuckets; d++) {
       const idx = (i - d + numBuckets) % numBuckets;
-      if (buckets[idx]) { prevIdx = idx; break; }
+      if (buckets[idx]) {
+        prevIdx = idx;
+        break;
+      }
     }
     let nextIdx = -1;
     for (let d = 1; d < numBuckets; d++) {
       const idx = (i + d) % numBuckets;
-      if (buckets[idx]) { nextIdx = idx; break; }
+      if (buckets[idx]) {
+        nextIdx = idx;
+        break;
+      }
     }
     if (prevIdx < 0 || nextIdx < 0) continue;
 
     // How far are we between prevIdx and nextIdx?
-    const gapSize =
-      ((nextIdx - prevIdx + numBuckets) % numBuckets) || numBuckets;
-    const pos = ((i - prevIdx + numBuckets) % numBuckets) || numBuckets;
+    const gapSize = (nextIdx - prevIdx + numBuckets) % numBuckets || numBuckets;
+    const pos = (i - prevIdx + numBuckets) % numBuckets || numBuckets;
     const frac = pos / gapSize;
 
     // Spherical linear interpolation (SLERP) between the two filled points
@@ -403,20 +368,13 @@ function buildVisiblePolygon(
 /**
  * Initial bearing (forward azimuth) from point 1 to point 2, in degrees [0, 360).
  */
-function bearingFromTo(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+function bearingFromTo(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const dLon = (lon2 - lon1) * DEG2RAD;
   const la1 = lat1 * DEG2RAD;
   const la2 = lat2 * DEG2RAD;
   const y = Math.sin(dLon) * Math.cos(la2);
-  const x =
-    Math.cos(la1) * Math.sin(la2) -
-    Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
-  return ((Math.atan2(y, x) * RAD2DEG) + 360) % 360;
+  const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * RAD2DEG + 360) % 360;
 }
 
 /**
@@ -428,7 +386,7 @@ function sphericalInterp(
   lon1: number,
   lat2: number,
   lon2: number,
-  frac: number
+  frac: number,
 ): OverlayPoint {
   const la1 = lat1 * DEG2RAD;
   const lo1 = lon1 * DEG2RAD;
@@ -457,19 +415,12 @@ function sphericalInterp(
 /**
  * Angular distance between two lat/lon points in degrees (Haversine).
  */
-function angularDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+function angularDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const dLat = (lat2 - lat1) * DEG2RAD;
   const dLon = (lon2 - lon1) * DEG2RAD;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * DEG2RAD) *
-      Math.cos(lat2 * DEG2RAD) *
-      Math.sin(dLon / 2) ** 2;
+    Math.cos(lat1 * DEG2RAD) * Math.cos(lat2 * DEG2RAD) * Math.sin(dLon / 2) ** 2;
   return 2 * Math.asin(Math.sqrt(a)) * RAD2DEG;
 }
 
@@ -491,7 +442,7 @@ function angularDistance(
  */
 function buildBandPolygon(
   outlines: { t: number; points: OverlayPoint[] }[],
-  tolerance: number
+  tolerance: number,
 ): OverlayPoint[][] {
   const valid = outlines.filter((o) => o.points.length >= 3);
   if (valid.length === 0) return [];
@@ -499,23 +450,24 @@ function buildBandPolygon(
 
   if (valid.length === 1) {
     // Single timestep: just return the outline ring
-    const ring = valid[0]!.points;
+    const ring = valid[0]?.points;
+    if (!ring) return [];
     const s = simplifyPath(ring, tolerance);
     return s.length >= 3 ? [s] : [];
   }
 
   // Compute the shadow sweep direction from first to last center
-  const firstCenter = outlineCenter(valid[0]!.points);
-  const lastCenter = outlineCenter(valid[valid.length - 1]!.points);
+  const firstPoints = valid[0]?.points;
+  const lastPoints = valid[valid.length - 1]?.points;
+  if (!firstPoints || !lastPoints) return [];
+
+  const firstCenter = outlineCenter(firstPoints);
+  const lastCenter = outlineCenter(lastPoints);
   const sweepDx = lastCenter[1] - firstCenter[1];
   const sweepDy = lastCenter[0] - firstCenter[0];
   // Handle dateline wrap for sweep direction
   const adjustedSweepDx =
-    Math.abs(sweepDx) > 180
-      ? sweepDx > 0
-        ? sweepDx - 360
-        : sweepDx + 360
-      : sweepDx;
+    Math.abs(sweepDx) > 180 ? (sweepDx > 0 ? sweepDx - 360 : sweepDx + 360) : sweepDx;
   const sweepAngle = Math.atan2(adjustedSweepDx, sweepDy);
   // perpendicular: "left" of sweep = +90°
   const perpAngle = sweepAngle + Math.PI / 2;
@@ -529,11 +481,14 @@ function buildBandPolygon(
   const rightEdge: OverlayPoint[] = [];
 
   for (const frame of valid) {
+    const firstPoint = frame.points[0];
+    if (!firstPoint) continue;
+
     const center = outlineCenter(frame.points);
     let bestLeftScore = -Infinity;
-    let bestLeftPt: OverlayPoint = frame.points[0]!;
+    let bestLeftPt: OverlayPoint = firstPoint;
     let bestRightScore = Infinity;
-    let bestRightPt: OverlayPoint = frame.points[0]!;
+    let bestRightPt: OverlayPoint = firstPoint;
 
     for (const p of frame.points) {
       let dl = p[1] - center[1];
@@ -556,27 +511,19 @@ function buildBandPolygon(
 
   // Leading cap: first outline, sorted from right-edge to left-edge
   // (going "counter-sweep" around the cap)
-  const firstPts = valid[0]!.points;
+  const firstPts = valid[0]?.points;
+  if (!firstPts) return [];
   const firstCtr = outlineCenter(firstPts);
   const leadingCap = sortByPerpProjection(firstPts, firstCtr, perpDx, perpDy);
 
   // Trailing cap: last outline, sorted from left-edge to right-edge
-  const lastPts = valid[valid.length - 1]!.points;
+  const lastPts = valid[valid.length - 1]?.points;
+  if (!lastPts) return [];
   const lastCtr = outlineCenter(lastPts);
-  const trailingCap = sortByPerpProjection(
-    lastPts,
-    lastCtr,
-    perpDx,
-    perpDy
-  ).reverse();
+  const trailingCap = sortByPerpProjection(lastPts, lastCtr, perpDx, perpDy).reverse();
 
   // Assemble: leftEdge forward → trailingCap → rightEdge reversed → leadingCap
-  const band: OverlayPoint[] = [
-    ...leftEdge,
-    ...trailingCap,
-    ...rightEdge.reverse(),
-    ...leadingCap,
-  ];
+  const band: OverlayPoint[] = [...leftEdge, ...trailingCap, ...rightEdge.reverse(), ...leadingCap];
 
   if (band.length < 3) return [];
 
@@ -603,7 +550,7 @@ function sortByPerpProjection(
   pts: OverlayPoint[],
   center: OverlayPoint,
   perpDx: number,
-  perpDy: number
+  perpDy: number,
 ): OverlayPoint[] {
   return [...pts].sort((a, b) => {
     let adl = a[1] - center[1];
@@ -627,8 +574,13 @@ type OverlayResult = {
   overlayCentralPolygons: OverlayPoint[][];
 };
 
+type CatalogOverlayRecord = EclipseRecord & {
+  overlayVisiblePolygons?: OverlayPoint[][];
+  overlayCentralPolygons?: OverlayPoint[][];
+};
+
 function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
-  const kind = String((e as any).kind ?? "P").toUpperCase()[0];
+  const kind = String(e.kind ?? "P").toUpperCase()[0];
   const isPartial = kind === "P";
 
   // ------------------------------------------------------------------
@@ -644,17 +596,13 @@ function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
     if (!center) continue;
 
     // Check if penumbra touches Earth at this time
-    const cVal = penumbraMetric(
-      e,
-      { latDeg: center[0], lonDeg: center[1], elevM: 0 },
-      t
-    );
+    const cVal = penumbraMetric(e, { latDeg: center[0], lonDeg: center[1], elevM: 0 }, t);
     if (cVal >= 0) continue;
 
     visFrames.push({ t, center });
   }
 
-  const visiblePolygons = buildVisiblePolygon(e, visFrames, SIMPLIFY_VIS_DEG);
+  const visiblePolygons = buildVisiblePolygon(e, visFrames);
 
   // ------------------------------------------------------------------
   // Central (umbra/antumbra) overlay — ray-traced band
@@ -668,11 +616,7 @@ function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
       const center = shadowAxisLatLon(e, t);
       if (!center) continue;
 
-      const cVal = umbraMetric(
-        e,
-        { latDeg: center[0], lonDeg: center[1], elevM: 0 },
-        t
-      );
+      const cVal = umbraMetric(e, { latDeg: center[0], lonDeg: center[1], elevM: 0 }, t);
       if (cVal >= 0) continue;
 
       const outline = traceOutlineAtTime(
@@ -682,7 +626,7 @@ function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
         center[1],
         UMB_SEARCH_DEG,
         umbraMetric,
-        BEARING_SAMPLES_CENTRAL
+        BEARING_SAMPLES_CENTRAL,
       );
       if (outline.length >= 3) {
         cenOutlines.push({ t, points: outline });
@@ -703,8 +647,8 @@ function buildOverlaysForEclipse(e: EclipseRecord): OverlayResult {
 // ---------------------------------------------------------------------------
 
 console.log("Loading catalog...");
-const raw = JSON.parse(fs.readFileSync(catalogPath, "utf8")) as any[];
-const catalog: EclipseRecord[] = raw.map((e: any) => {
+const raw = JSON.parse(fs.readFileSync(catalogPath, "utf8")) as CatalogOverlayRecord[];
+const catalog: EclipseRecord[] = raw.map((e) => {
   const { overlayVisiblePolygons, overlayCentralPolygons, ...rest } = e;
   return rest as EclipseRecord;
 });
@@ -719,7 +663,7 @@ for (const e of catalog) {
   doneCount++;
   if (doneCount % 10 === 0 || doneCount === catalog.length) {
     console.log(
-      `  [${doneCount}/${catalog.length}] ${e.id} — vis: ${result.overlayVisiblePolygons.length} poly, cen: ${result.overlayCentralPolygons.length} poly`
+      `  [${doneCount}/${catalog.length}] ${e.id} — vis: ${result.overlayVisiblePolygons.length} poly, cen: ${result.overlayCentralPolygons.length} poly`,
     );
   }
 }

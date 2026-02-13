@@ -1,5 +1,10 @@
 // packages/engine/src/circumstances/compute.ts
-import type { Circumstances, EclipseRecord, Observer, EclipseKindAtLocation } from "@eclipse-timer/shared";
+import type {
+  Circumstances,
+  EclipseRecord,
+  Observer,
+  EclipseKindAtLocation,
+} from "@eclipse-timer/shared";
 import { findBrackets } from "../math/bracket";
 import { bisectRoot } from "../math/root";
 import { evaluateShadowMetricsAtT } from "./functions";
@@ -18,7 +23,7 @@ function scanMin(
   f: (tHours: number) => number,
   a: number,
   b: number,
-  stepHours: number
+  stepHours: number,
 ): { t: number; val: number } {
   let bestT = a;
   let bestV = Number.POSITIVE_INFINITY;
@@ -36,12 +41,12 @@ function scanMin(
 
 function solveContacts(
   e: EclipseRecord,
-  o: Observer
+  o: Observer,
 ): {
   contacts: ContactTimes;
   kindAtLocation: EclipseKindAtLocation;
   maxEval?: ReturnType<typeof evaluateShadowMetricsAtT>;
-  debug: any;
+  debug: Record<string, unknown>;
 } {
   // NASA page says valid over 7.00 ≤ t ≤ 13.00 TDT and t0=10.000 ⇒ [-3, +3] hours from t0
   const tMin = -3;
@@ -87,19 +92,24 @@ function solveContacts(
   const c3 = umbRoots.length >= 2 ? umbRoots[umbRoots.length - 1] : undefined;
 
   // Visible if we have sane C1 and C4
-  const visible = typeof c1 === "number" && Number.isFinite(c1) && typeof c4 === "number" && Number.isFinite(c4);
+  const visible =
+    typeof c1 === "number" && Number.isFinite(c1) && typeof c4 === "number" && Number.isFinite(c4);
 
   // Determine kind at location:
   let kindAtLocation: EclipseKindAtLocation = "none";
   if (!visible) {
     kindAtLocation = "none";
   } else if (
+    typeof c1 === "number" &&
+    Number.isFinite(c1) &&
+    typeof c4 === "number" &&
+    Number.isFinite(c4) &&
     typeof c2 === "number" &&
     Number.isFinite(c2) &&
     typeof c3 === "number" &&
     Number.isFinite(c3) &&
-    c2 > c1! &&
-    c3 < c4!
+    c2 > c1 &&
+    c3 < c4
   ) {
     // Decide total vs annular based on sign of L2obs near maximum.
     // We'll compute bestT first below, then decide.
@@ -162,14 +172,16 @@ function solveContacts(
 
       // max selection
       bestT_hours: bestT,
-      bestMetric
-    }
+      bestMetric,
+    },
   };
 }
 
 export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstances {
   const { contacts, kindAtLocation, maxEval, debug } = solveContacts(e, o);
-  const v = maxEval ?? evaluateShadowMetricsAtT(e, o, contacts.max!);
+  const fallbackMaxT =
+    typeof contacts.max === "number" && Number.isFinite(contacts.max) ? contacts.max : 0;
+  const v = maxEval ?? evaluateShadowMetricsAtT(e, o, fallbackMaxT);
 
   const t0tt = t0TtDate(e);
 
@@ -189,7 +201,11 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
   const visible = typeof contacts.c1 === "number" && typeof contacts.c4 === "number";
 
   let durationSeconds: number | undefined;
-  if (typeof contacts.c2 === "number" && typeof contacts.c3 === "number" && contacts.c3 > contacts.c2) {
+  if (
+    typeof contacts.c2 === "number" &&
+    typeof contacts.c3 === "number" &&
+    contacts.c3 > contacts.c2
+  ) {
     durationSeconds = (contacts.c3 - contacts.c2) * 3600;
   }
 
@@ -204,7 +220,7 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
     const raw = (v.L1obs - v.delta) / v.L1obs;
     magnitude = Math.max(0, Math.min(1, raw));
   }
-  
+
   return {
     eclipseId: e.id,
     visible,
@@ -221,7 +237,7 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
       t0UtcApprox: ttToUtcUsingDeltaT(t0tt, e).toISOString(),
       deltaTSeconds: e.deltaTSeconds,
       nasaGreatestEclipseUtc: e.greatestEclipseUtc,
-      ...debug
-    }
+      ...debug,
+    },
   };
 }

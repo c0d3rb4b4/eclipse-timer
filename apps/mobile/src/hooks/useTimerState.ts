@@ -7,16 +7,40 @@ import * as Location from "expo-location";
 import { computeCircumstances } from "@eclipse-timer/engine";
 import type { Circumstances, EclipseRecord, Observer } from "@eclipse-timer/shared";
 
-import { buildContactItems, nextEventCountdown, type ContactItem, type ContactKey } from "../utils/contacts";
-import { normalizeLongitude, overlayTuplesToCells, sanitizeDelta, sanitizeLatitude, sanitizeRegion } from "../utils/map";
+import {
+  buildContactItems,
+  nextEventCountdown,
+  type ContactItem,
+  type ContactKey,
+} from "../utils/contacts";
+import {
+  normalizeLongitude,
+  overlayTuplesToCells,
+  sanitizeDelta,
+  sanitizeLatitude,
+  sanitizeRegion,
+} from "../utils/map";
 
 type MapType3 = "standard" | "satellite" | "hybrid";
 
 type AlarmState = Record<ContactKey, boolean>;
 
 type Pin = { lat: number; lon: number };
+type MarkerDragEndEvent = {
+  nativeEvent: {
+    coordinate: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+};
 
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
 export type TimerState = {
   mapRef: RefObject<MapView | null>;
@@ -38,7 +62,7 @@ export type TimerState = {
   cycleMapType: () => void;
   jumpTo: (lat: number, lon: number, delta?: number) => void;
   onMapPress: (e: MapPressEvent) => void;
-  onDragEnd: (e: any) => void;
+  onDragEnd: (e: MarkerDragEndEvent) => void;
   useGps: () => Promise<void>;
   runCompute: () => void;
   toggleAlarm: (key: ContactKey, enabled: boolean) => void;
@@ -63,7 +87,9 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   const [didComputeFlash, setDidComputeFlash] = useState(false);
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
   const resultFlash = useRef(new Animated.Value(0)).current;
-  const computeTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const computeTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(
+    null,
+  );
   const computeRunTokenRef = useRef(0);
   const [alarmState, setAlarmState] = useState<AlarmState>({
     c1: true,
@@ -75,18 +101,18 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
 
   const overlayVisiblePolygons = useMemo(
     () => overlayTuplesToCells(activeEclipse?.overlayVisiblePolygons),
-    [activeEclipse]
+    [activeEclipse],
   );
   const overlayCentralPolygons = useMemo(
     () => overlayTuplesToCells(activeEclipse?.overlayCentralPolygons),
-    [activeEclipse]
+    [activeEclipse],
   );
   const hasOverlayData = overlayVisiblePolygons.length > 0 || overlayCentralPolygons.length > 0;
 
   const contactItems = useMemo(() => (result ? buildContactItems(result) : []), [result]);
   const nextEventCountdownText = useMemo(
     () => (result ? nextEventCountdown(result, countdownNowMs) : "No countdown available"),
-    [result, countdownNowMs]
+    [result, countdownNowMs],
   );
 
   useEffect(() => {
@@ -107,7 +133,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     () => () => {
       cancelPendingCompute();
     },
-    [cancelPendingCompute]
+    [cancelPendingCompute],
   );
 
   const onRegionChangeComplete = (r: Region) => {
@@ -148,7 +174,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     movePinKeepZoom(latitude, longitude);
   };
 
-  const onDragEnd = (e: any) => {
+  const onDragEnd = (e: MarkerDragEndEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
     movePinKeepZoom(latitude, longitude);
@@ -177,11 +203,14 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
         accuracy: Location.Accuracy.Balanced,
       });
 
-      const timeoutPromise = new Promise<null>((resolve) =>
-        setTimeout(() => resolve(null), timeoutMs)
+      const timeoutPromise: Promise<null> = new Promise((resolve) =>
+        setTimeout(() => resolve(null), timeoutMs),
       );
 
-      const current = (await Promise.race([currentPromise, timeoutPromise])) as any;
+      const current = await Promise.race<Location.LocationObject | null>([
+        currentPromise,
+        timeoutPromise,
+      ]);
 
       if (current?.coords) {
         jumpTo(current.coords.latitude, current.coords.longitude, 2);
@@ -189,8 +218,8 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
       } else if (!last) {
         setStatus("GPS timed out (try again or move near a window)");
       }
-    } catch (err: any) {
-      setStatus(`GPS error: ${err?.message ?? String(err)}`);
+    } catch (err: unknown) {
+      setStatus(`GPS error: ${getErrorMessage(err)}`);
     }
   };
 
@@ -228,9 +257,9 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
 
         setDidComputeFlash(true);
         setTimeout(() => setDidComputeFlash(false), 800);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (computeRunTokenRef.current !== runToken) return;
-        setStatus(`Compute error: ${err?.message ?? String(err)}`);
+        setStatus(`Compute error: ${getErrorMessage(err)}`);
         setResult(null);
       } finally {
         if (computeRunTokenRef.current !== runToken) return;
@@ -258,7 +287,9 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
       return;
     }
 
-    const target = enabledItems.find((item) => !!item.iso) ?? enabledItems[0]!;
+    const firstEnabled = enabledItems[0];
+    if (!firstEnabled) return;
+    const target = enabledItems.find((item) => !!item.iso) ?? firstEnabled;
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
