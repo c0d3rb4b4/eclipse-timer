@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import { Alert, Animated, Vibration } from "react-native";
 import type { MapPressEvent, Region } from "react-native-maps";
 import type MapView from "react-native-maps";
@@ -226,17 +226,17 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     Vibration.vibrate([0, 250, 120, 250]);
   };
 
-  const resetForNewEclipse = () => {
+  const resetForNewEclipse = useCallback(() => {
     setIsComputing(false);
     setDidComputeFlash(false);
     resultFlash.setValue(0);
     setResult(null);
     setStatus("Ready");
-  };
+  }, []);
 
-  const setStatusMessage = (msg: string) => {
+  const setStatusMessage = useCallback((msg: string) => {
     setStatus(msg);
-  };
+  }, []);
 
   return {
     mapRef,

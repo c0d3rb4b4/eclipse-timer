@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView } from "react-native";
 
-type AppScreen = "landing" | "timer";
-
 type LandingScrollArgs = {
-  screen: AppScreen;
+  isFocused: boolean;
   selectedLandingId: string | null;
 };
 
@@ -20,29 +18,29 @@ export type LandingScrollState = {
   onMomentumScrollEnd: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 };
 
-export function useLandingScroll({ screen, selectedLandingId }: LandingScrollArgs): LandingScrollState {
+export function useLandingScroll({ isFocused, selectedLandingId }: LandingScrollArgs): LandingScrollState {
   const landingListRef = useRef<ScrollView>(null);
   const didAutoScrollRef = useRef(false);
-  const prevScreenRef = useRef<AppScreen>("landing");
+  const prevFocusedRef = useRef(isFocused);
   const landingListScrollYRef = useRef(0);
   const landingRowYByIdRef = useRef<Record<string, number>>({});
   const [firstFutureRowY, setFirstFutureRowY] = useState<number | null>(null);
 
   useEffect(() => {
-    if (screen !== "landing" || didAutoScrollRef.current) return;
+    if (!isFocused || didAutoScrollRef.current) return;
     if (firstFutureRowY == null) return;
 
     const y = Math.max(0, firstFutureRowY - 8);
     landingListRef.current?.scrollTo({ y, animated: false });
     landingListScrollYRef.current = y;
     didAutoScrollRef.current = true;
-  }, [screen, firstFutureRowY]);
+  }, [isFocused, firstFutureRowY]);
 
   useEffect(() => {
-    const prev = prevScreenRef.current;
-    prevScreenRef.current = screen;
+    const prev = prevFocusedRef.current;
+    prevFocusedRef.current = isFocused;
 
-    if (prev !== "timer" || screen !== "landing") return;
+    if (!isFocused || prev) return;
 
     const restore = () => {
       let targetY = Math.max(0, landingListScrollYRef.current);
@@ -61,7 +59,7 @@ export function useLandingScroll({ screen, selectedLandingId }: LandingScrollArg
     restore();
     const t = setTimeout(restore, 80);
     return () => clearTimeout(t);
-  }, [screen, selectedLandingId]);
+  }, [isFocused, selectedLandingId]);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = Math.max(0, e.nativeEvent.contentOffset.y);

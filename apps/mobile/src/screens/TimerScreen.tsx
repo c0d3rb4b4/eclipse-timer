@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from "react";
-import { ActivityIndicator, Animated, BackHandler, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import React, { useMemo } from "react";
+import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -16,19 +16,10 @@ const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 
 type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
-  onBack: () => void;
   timer: TimerState;
 };
 
-export default function TimerScreen({ activeEclipse, onBack, timer }: TimerScreenProps) {
-  useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      onBack();
-      return true;
-    });
-    return () => sub.remove();
-  }, [onBack]);
-
+export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) {
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
     () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),

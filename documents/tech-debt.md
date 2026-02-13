@@ -68,8 +68,8 @@
 |----|------|----------|---------|
 | A-01 | **God component: `App.tsx` is ~1 000 lines** | 🔴 Critical | ✅ Resolved 2026-02-12: split into `LandingScreen`/`TimerScreen` plus hooks/utilities; `App.tsx` now orchestrates only. |
 | A-02 | **No state management layer** | 🟠 High | ✅ Resolved 2026-02-12: added `AppStateProvider` with reducer/actions for screen + selection state. |
-| A-03 | **Helper functions defined outside module scope** | 🟡 Medium | Many pure helpers (`fmtUtcHuman`, `nextEventCountdown`, `buildContactItems`, `overlayTuplesToCells`, `splitPolygonOnDateline`, etc.) sit in `App.tsx`. They should be extracted to dedicated utility modules. |
-| A-04 | **No navigation library** | 🟡 Medium | Screen switching is managed via a `screen` state string and conditional rendering. This breaks deep-linking, gestures, header management, and scalability. Consider React Navigation or Expo Router. |
+| A-03 | **Helper functions defined outside module scope** | 🟡 Medium | ✅ Resolved 2026-02-13: helpers extracted into `utils/` and `hooks/` modules; `App.tsx` no longer hosts them. |
+| A-04 | **No navigation library** | 🟡 Medium | ✅ Resolved 2026-02-13: added React Navigation native stack and moved screen switching to the navigator. |
 | A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | The engine does iterative root-finding and scanning. On slow devices this blocks the UI thread. Should be offloaded to a worker or at minimum wrapped in `InteractionManager.runAfterInteractions`. |
 | A-06 | **Countdown timer never re-renders** | 🟠 High | `nextEventCountdown` calculates a live countdown string but is only computed on render — there is no `setInterval` or timer to tick it. The displayed countdown is stale immediately. |
 | A-07 | **Alarm system is a UI stub** | 🟡 Medium | Alarm toggles and "Test Alarm" exist, but there is no background scheduling (e.g., `expo-notifications` local notifications). Alarms are effectively non-functional. |
@@ -268,8 +268,8 @@
 | T-07 | Mobile component tests |
 | T-08 | End-to-end regression suite |
 | L-03 | Pre-commit hooks |
-| A-03 | Extract helper functions from App.tsx |
-| A-04 | Add navigation library |
+| A-03 | ✅ Resolved 2026-02-13: extract helper functions from App.tsx |
+| A-04 | ✅ Resolved 2026-02-13: add navigation library |
 | A-07 | Wire up real notifications for alarms |
 | A-10 | Pass GPS altitude as `elevM` |
 | A-11 | Add error boundary |
