@@ -29,7 +29,7 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
-| T-02 | **Zero unit tests for the engine** | 🔴 Critical | The core eclipse computation (`computeCircumstances`, `evaluateAtT`, `fPenumbra`, `fUmbraAbs`, root-finding, polynomial evaluation) has no automated verification. Manual `dev/run_one.ts` is the only validation method. |
+| T-02 | **Limited unit coverage for the engine** | 🔴 Critical | 🟡 In progress 2026-02-13: added initial Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` (regression + classification cases). Remaining gaps: more known-answer vectors, edge-case error handling, and broader contact-solver scenarios. |
 | T-03 | **Zero unit tests for math helpers** | 🔴 Critical | `evalPoly`, `findBrackets`, `bisectRoot` are numerically sensitive pure functions — ideal for property-based and example-based tests but completely untested. |
 | T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
 | T-05 | **Zero unit tests for time utilities** | 🟠 High | `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT` have no tests; date math is notoriously bug-prone. |
