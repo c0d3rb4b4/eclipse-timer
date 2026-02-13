@@ -30,7 +30,7 @@
 |----|------|----------|---------|
 | T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
 | T-02 | **Limited unit coverage for the engine** | 🔴 Critical | ✅ Resolved 2026-02-13: added comprehensive Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` including deterministic regression vectors, whole-catalog greatest-point invariant sweeps, root-equation checks, partial-magnitude validation, and malformed-input/elevation robustness tests. |
-| T-03 | **Zero unit tests for math helpers** | 🔴 Critical | `evalPoly`, `findBrackets`, `bisectRoot` are numerically sensitive pure functions — ideal for property-based and example-based tests but completely untested. |
+| T-03 | **Zero unit tests for math helpers** | 🔴 Critical | ✅ Resolved 2026-02-13: added dedicated Vitest coverage for `evalPoly`, `findBrackets`, and `bisectRoot` with example-based assertions and deterministic property-style sweeps (Horner equivalence, sign-change bracket guarantees, and bisection convergence/null-path behavior). |
 | T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
 | T-05 | **Zero unit tests for time utilities** | 🟠 High | `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT` have no tests; date math is notoriously bug-prone. |
 | T-06 | **No integration/snapshot tests for catalog scripts** | 🟡 Medium | `build_catalog_json.ts`, `build_overlays_json.ts`, `filter_csv_1900_2100.ts` have no automated output verification. A typo in CSV column mapping would silently produce bad data. |
@@ -238,7 +238,7 @@
 |----|---------|
 | T-01 | ✅ Resolved 2026-02-13: install a test framework |
 | T-02 | ✅ Resolved 2026-02-13: unit tests for core engine |
-| T-03 | Unit tests for math helpers |
+| T-03 | ✅ Resolved 2026-02-13: unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
 | C-01 | Fix cross-package deep import in overlay build |
 | CI-01 | Set up a CI pipeline |
