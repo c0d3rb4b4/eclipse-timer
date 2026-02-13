@@ -66,8 +66,8 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| A-01 | **God component: `App.tsx` is ~1 000 lines** | 🔴 Critical | A single file contains: landing screen, timer screen, all state, map logic, GPS flow, compute flow, alarm logic, overlay processing, date formatting, and the full `StyleSheet`. This is unmaintainable. |
-| A-02 | **No state management layer** | 🟠 High | All state lives as `useState` in a single component. No context, no reducer, no Zustand/Jotai. Makes testing and feature branching extremely difficult. |
+| A-01 | **God component: `App.tsx` is ~1 000 lines** | 🔴 Critical | ✅ Resolved 2026-02-12: split into `LandingScreen`/`TimerScreen` plus hooks/utilities; `App.tsx` now orchestrates only. |
+| A-02 | **No state management layer** | 🟠 High | ✅ Resolved 2026-02-12: added `AppStateProvider` with reducer/actions for screen + selection state. |
 | A-03 | **Helper functions defined outside module scope** | 🟡 Medium | Many pure helpers (`fmtUtcHuman`, `nextEventCountdown`, `buildContactItems`, `overlayTuplesToCells`, `splitPolygonOnDateline`, etc.) sit in `App.tsx`. They should be extracted to dedicated utility modules. |
 | A-04 | **No navigation library** | 🟡 Medium | Screen switching is managed via a `screen` state string and conditional rendering. This breaks deep-linking, gestures, header management, and scalability. Consider React Navigation or Expo Router. |
 | A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | The engine does iterative root-finding and scanning. On slow devices this blocks the UI thread. Should be offloaded to a worker or at minimum wrapped in `InteractionManager.runAfterInteractions`. |
@@ -239,7 +239,7 @@
 | T-01 | Install a test framework |
 | T-02 | Unit tests for core engine |
 | T-03 | Unit tests for math helpers |
-| A-01 | Break up the 1 000-line `App.tsx` |
+| A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
 | C-01 | Fix cross-package deep import in overlay build |
 | CI-01 | Set up a CI pipeline |
 
@@ -250,7 +250,7 @@
 | T-05 | Tests for time utilities |
 | L-01 | Configure a linter |
 | L-02 | Configure a formatter |
-| A-02 | Introduce state management |
+| A-02 | ✅ Resolved 2026-02-12: introduce state management |
 | A-05 | Offload compute from JS thread |
 | A-06 / U-11 | Make countdown timer tick in real time |
 | E-05 | Fix oversimplified magnitude formula |

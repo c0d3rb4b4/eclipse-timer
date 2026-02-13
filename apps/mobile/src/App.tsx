@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { loadCatalog } from "@eclipse-timer/catalog";
@@ -8,14 +8,11 @@ import TimerScreen from "./screens/TimerScreen";
 import { useLandingEclipses } from "./hooks/useLandingEclipses";
 import { useLandingScroll } from "./hooks/useLandingScroll";
 import { useTimerState } from "./hooks/useTimerState";
+import { AppStateProvider, useAppState } from "./state/appState";
 
-type AppScreen = "landing" | "timer";
-
-export default function App() {
-  const [screen, setScreen] = useState<AppScreen>("landing");
-  const [selectedLandingId, setSelectedLandingId] = useState<string | null>(null);
-  const [activeEclipseId, setActiveEclipseId] = useState<string | null>(null);
-
+function AppContent() {
+  const { state, actions } = useAppState();
+  const { screen, selectedLandingId, activeEclipseId } = state;
   const catalog = useMemo(() => loadCatalog(), []);
   const { landingEclipses, firstFutureIndex } = useLandingEclipses(catalog);
   const landingScroll = useLandingScroll({ screen, selectedLandingId });
@@ -31,19 +28,18 @@ export default function App() {
     if (!selectedLandingId) return;
     landingScroll.didAutoScrollRef.current = true;
     timerState.resetForNewEclipse();
-    setActiveEclipseId(selectedLandingId);
-    setScreen("timer");
+    actions.goToTimer();
   };
 
-  const goToLanding = () => setScreen("landing");
+  const goToLanding = () => actions.goToLanding();
 
   return (
-    <SafeAreaProvider>
+    <>
       {screen === "landing" ? (
         <LandingScreen
           eclipses={landingEclipses}
           selectedId={selectedLandingId}
-          onSelect={setSelectedLandingId}
+          onSelect={actions.selectLanding}
           onGo={goToTimer}
           firstFutureIndex={firstFutureIndex}
           scroll={landingScroll}
@@ -51,6 +47,16 @@ export default function App() {
       ) : (
         <TimerScreen activeEclipse={activeEclipse} onBack={goToLanding} timer={timerState} />
       )}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppStateProvider>
+        <AppContent />
+      </AppStateProvider>
     </SafeAreaProvider>
   );
 }
