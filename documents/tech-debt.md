@@ -29,7 +29,7 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
-| T-02 | **Limited unit coverage for the engine** | 🔴 Critical | 🟡 In progress 2026-02-13: expanded Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` with deterministic regression vectors (total/annular/partial/hybrid), contact-order/duration invariants, and root-equation checks. Remaining gaps: edge-case error handling and larger known-answer coverage. |
+| T-02 | **Limited unit coverage for the engine** | 🔴 Critical | 🟡 In progress 2026-02-13: expanded Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` with deterministic vectors across historical/modern eclipses (total/annular/partial/hybrid), contact-order/duration invariants, root-equation checks, and partial-magnitude formula validation. Remaining gaps: edge-case error handling and broader known-answer/NASA cross-check coverage. |
 | T-03 | **Zero unit tests for math helpers** | 🔴 Critical | `evalPoly`, `findBrackets`, `bisectRoot` are numerically sensitive pure functions — ideal for property-based and example-based tests but completely untested. |
 | T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
 | T-05 | **Zero unit tests for time utilities** | 🟠 High | `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT` have no tests; date math is notoriously bug-prone. |

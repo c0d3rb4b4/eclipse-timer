@@ -100,6 +100,15 @@ function expectRootsNearZero(e: EclipseRecord, observer: { latDeg: number; lonDe
   }
 }
 
+function getDebug(c: Circumstances): { penRoots: number[]; umbRoots: number[]; bestT_hours?: number } {
+  const debug = (c._debug ?? {}) as { penRoots?: number[]; umbRoots?: number[]; bestT_hours?: number };
+  return {
+    penRoots: debug.penRoots ?? [],
+    umbRoots: debug.umbRoots ?? [],
+    bestT_hours: debug.bestT_hours
+  };
+}
+
 describe("evaluateAtT", () => {
   it("evaluates projected geometry for a known sample at t=0", () => {
     const v = evaluateAtT(sampleRecord, gibraltar, 0);
@@ -212,6 +221,61 @@ describe("computeCircumstances", () => {
       expect(Number.isFinite(parseUtc(c.maxUtc, `${id}.maxUtc`))).toBe(true);
       expectOrderedContacts(c);
       expectRootsNearZero(e, getGreatestObserver(e), c);
+    }
+  });
+
+  it("matches modern regression vectors across recent and upcoming eclipses", () => {
+    const cases: Array<{ id: string; kindAtLocation: Circumstances["kindAtLocation"]; maxUtc: string }> = [
+      { id: "2012-05-20T", kindAtLocation: "annular", maxUtc: "2012-05-19T23:53:20.584Z" },
+      { id: "2017-08-21T", kindAtLocation: "total", maxUtc: "2017-08-21T18:26:05.961Z" },
+      { id: "2023-10-14T", kindAtLocation: "annular", maxUtc: "2023-10-14T18:00:05.069Z" },
+      { id: "2024-04-08T", kindAtLocation: "total", maxUtc: "2024-04-08T18:17:47.715Z" },
+      { id: "2045-08-12T", kindAtLocation: "total", maxUtc: "2045-08-12T17:41:51.790Z" }
+    ];
+
+    for (const tc of cases) {
+      const e = getRecord(tc.id);
+      const c = computeCircumstances(e, getGreatestObserver(e));
+      expect(c.visible).toBe(true);
+      expect(c.kindAtLocation).toBe(tc.kindAtLocation);
+      expect(c.maxUtc).toBe(tc.maxUtc);
+      expectOrderedContacts(c);
+      expectRootsNearZero(e, getGreatestObserver(e), c);
+    }
+  });
+
+  it("enforces root-count semantics by kind at greatest points", () => {
+    const totalOrAnnularIds = ["1900-05-28T", "1900-11-22T", "2012-05-20T", "2017-08-21T", "2023-10-14T"];
+    for (const id of totalOrAnnularIds) {
+      const c = computeCircumstances(getRecord(id), getGreatestObserver(getRecord(id)));
+      const debug = getDebug(c);
+      expect(debug.penRoots).toHaveLength(2);
+      expect(debug.umbRoots).toHaveLength(2);
+    }
+
+    const partialLikeIds = ["1902-04-08T", "1902-05-07T", "1908-12-23T"];
+    for (const id of partialLikeIds) {
+      const c = computeCircumstances(getRecord(id), getGreatestObserver(getRecord(id)));
+      const debug = getDebug(c);
+      expect(c.kindAtLocation).toBe("partial");
+      expect(debug.penRoots).toHaveLength(2);
+      expect(debug.umbRoots).toHaveLength(0);
+    }
+  });
+
+  it("computes partial magnitude from evaluateAtT at bestT", () => {
+    const ids = ["1902-04-08T", "1902-05-07T", "1908-12-23T"];
+    for (const id of ids) {
+      const e = getRecord(id);
+      const obs = getGreatestObserver(e);
+      const c = computeCircumstances(e, obs);
+      const debug = getDebug(c);
+
+      expect(c.kindAtLocation).toBe("partial");
+      const bestT = requireDefined(debug.bestT_hours, `${id}.bestT_hours`);
+      const v = evaluateAtT(e, obs, bestT);
+      const expected = Math.max(0, Math.min(1, (v.L1obs - v.delta) / v.L1obs));
+      expect(c.magnitude).toBeCloseTo(expected, 12);
     }
   });
 
