@@ -19,7 +19,7 @@ type Pin = { lat: number; lon: number };
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
 
 export type TimerState = {
-  mapRef: RefObject<MapView>;
+  mapRef: RefObject<MapView | null>;
   pin: Pin;
   region: Region;
   mapType: MapType3;
