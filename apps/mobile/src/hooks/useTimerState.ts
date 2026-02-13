@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
-import { Alert, Animated, Vibration } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Alert, Animated, InteractionManager, Vibration } from "react-native";
 import type { MapPressEvent, Region } from "react-native-maps";
 import type MapView from "react-native-maps";
 import * as Location from "expo-location";
@@ -7,7 +7,7 @@ import * as Location from "expo-location";
 import { computeCircumstances } from "@eclipse-timer/engine";
 import type { Circumstances, EclipseRecord, Observer } from "@eclipse-timer/shared";
 
-import { buildContactItems, type ContactItem, type ContactKey } from "../utils/contacts";
+import { buildContactItems, nextEventCountdown, type ContactItem, type ContactKey } from "../utils/contacts";
 import { normalizeLongitude, overlayTuplesToCells, sanitizeDelta, sanitizeLatitude, sanitizeRegion } from "../utils/map";
 
 type MapType3 = "standard" | "satellite" | "hybrid";
@@ -19,7 +19,7 @@ type Pin = { lat: number; lon: number };
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
 
 export type TimerState = {
-  mapRef: RefObject<MapView>;
+  mapRef: RefObject<MapView | null>;
   pin: Pin;
   region: Region;
   mapType: MapType3;
@@ -33,6 +33,7 @@ export type TimerState = {
   hasOverlayData: boolean;
   alarmState: AlarmState;
   contactItems: ContactItem[];
+  nextEventCountdownText: string;
   onRegionChangeComplete: (r: Region) => void;
   cycleMapType: () => void;
   jumpTo: (lat: number, lon: number, delta?: number) => void;
@@ -60,7 +61,10 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   const [result, setResult] = useState<Circumstances | null>(null);
   const [isComputing, setIsComputing] = useState(false);
   const [didComputeFlash, setDidComputeFlash] = useState(false);
+  const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
   const resultFlash = useRef(new Animated.Value(0)).current;
+  const computeTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const computeRunTokenRef = useRef(0);
   const [alarmState, setAlarmState] = useState<AlarmState>({
     c1: true,
     c2: true,
@@ -80,6 +84,31 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   const hasOverlayData = overlayVisiblePolygons.length > 0 || overlayCentralPolygons.length > 0;
 
   const contactItems = useMemo(() => (result ? buildContactItems(result) : []), [result]);
+  const nextEventCountdownText = useMemo(
+    () => (result ? nextEventCountdown(result, countdownNowMs) : "No countdown available"),
+    [result, countdownNowMs]
+  );
+
+  useEffect(() => {
+    if (!result) return;
+    setCountdownNowMs(Date.now());
+    const intervalId = setInterval(() => setCountdownNowMs(Date.now()), 1000);
+    return () => clearInterval(intervalId);
+  }, [result]);
+
+  const cancelPendingCompute = useCallback(() => {
+    computeRunTokenRef.current += 1;
+    const task = computeTaskRef.current;
+    computeTaskRef.current = null;
+    task?.cancel();
+  }, []);
+
+  useEffect(
+    () => () => {
+      cancelPendingCompute();
+    },
+    [cancelPendingCompute]
+  );
 
   const onRegionChangeComplete = (r: Region) => {
     setRegion((prev) => sanitizeRegion(r, prev));
@@ -173,29 +202,42 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
 
     const observer: Observer = { latDeg: pin.lat, lonDeg: pin.lon, elevM: 0 };
 
+    cancelPendingCompute();
+    const runToken = computeRunTokenRef.current;
+
     setIsComputing(true);
     setDidComputeFlash(false);
-    setStatus(`Computing for ${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}...`);
+    setStatus(`Queueing compute for ${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}...`);
 
-    try {
-      const out = computeCircumstances(activeEclipse, observer);
-      setResult(out);
-      setStatus("Computed");
+    computeTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      if (computeRunTokenRef.current !== runToken) return;
+      setStatus(`Computing for ${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}...`);
 
-      resultFlash.setValue(0);
-      Animated.sequence([
-        Animated.timing(resultFlash, { toValue: 1, duration: 160, useNativeDriver: true }),
-        Animated.timing(resultFlash, { toValue: 0, duration: 420, useNativeDriver: true }),
-      ]).start();
+      try {
+        const out = computeCircumstances(activeEclipse, observer);
+        if (computeRunTokenRef.current !== runToken) return;
 
-      setDidComputeFlash(true);
-      setTimeout(() => setDidComputeFlash(false), 800);
-    } catch (err: any) {
-      setStatus(`Compute error: ${err?.message ?? String(err)}`);
-      setResult(null);
-    } finally {
-      setIsComputing(false);
-    }
+        setResult(out);
+        setStatus("Computed");
+
+        resultFlash.setValue(0);
+        Animated.sequence([
+          Animated.timing(resultFlash, { toValue: 1, duration: 160, useNativeDriver: true }),
+          Animated.timing(resultFlash, { toValue: 0, duration: 420, useNativeDriver: true }),
+        ]).start();
+
+        setDidComputeFlash(true);
+        setTimeout(() => setDidComputeFlash(false), 800);
+      } catch (err: any) {
+        if (computeRunTokenRef.current !== runToken) return;
+        setStatus(`Compute error: ${err?.message ?? String(err)}`);
+        setResult(null);
+      } finally {
+        if (computeRunTokenRef.current !== runToken) return;
+        computeTaskRef.current = null;
+        setIsComputing(false);
+      }
+    });
   };
 
   const toggleAlarm = (key: ContactKey, enabled: boolean) => {
@@ -227,12 +269,13 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   };
 
   const resetForNewEclipse = useCallback(() => {
+    cancelPendingCompute();
     setIsComputing(false);
     setDidComputeFlash(false);
     resultFlash.setValue(0);
     setResult(null);
     setStatus("Ready");
-  }, []);
+  }, [cancelPendingCompute, resultFlash]);
 
   const setStatusMessage = useCallback((msg: string) => {
     setStatus(msg);
@@ -253,6 +296,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     hasOverlayData,
     alarmState,
     contactItems,
+    nextEventCountdownText,
     onRegionChangeComplete,
     cycleMapType,
     jumpTo,

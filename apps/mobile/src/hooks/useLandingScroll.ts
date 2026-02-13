@@ -7,7 +7,7 @@ type LandingScrollArgs = {
 };
 
 export type LandingScrollState = {
-  landingListRef: RefObject<ScrollView>;
+  landingListRef: RefObject<ScrollView | null>;
   landingRowYByIdRef: MutableRefObject<Record<string, number>>;
   didAutoScrollRef: MutableRefObject<boolean>;
   landingListScrollYRef: MutableRefObject<number>;

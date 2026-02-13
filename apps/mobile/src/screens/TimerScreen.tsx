@@ -7,7 +7,6 @@ import type { EclipseRecord } from "@eclipse-timer/shared";
 
 import type { TimerState } from "../hooks/useTimerState";
 import { fmtUtcHuman } from "../utils/date";
-import { nextEventCountdown } from "../utils/contacts";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
@@ -160,7 +159,7 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
             <>
               <View style={styles.timerHero}>
                 <Text style={styles.timerHeroLabel}>Next Event Timer</Text>
-                <Text style={styles.timerHeroText}>{nextEventCountdown(timer.result)}</Text>
+                <Text style={styles.timerHeroText}>{timer.nextEventCountdownText}</Text>
               </View>
 
               <Pressable style={styles.testAlarmBtn} onPress={timer.runAlarmTest}>

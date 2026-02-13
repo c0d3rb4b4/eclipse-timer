@@ -70,8 +70,8 @@
 | A-02 | **No state management layer** | 🟠 High | ✅ Resolved 2026-02-12: added `AppStateProvider` with reducer/actions for screen + selection state. |
 | A-03 | **Helper functions defined outside module scope** | 🟡 Medium | ✅ Resolved 2026-02-13: helpers extracted into `utils/` and `hooks/` modules; `App.tsx` no longer hosts them. |
 | A-04 | **No navigation library** | 🟡 Medium | ✅ Resolved 2026-02-13: added React Navigation native stack and moved screen switching to the navigator. |
-| A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | The engine does iterative root-finding and scanning. On slow devices this blocks the UI thread. Should be offloaded to a worker or at minimum wrapped in `InteractionManager.runAfterInteractions`. |
-| A-06 | **Countdown timer never re-renders** | 🟠 High | `nextEventCountdown` calculates a live countdown string but is only computed on render — there is no `setInterval` or timer to tick it. The displayed countdown is stale immediately. |
+| A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | ✅ Resolved 2026-02-13: compute now runs via `InteractionManager.runAfterInteractions` with cancellation guards for reset/unmount paths. |
+| A-06 | **Countdown timer never re-renders** | 🟠 High | ✅ Resolved 2026-02-13: timer state now owns a 1-second interval and feeds a live `nextEventCountdownText` string to the UI. |
 | A-07 | **Alarm system is a UI stub** | 🟡 Medium | Alarm toggles and "Test Alarm" exist, but there is no background scheduling (e.g., `expo-notifications` local notifications). Alarms are effectively non-functional. |
 | A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
@@ -94,7 +94,7 @@
 | U-08 | **GIF preview loads from NASA servers** | 🟡 Medium | No caching, no placeholder, no error fallback. On slow connections the preview card is blank. Needs a loading indicator and error state. |
 | U-09 | **Magnitude is displayed as `1` for total/annular** | 🟡 Medium | Magnitude for total eclipses should be the obscuration ratio (>1), not clamped to 1. This is an engine issue surfacing in UX. |
 | U-10 | **No haptic feedback on map interactions** | 🟢 Low | Pin drop and drag could benefit from subtle haptics for tactile confirmation. |
-| U-11 | **Countdown not ticking live** | 🟠 High | Same as A-06 — the "Next Event Timer" hero card is static text. Users expect a real-time ticking countdown. |
+| U-11 | **Countdown not ticking live** | 🟠 High | ✅ Resolved 2026-02-13 via A-06: hero card countdown is now driven by a ticking interval-backed state value. |
 | U-12 | **No landscape orientation support** | 🟢 Low | `app.json` locks to portrait. Map exploration benefits from landscape. |
 
 ---
@@ -251,8 +251,8 @@
 | L-01 | Configure a linter |
 | L-02 | Configure a formatter |
 | A-02 | ✅ Resolved 2026-02-12: introduce state management |
-| A-05 | Offload compute from JS thread |
-| A-06 / U-11 | Make countdown timer tick in real time |
+| A-05 | ✅ Resolved 2026-02-13: defer compute with `InteractionManager.runAfterInteractions` |
+| A-06 / U-11 | ✅ Resolved 2026-02-13: make countdown timer tick in real time |
 | E-05 | Fix oversimplified magnitude formula |
 | AC-01 | Add accessibility labels |
 | U-01 / F-09 | Show local time for contacts |
