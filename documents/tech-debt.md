@@ -31,9 +31,9 @@
 | T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
 | T-02 | **Limited unit coverage for the engine** | 🔴 Critical | ✅ Resolved 2026-02-13: added comprehensive Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` including deterministic regression vectors, whole-catalog greatest-point invariant sweeps, root-equation checks, partial-magnitude validation, and malformed-input/elevation robustness tests. |
 | T-03 | **Zero unit tests for math helpers** | 🔴 Critical | ✅ Resolved 2026-02-13: added dedicated Vitest coverage for `evalPoly`, `findBrackets`, and `bisectRoot` with example-based assertions and deterministic property-style sweeps (Horner equivalence, sign-change bracket guarantees, and bisection convergence/null-path behavior). |
-| T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
-| T-05 | **Zero unit tests for time utilities** | 🟠 High | `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT` have no tests; date math is notoriously bug-prone. |
-| T-06 | **No integration/snapshot tests for catalog scripts** | 🟡 Medium | `build_catalog_json.ts`, `build_overlays_json.ts`, `filter_csv_1900_2100.ts` have no automated output verification. A typo in CSV column mapping would silently produce bad data. |
+| T-04 | **Zero unit tests for geo/coords** | 🟠 High | ✅ Resolved 2026-02-13: added dedicated geo regression/invariant tests for `observerToFundamental` (reference vectors, periodicity checks, elevation sensitivity, and polar finiteness). |
+| T-05 | **Zero unit tests for time utilities** | 🟠 High | ✅ Resolved 2026-02-13: added tests for `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT`, and `toIsoUtc` covering fractional-hour conversion, boundary rounding, positive/negative ΔT, and invalid-date behavior. |
+| T-06 | **No integration/snapshot tests for catalog scripts** | 🟡 Medium | ✅ Resolved 2026-02-13: added catalog integration/snapshot tests validating `filter_csv_1900_2100` year-range output, `build_catalog_json` field mapping against CSV columns, `build_overlays_json` output shape/coordinate sanity, and artifact hash snapshots for generated files. |
 | T-07 | **No mobile component/screen tests** | 🟡 Medium | No React Native Testing Library or Detox setup. All UI behavior is manually verified. |
 | T-08 | **No end-to-end regression suite** | 🟡 Medium | No known-answer tests validating the full pipeline (catalog → engine → formatted output) against NASA reference data. |
 
@@ -246,8 +246,8 @@
 ### 🟠 High — Fix Soon
 | ID | Summary |
 |----|---------|
-| T-04 | Tests for geo/coords |
-| T-05 | Tests for time utilities |
+| T-04 | ✅ Resolved 2026-02-13: tests for geo/coords |
+| T-05 | ✅ Resolved 2026-02-13: tests for time utilities |
 | L-01 | Configure a linter |
 | L-02 | Configure a formatter |
 | A-02 | ✅ Resolved 2026-02-12: introduce state management |
@@ -264,7 +264,7 @@
 ### 🟡 Medium — Plan Next
 | ID | Summary |
 |----|---------|
-| T-06 | Tests for catalog scripts |
+| T-06 | ✅ Resolved 2026-02-13: tests for catalog scripts |
 | T-07 | Mobile component tests |
 | T-08 | End-to-end regression suite |
 | L-03 | Pre-commit hooks |
