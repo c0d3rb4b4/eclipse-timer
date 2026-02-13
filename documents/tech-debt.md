@@ -29,7 +29,7 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
-| T-02 | **Limited unit coverage for the engine** | 🔴 Critical | 🟡 In progress 2026-02-13: expanded Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` with deterministic vectors across historical/modern eclipses (total/annular/partial/hybrid), contact-order/duration invariants, root-equation checks, and partial-magnitude formula validation. Remaining gaps: edge-case error handling and broader known-answer/NASA cross-check coverage. |
+| T-02 | **Limited unit coverage for the engine** | 🔴 Critical | ✅ Resolved 2026-02-13: added comprehensive Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` including deterministic regression vectors, whole-catalog greatest-point invariant sweeps, root-equation checks, partial-magnitude validation, and malformed-input/elevation robustness tests. |
 | T-03 | **Zero unit tests for math helpers** | 🔴 Critical | `evalPoly`, `findBrackets`, `bisectRoot` are numerically sensitive pure functions — ideal for property-based and example-based tests but completely untested. |
 | T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
 | T-05 | **Zero unit tests for time utilities** | 🟠 High | `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT` have no tests; date math is notoriously bug-prone. |
@@ -237,7 +237,7 @@
 | ID | Summary |
 |----|---------|
 | T-01 | ✅ Resolved 2026-02-13: install a test framework |
-| T-02 | Unit tests for core engine |
+| T-02 | ✅ Resolved 2026-02-13: unit tests for core engine |
 | T-03 | Unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
 | C-01 | Fix cross-package deep import in overlay build |
