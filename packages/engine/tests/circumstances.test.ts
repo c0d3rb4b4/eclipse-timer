@@ -67,7 +67,13 @@ function expectOrderedContacts(c: Circumstances): void {
     expect(c3).toBeLessThan(c4);
     const expectedDuration = (c3 - c2) / 1000;
     expect(c.durationSeconds).toBeCloseTo(expectedDuration, 2);
-    expect(c.magnitude).toBe(1);
+    const magnitude = requireDefined(c.magnitude, "central magnitude");
+    if (c.kindAtLocation === "total") {
+      expect(magnitude).toBeGreaterThanOrEqual(1);
+    } else {
+      expect(magnitude).toBeGreaterThan(0);
+      expect(magnitude).toBeLessThan(1);
+    }
   } else {
     expect(c.c2Utc).toBeUndefined();
     expect(c.c3Utc).toBeUndefined();
@@ -163,7 +169,7 @@ describe("computeCircumstances", () => {
     expect(c.c3Utc).toBe("2027-08-02T08:50:20.221Z");
     expect(c.c4Utc).toBe("2027-08-02T10:01:35.361Z");
     expect(c.durationSeconds).toBeCloseTo(269.06730651855105, 9);
-    expect(c.magnitude).toBe(1);
+    expect(requireDefined(c.magnitude, "sample total magnitude")).toBeGreaterThan(1);
 
     expectOrderedContacts(c);
     expectRootsNearZero(sampleRecord, gibraltar, c);
@@ -181,7 +187,7 @@ describe("computeCircumstances", () => {
     expect(c.c3Utc).toBe("2027-08-02T10:03:46.662Z");
     expect(c.c4Utc).toBe("2027-08-02T11:22:11.009Z");
     expect(c.durationSeconds).toBeCloseTo(379.4789886474608, 9);
-    expect(c.magnitude).toBe(1);
+    expect(requireDefined(c.magnitude, "sample central-line magnitude")).toBeGreaterThan(1);
 
     expectOrderedContacts(c);
     expectRootsNearZero(sampleRecord, centralAt1000, c);

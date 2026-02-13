@@ -1,5 +1,14 @@
-import { useCallback, useMemo } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
@@ -8,7 +17,11 @@ import type { LandingScrollState } from "../hooks/useLandingScroll";
 type LandingScreenProps = {
   eclipses: LandingEclipseItem[];
   selectedId: string | null;
+  searchQuery: string;
+  filteredCount: number;
+  totalCount: number;
   onSelect: (id: string) => void;
+  onSearchQueryChange: (query: string) => void;
   onGo: () => void;
   scroll: LandingScrollState;
 };
@@ -16,7 +29,11 @@ type LandingScreenProps = {
 export default function LandingScreen({
   eclipses,
   selectedId,
+  searchQuery,
+  filteredCount,
+  totalCount,
   onSelect,
+  onSearchQueryChange,
   onGo,
   scroll,
 }: LandingScreenProps) {
@@ -25,6 +42,27 @@ export default function LandingScreen({
     [eclipses, selectedId],
   );
   const canGo = !!selectedLanding;
+  const previewUri = selectedLanding?.gifUrl;
+  const [previewState, setPreviewState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!previewUri) {
+      setPreviewState("idle");
+      return;
+    }
+    setPreviewReloadKey(0);
+    setPreviewState("loading");
+    Image.prefetch(previewUri).catch(() => undefined);
+  }, [previewUri]);
+
+  const retryPreview = useCallback(() => {
+    if (!previewUri) return;
+    setPreviewReloadKey((v) => v + 1);
+    setPreviewState("loading");
+    Image.prefetch(previewUri).catch(() => undefined);
+  }, [previewUri]);
+
   const renderItem = useCallback(
     ({ item }: { item: LandingEclipseItem }) => (
       <Pressable
@@ -57,6 +95,21 @@ export default function LandingScreen({
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.landingWrap}>
         <Text style={styles.landingTitle}>Eclipse Timer</Text>
+        <View style={styles.searchWrap}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={onSearchQueryChange}
+            style={styles.searchInput}
+            placeholder="Search by year, date, kind, or ID"
+            placeholderTextColor="#6f6f6f"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+          <Text style={styles.searchMeta}>
+            {filteredCount} of {totalCount}
+          </Text>
+        </View>
 
         <View style={styles.landingListBox}>
           <FlatList
@@ -80,16 +133,42 @@ export default function LandingScreen({
             maxToRenderPerBatch={24}
             windowSize={11}
             removeClippedSubviews
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyTitle}>No eclipses found</Text>
+                <Text style={styles.emptyMeta}>Try a different search query.</Text>
+              </View>
+            }
           />
         </View>
 
         {selectedLanding ? (
           <View style={styles.previewCard}>
-            <Image
-              source={{ uri: selectedLanding.gifUrl }}
-              style={styles.previewGif}
-              resizeMode="contain"
-            />
+            <View style={styles.previewMedia}>
+              <Image
+                key={`${previewUri}-${previewReloadKey}`}
+                source={{ uri: selectedLanding.gifUrl, cache: "force-cache" }}
+                style={styles.previewGif}
+                resizeMode="contain"
+                onLoadStart={() => setPreviewState("loading")}
+                onLoad={() => setPreviewState("ready")}
+                onError={() => setPreviewState("error")}
+              />
+              {previewState === "loading" ? (
+                <View style={styles.previewOverlay}>
+                  <ActivityIndicator />
+                  <Text style={styles.previewOverlayText}>Loading NASA preview...</Text>
+                </View>
+              ) : null}
+              {previewState === "error" ? (
+                <View style={styles.previewOverlay}>
+                  <Text style={styles.previewOverlayText}>Preview unavailable right now.</Text>
+                  <Pressable style={styles.previewRetryBtn} onPress={retryPreview}>
+                    <Text style={styles.previewRetryText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -115,6 +194,29 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
+  searchWrap: {
+    backgroundColor: "#121212",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2b2b2b",
+    padding: 10,
+    gap: 8,
+  },
+  searchInput: {
+    color: "white",
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#313131",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  searchMeta: {
+    color: "#9b9b9b",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   landingListBox: {
     flex: 1,
     minHeight: 220,
@@ -150,6 +252,14 @@ const styles = StyleSheet.create({
   landingListItemTitlePast: { color: "#9b9b9b" },
   landingListItemMeta: { color: "#bdbdbd", fontSize: 12, marginTop: 4 },
   landingListItemMetaPast: { color: "#7f7f7f" },
+  emptyWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 36,
+    gap: 6,
+  },
+  emptyTitle: { color: "#dedede", fontSize: 14, fontWeight: "700" },
+  emptyMeta: { color: "#8d8d8d", fontSize: 12 },
   previewCard: {
     backgroundColor: "#121212",
     borderRadius: 12,
@@ -157,11 +267,40 @@ const styles = StyleSheet.create({
     borderColor: "#2b2b2b",
     padding: 8,
   },
-  previewGif: {
+  previewMedia: {
     width: "100%",
     height: 220,
     borderRadius: 8,
+    overflow: "hidden",
     backgroundColor: "#0b0b0b",
+  },
+  previewGif: {
+    width: "100%",
+    height: "100%",
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(11, 11, 11, 0.85)",
+    paddingHorizontal: 16,
+  },
+  previewOverlayText: {
+    color: "#d8d8d8",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  previewRetryBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#2c3cff",
+  },
+  previewRetryText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "700",
   },
   goBtn: {
     marginTop: 4,

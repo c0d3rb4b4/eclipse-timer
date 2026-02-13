@@ -214,7 +214,19 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
   if (!visible || !v || !Number.isFinite(v.L1obs) || v.L1obs <= 0) {
     magnitude = undefined;
   } else if (kindAtLocation === "total" || kindAtLocation === "annular") {
-    magnitude = 1;
+    const denom = v.L1obs + v.L2obs;
+    if (!Number.isFinite(v.L2obs) || !Number.isFinite(v.delta) || !Number.isFinite(denom) || denom <= 0) {
+      magnitude = undefined;
+    } else {
+      const raw = (v.L1obs - v.delta) / denom;
+      if (!Number.isFinite(raw)) {
+        magnitude = undefined;
+      } else if (kindAtLocation === "total") {
+        magnitude = Math.max(1, raw);
+      } else {
+        magnitude = Math.max(0, Math.min(1, raw));
+      }
+    }
   } else {
     // partial eclipse
     const raw = (v.L1obs - v.delta) / v.L1obs;

@@ -98,7 +98,13 @@ describe("computeCircumstances catalog sweeps", () => {
         expect(max).toBeLessThan(c3);
         expect(c3).toBeLessThan(c4);
         expect(c.durationSeconds).toBeGreaterThan(0);
-        expect(c.magnitude).toBe(1);
+        expect(c.magnitude).toBeDefined();
+        if (c.kindAtLocation === "total") {
+          expect(c.magnitude).toBeGreaterThanOrEqual(1);
+        } else {
+          expect(c.magnitude).toBeGreaterThan(0);
+          expect(c.magnitude).toBeLessThan(1);
+        }
       } else {
         expect(roots.umb, `${e.id} partial events should have no umbral roots`).toHaveLength(0);
         expect(c.c2Utc).toBeUndefined();

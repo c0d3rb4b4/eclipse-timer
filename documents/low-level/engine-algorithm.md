@@ -75,7 +75,10 @@ Visibility and preliminary classification:
   - Only set when `C2` and `C3` exist and `C3 > C2`.
 - `magnitude`:
   - `undefined` when not visible or invalid `L1obs`.
-  - `1` for total/annular.
+  - Central (`total`/`annular`) formula:
+    - `raw = (L1obs - delta) / (L1obs + L2obs)`
+    - `total`: `max(1, raw)`
+    - `annular`: clamp to `[0, 1]`
   - Partial formula:
     - `(L1obs - delta) / L1obs`, clamped to `[0, 1]`.
 
