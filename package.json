@@ -9,10 +9,12 @@
   "scripts": {
     "dev:mobile": "pnpm -C apps/mobile start",
     "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.15",
     "typescript": "^5.4.0",
     "vitest": "^2.1.9"
   }

@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { EclipseRecord, OverlayPoint } from "@eclipse-timer/shared";
-import { evaluateAtT } from "../../engine/src/circumstances/functions.ts";
+import { evaluateAtT } from "@eclipse-timer/engine";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

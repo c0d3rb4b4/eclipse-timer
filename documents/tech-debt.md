@@ -49,8 +49,8 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| L-01 | **No linter configured** | 🟠 High | All `lint` scripts are `echo "(add eslint later)"`. No ESLint, Biome, or equivalent. |
-| L-02 | **No formatter configured** | 🟠 High | No Prettier/Biome/dprint config. Inconsistent indentation is already visible (e.g., mixed 2-space and realigned blocks in `App.tsx` styles). |
+| L-01 | **No linter configured** | 🟠 High | ✅ Resolved 2026-02-13: configured Biome at the workspace root and replaced placeholder `lint` scripts across app/package workspaces with `biome lint .`. |
+| L-02 | **No formatter configured** | 🟠 High | ✅ Resolved 2026-02-13: added shared Biome formatter config and `format` scripts (`biome format --write .`) across workspaces. |
 | L-03 | **No pre-commit hooks** | 🟡 Medium | No Husky/lint-staged setup. Nothing prevents committing broken types or unformatted code. |
 | L-04 | **No `.editorconfig`** | 🟢 Low | Helps enforce consistent whitespace across editors/contributors. |
 | L-05 | **No `.nvmrc` / `.node-version`** | 🟢 Low | README says "Node 18+" but nothing pins or validates it. |
@@ -120,7 +120,7 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| C-01 | **Cross-package deep import in `build_overlays_json.ts`** | 🔴 Critical | The overlay build script directly imports `../../engine/src/circumstances/functions.ts` — a deep relative path into another package's internals. This bypasses package boundaries and will break if the engine restructures. Should import from `@eclipse-timer/engine` public API. |
+| C-01 | **Cross-package deep import in `build_overlays_json.ts`** | 🔴 Critical | ✅ Resolved 2026-02-13: `build_overlays_json.ts` now imports `evaluateAtT` from `@eclipse-timer/engine`, and the engine exports `evaluateAtT` through its public API surface. |
 | C-02 | **`loadCatalog()` uses `require()` (CJS) in an ESM package** | 🟡 Medium | `catalog/src/index.ts` uses `require("../generated/overlays.generated.json")` in a package marked `"type": "module"`. This works via Metro/bundler magic but is a portability risk for Node.js consumers. |
 | C-03 | **Generated files are committed (implied)** | 🟡 Medium | `generated/catalog.generated.json` and `overlays.generated.json` appear in the repo. Large generated JSON files inflate the git history. Consider `.gitignore`-ing them and regenerating in CI. |
 | C-04 | **No checksum or version stamping on generated data** | 🟢 Low | There's no way to tell which CSV input or script version produced a given `.generated.json`. Adding a metadata header (timestamp, input hash) aids reproducibility. |
@@ -240,7 +240,7 @@
 | T-02 | ✅ Resolved 2026-02-13: unit tests for core engine |
 | T-03 | ✅ Resolved 2026-02-13: unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
-| C-01 | Fix cross-package deep import in overlay build |
+| C-01 | ✅ Resolved 2026-02-13: fix cross-package deep import in overlay build |
 | CI-01 | Set up a CI pipeline |
 
 ### 🟠 High — Fix Soon
@@ -248,8 +248,8 @@
 |----|---------|
 | T-04 | ✅ Resolved 2026-02-13: tests for geo/coords |
 | T-05 | ✅ Resolved 2026-02-13: tests for time utilities |
-| L-01 | Configure a linter |
-| L-02 | Configure a formatter |
+| L-01 | ✅ Resolved 2026-02-13: configure a linter |
+| L-02 | ✅ Resolved 2026-02-13: configure a formatter |
 | A-02 | ✅ Resolved 2026-02-12: introduce state management |
 | A-05 | ✅ Resolved 2026-02-13: defer compute with `InteractionManager.runAfterInteractions` |
 | A-06 / U-11 | ✅ Resolved 2026-02-13: make countdown timer tick in real time |

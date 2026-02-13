@@ -43,12 +43,13 @@ The current MVP is built around a two-screen flow:
   -> @eclipse-timer/shared
 
 @eclipse-timer/engine
-  -> @eclipse-timer/catalog
   -> @eclipse-timer/shared
 
 @eclipse-timer/catalog
   -> @eclipse-timer/shared
 ```
+
+Catalog build scripts (`packages/catalog/scripts/*`) use `@eclipse-timer/engine` as a dev dependency.
 
 ## End-to-End Flow (High Level)
 
@@ -253,6 +254,6 @@ documents/
 ## Current Status and Limits
 
 - MVP behavior is implemented and usable for local exploration.
-- Lint script is currently a placeholder and should be replaced with real lint rules.
+- Workspace lint/format tooling is configured with Biome; current codebase still has existing lint warnings to address incrementally.
 - Alarm toggles/test alarm UI exists, but production-grade local notification scheduling is not implemented yet.
 - Product polish and persistence/history features are intentionally limited while core engine/data reliability is prioritized.
