@@ -105,7 +105,7 @@
 |----|------|----------|---------|
 | E-01 | **`deltaTSecondsApprox` is dead code** | 🟡 Medium | `time/deltaT.ts` exports `deltaTSecondsApprox` but it is never imported anywhere. The engine uses the per-record `deltaTSeconds` field instead. Should be deleted or integrated. |
 | E-02 | **`bessel/elements.ts` is dead code** | 🟡 Medium | `evalElements` duplicates what `evaluateAtT` already does in `functions.ts`. It is never imported by any consumer. |
-| E-03 | **Redundant evaluation in `fPenumbra` / `fUmbraAbs`** | 🟡 Medium | Each call to `fPenumbra` or `fUmbraAbs` calls `evaluateAtT` independently. During bracket scanning (~360 evaluations per eclipse × 2 functions), many evaluations are duplicated at the same `t`. Could return both metrics from a single evaluation. |
+| E-03 | **Redundant evaluation in `fPenumbra` / `fUmbraAbs`** | 🟡 Medium | ✅ Resolved 2026-02-13: introduced `evaluateShadowMetricsAtT` and shared per-`t` metric caching inside contact solving so penumbral/umbral scans reuse one `evaluateAtT` result. |
 | E-04 | **Magic numbers in `solveContacts`** | 🟡 Medium | `tMin = -3`, `tMax = +3`, `stepBracket = 1/60`, `stepFine = 1/600`, `tol = 1e-7` are inlined constants with no configuration or documentation of units beyond comments. |
 | E-05 | **Magnitude formula is oversimplified** | 🟠 High | For total/annular eclipses, magnitude is hardcoded to `1`. Astronomical magnitude for a total eclipse is typically `> 1` (ratio of apparent diameters). The partial formula `(L1obs - delta) / L1obs` may also be an approximation — should be validated against references. |
 | E-06 | **No input validation** | 🟡 Medium | `computeCircumstances` trusts that `EclipseRecord` has valid polynomial arrays and numeric fields. A malformed record causes silent NaN propagation. |
@@ -175,11 +175,11 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| P-01 | **Entire 200-eclipse catalog loaded into memory at startup** | 🟡 Medium | `loadCatalog()` merges all catalog entries with overlay data eagerly. For mobile, lazy loading or pagination would reduce memory. |
-| P-02 | **Overlay JSON can be large** | 🟡 Medium | With 200+ eclipses, `overlays.generated.json` can be multiple MB. Metro bundles it into the JS bundle. Consider on-demand loading per eclipse. |
-| P-03 | **`splitPolygonOnDateline` runs on every render** | 🟢 Low | `overlayTuplesToCells` is wrapped in `useMemo` keyed on `activeEclipse`, which is correct. But the function allocates heavily — could be precomputed in the build script. |
-| P-04 | **Duplicate `evaluateAtT` calls during root solving** | 🟡 Medium | See E-03. Each bracket scan step calls `evaluateAtT` twice (once for penumbra, once for umbra), but the polynomial evaluation is identical — only the metric differs. |
-| P-05 | **Landing list renders all 200+ rows** | 🟡 Medium | Uses a plain `ScrollView` + `.map()`. Should be a `FlatList` with virtualization for smooth scrolling on low-end devices. |
+| P-01 | **Entire 200-eclipse catalog loaded into memory at startup** | 🟡 Medium | ✅ Resolved 2026-02-13: `loadCatalog()` now returns lightweight records and overlays are hydrated lazily only for the selected eclipse. |
+| P-02 | **Overlay JSON can be large** | 🟡 Medium | ✅ Resolved 2026-02-13: overlays are now emitted as decade chunk files and loaded on demand by eclipse year instead of eagerly loading a monolithic overlay map in the app path. |
+| P-03 | **`splitPolygonOnDateline` runs on every render** | 🟢 Low | ✅ Resolved 2026-02-13: `overlayTuplesToCells` now memoizes converted/split polygons in a `WeakMap`, eliminating repeat allocation work for previously seen overlay arrays. |
+| P-04 | **Duplicate `evaluateAtT` calls during root solving** | 🟡 Medium | ✅ Resolved 2026-02-13 via E-03: contact solving now shares one cached evaluation per `t` for both penumbral and umbral metrics. |
+| P-05 | **Landing list renders all 200+ rows** | 🟡 Medium | ✅ Resolved 2026-02-13: replaced `ScrollView` + `.map()` with a virtualized `FlatList` (batched rendering + clipped subviews + fixed item layout). |
 
 ---
 
@@ -273,7 +273,7 @@
 | A-07 | Wire up real notifications for alarms |
 | A-10 | Pass GPS altitude as `elevM` |
 | A-11 | Add error boundary |
-| E-03 | Deduplicate evaluateAtT calls |
+| E-03 | ✅ Resolved 2026-02-13: deduplicate `evaluateAtT` calls |
 | E-04 | Extract magic numbers to config |
 | E-06 | Add input validation to engine |
 | E-08 | Typed result instead of thrown errors |
@@ -289,10 +289,10 @@
 | U-06 | Add search/filter to landing list |
 | U-08 | Handle GIF loading/error states |
 | U-09 | Fix magnitude display for total eclipses |
-| P-01 | Lazy-load catalog |
-| P-02 | On-demand overlay loading |
-| P-04 | Deduplicate polynomial evaluations |
-| P-05 | Virtualize landing list with FlatList |
+| P-01 | ✅ Resolved 2026-02-13: lazy-load catalog overlays |
+| P-02 | ✅ Resolved 2026-02-13: on-demand decade overlay chunks |
+| P-04 | ✅ Resolved 2026-02-13: deduplicate polynomial evaluations |
+| P-05 | ✅ Resolved 2026-02-13: virtualize landing list with FlatList |
 | AC-02 | Add non-color overlay differentiation |
 | AC-04 | Support dynamic font sizing |
 | SP-01 | Show location rationale before permission |

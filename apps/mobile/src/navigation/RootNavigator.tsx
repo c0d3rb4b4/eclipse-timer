@@ -3,7 +3,7 @@ import { NavigationContainer, useFocusEffect, useIsFocused } from "@react-naviga
 import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
 import { enableScreens } from "react-native-screens";
 
-import { loadCatalog } from "@eclipse-timer/catalog";
+import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
 import type { EclipseRecord } from "@eclipse-timer/shared";
 
 import LandingScreen from "../screens/LandingScreen";
@@ -26,17 +26,18 @@ type LandingRouteProps = NativeStackScreenProps<RootStackParamList, "Landing"> &
   catalog: EclipseRecord[];
 };
 
-type TimerRouteProps = NativeStackScreenProps<RootStackParamList, "Timer"> & {
-  catalog: EclipseRecord[];
-};
-
 function LandingRoute({ navigation, catalog }: LandingRouteProps) {
   const { state, actions } = useAppState();
   const isFocused = useIsFocused();
   const { landingEclipses, firstFutureIndex } = useLandingEclipses(catalog);
+  const selectedIndex = useMemo(
+    () => (state.selectedLandingId ? landingEclipses.findIndex((item) => item.id === state.selectedLandingId) : -1),
+    [landingEclipses, state.selectedLandingId]
+  );
   const landingScroll = useLandingScroll({
     isFocused,
-    selectedLandingId: state.selectedLandingId,
+    selectedIndex,
+    firstFutureIndex,
   });
 
   const goToTimer = () => {
@@ -52,17 +53,16 @@ function LandingRoute({ navigation, catalog }: LandingRouteProps) {
       selectedId={state.selectedLandingId}
       onSelect={actions.selectLanding}
       onGo={goToTimer}
-      firstFutureIndex={firstFutureIndex}
       scroll={landingScroll}
     />
   );
 }
 
-function TimerRoute({ catalog }: TimerRouteProps) {
+function TimerRoute(_props: NativeStackScreenProps<RootStackParamList, "Timer">) {
   const { state } = useAppState();
   const activeEclipse = useMemo(
-    () => catalog.find((e) => e.id === state.activeEclipseId) ?? null,
-    [catalog, state.activeEclipseId]
+    () => (state.activeEclipseId ? loadCatalogEntryWithOverlays(state.activeEclipseId) ?? null : null),
+    [state.activeEclipseId]
   );
   const timerState = useTimerState(activeEclipse);
 
@@ -85,7 +85,7 @@ export default function RootNavigator() {
           {(props) => <LandingRoute {...props} catalog={catalog} />}
         </Stack.Screen>
         <Stack.Screen name="Timer">
-          {(props) => <TimerRoute {...props} catalog={catalog} />}
+          {(props) => <TimerRoute {...props} />}
         </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>

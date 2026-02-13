@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useMemo } from "react";
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
@@ -10,7 +10,6 @@ type LandingScreenProps = {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onGo: () => void;
-  firstFutureIndex: number;
   scroll: LandingScrollState;
 };
 
@@ -19,7 +18,6 @@ export default function LandingScreen({
   selectedId,
   onSelect,
   onGo,
-  firstFutureIndex,
   scroll,
 }: LandingScreenProps) {
   const selectedLanding = useMemo(
@@ -27,58 +25,65 @@ export default function LandingScreen({
     [eclipses, selectedId]
   );
   const canGo = !!selectedLanding;
+  const renderItem = useCallback(
+    ({ item }: { item: LandingEclipseItem }) => (
+      <Pressable
+        style={[
+          styles.landingListItem,
+          item.isPast ? styles.landingListItemPast : null,
+          selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
+        ]}
+        onPress={() => onSelect(item.id)}
+      >
+        <Text
+          style={[
+            styles.landingListItemTitle,
+            item.isPast ? styles.landingListItemTitlePast : null,
+          ]}
+        >
+          {item.dateYmd} {item.kindLabel}
+        </Text>
+        <Text
+          style={[
+            styles.landingListItemMeta,
+            item.isPast ? styles.landingListItemMetaPast : null,
+          ]}
+        >
+          {item.id} - {item.isPast ? "Past" : "Upcoming"}
+        </Text>
+      </Pressable>
+    ),
+    [onSelect, selectedLanding?.id]
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <ScrollView contentContainerStyle={styles.landingWrap}>
+      <View style={styles.landingWrap}>
         <Text style={styles.landingTitle}>Eclipse Timer</Text>
 
         <View style={styles.landingListBox}>
-          <ScrollView
+          <FlatList
             ref={scroll.landingListRef}
-            nestedScrollEnabled
+            data={eclipses}
+            keyExtractor={(item) => item.id}
             style={styles.landingListScroll}
             contentContainerStyle={styles.landingListScrollContent}
+            renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={{ height: scroll.rowGap }} />}
+            getItemLayout={(_, index) => ({
+              length: scroll.rowSpan,
+              offset: scroll.rowSpan * index,
+              index,
+            })}
             onScroll={scroll.onScroll}
             onScrollEndDrag={scroll.onScrollEndDrag}
             onMomentumScrollEnd={scroll.onMomentumScrollEnd}
             scrollEventThrottle={16}
-          >
-            {eclipses.map((item, index) => (
-              <Pressable
-                key={item.id}
-                style={[
-                  styles.landingListItem,
-                  item.isPast ? styles.landingListItemPast : null,
-                  selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
-                ]}
-                onPress={() => onSelect(item.id)}
-                onLayout={(e) => {
-                  scroll.landingRowYByIdRef.current[item.id] = e.nativeEvent.layout.y;
-                  if (index === firstFutureIndex) {
-                    scroll.setFirstFutureRowY(e.nativeEvent.layout.y);
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.landingListItemTitle,
-                    item.isPast ? styles.landingListItemTitlePast : null,
-                  ]}
-                >
-                  {item.dateYmd} {item.kindLabel}
-                </Text>
-                <Text
-                  style={[
-                    styles.landingListItemMeta,
-                    item.isPast ? styles.landingListItemMetaPast : null,
-                  ]}
-                >
-                  {item.id} - {item.isPast ? "Past" : "Upcoming"}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+            initialNumToRender={18}
+            maxToRenderPerBatch={24}
+            windowSize={11}
+            removeClippedSubviews
+          />
         </View>
 
         {selectedLanding ? (
@@ -98,7 +103,7 @@ export default function LandingScreen({
         >
           <Text style={styles.goBtnText}>GO</Text>
         </Pressable>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -106,6 +111,7 @@ export default function LandingScreen({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0b0b0b" },
   landingWrap: {
+    flex: 1,
     paddingHorizontal: 12,
     paddingTop: 24,
     paddingBottom: 24,
@@ -113,23 +119,27 @@ const styles = StyleSheet.create({
   },
   landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
   landingListBox: {
+    flex: 1,
+    minHeight: 220,
     backgroundColor: "#121212",
     borderRadius: 12,
     padding: 8,
   },
   landingListScroll: {
-    maxHeight: 360,
+    flex: 1,
   },
   landingListScrollContent: {
-    gap: 8,
+    paddingBottom: 2,
   },
   landingListItem: {
+    height: 68,
     backgroundColor: "#1f1f1f",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#2b2b2b",
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
+    justifyContent: "center",
   },
   landingListItemSelected: {
     borderColor: "#2c3cff",

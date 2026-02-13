@@ -1,6 +1,10 @@
 import { loadCatalog } from "@eclipse-timer/catalog";
 import { computeCircumstances } from "../circumstances/compute";
 
+declare const console: {
+  log: (...args: unknown[]) => void;
+};
+
 const e = loadCatalog()[0];
 if (!e) throw new Error("No eclipse in catalog");
 

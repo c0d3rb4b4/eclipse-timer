@@ -1,40 +1,49 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from "react";
-import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView } from "react-native";
+import { useCallback, useEffect, useRef, type MutableRefObject, type RefObject } from "react";
+import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+
+import type { LandingEclipseItem } from "./useLandingEclipses";
 
 type LandingScrollArgs = {
   isFocused: boolean;
-  selectedLandingId: string | null;
+  selectedIndex: number;
+  firstFutureIndex: number;
 };
 
+const LANDING_ROW_HEIGHT = 68;
+const LANDING_ROW_GAP = 8;
+const LANDING_ROW_SPAN = LANDING_ROW_HEIGHT + LANDING_ROW_GAP;
+
 export type LandingScrollState = {
-  landingListRef: RefObject<ScrollView | null>;
-  landingRowYByIdRef: MutableRefObject<Record<string, number>>;
+  landingListRef: RefObject<FlatList<LandingEclipseItem> | null>;
   didAutoScrollRef: MutableRefObject<boolean>;
   landingListScrollYRef: MutableRefObject<number>;
-  firstFutureRowY: number | null;
-  setFirstFutureRowY: Dispatch<SetStateAction<number | null>>;
+  rowHeight: number;
+  rowGap: number;
+  rowSpan: number;
   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onScrollEndDrag: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onMomentumScrollEnd: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 };
 
-export function useLandingScroll({ isFocused, selectedLandingId }: LandingScrollArgs): LandingScrollState {
-  const landingListRef = useRef<ScrollView>(null);
+export function useLandingScroll({
+  isFocused,
+  selectedIndex,
+  firstFutureIndex,
+}: LandingScrollArgs): LandingScrollState {
+  const landingListRef = useRef<FlatList<LandingEclipseItem>>(null);
   const didAutoScrollRef = useRef(false);
   const prevFocusedRef = useRef(isFocused);
   const landingListScrollYRef = useRef(0);
-  const landingRowYByIdRef = useRef<Record<string, number>>({});
-  const [firstFutureRowY, setFirstFutureRowY] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isFocused || didAutoScrollRef.current) return;
-    if (firstFutureRowY == null) return;
+    if (firstFutureIndex < 0) return;
 
-    const y = Math.max(0, firstFutureRowY - 8);
-    landingListRef.current?.scrollTo({ y, animated: false });
+    const y = Math.max(0, firstFutureIndex * LANDING_ROW_SPAN - LANDING_ROW_GAP);
+    landingListRef.current?.scrollToOffset({ offset: y, animated: false });
     landingListScrollYRef.current = y;
     didAutoScrollRef.current = true;
-  }, [isFocused, firstFutureRowY]);
+  }, [firstFutureIndex, isFocused]);
 
   useEffect(() => {
     const prev = prevFocusedRef.current;
@@ -45,21 +54,18 @@ export function useLandingScroll({ isFocused, selectedLandingId }: LandingScroll
     const restore = () => {
       let targetY = Math.max(0, landingListScrollYRef.current);
 
-      if (targetY <= 1 && selectedLandingId) {
-        const rowY = landingRowYByIdRef.current[selectedLandingId];
-        if (typeof rowY === "number" && Number.isFinite(rowY)) {
-          targetY = Math.max(0, rowY - 8);
-        }
+      if (targetY <= 1 && selectedIndex >= 0) {
+        targetY = Math.max(0, selectedIndex * LANDING_ROW_SPAN - LANDING_ROW_GAP);
       }
 
-      landingListRef.current?.scrollTo({ y: targetY, animated: false });
+      landingListRef.current?.scrollToOffset({ offset: targetY, animated: false });
       landingListScrollYRef.current = targetY;
     };
 
     restore();
     const t = setTimeout(restore, 80);
     return () => clearTimeout(t);
-  }, [isFocused, selectedLandingId]);
+  }, [isFocused, selectedIndex]);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = Math.max(0, e.nativeEvent.contentOffset.y);
@@ -73,11 +79,11 @@ export function useLandingScroll({ isFocused, selectedLandingId }: LandingScroll
 
   return {
     landingListRef,
-    landingRowYByIdRef,
     didAutoScrollRef,
     landingListScrollYRef,
-    firstFutureRowY,
-    setFirstFutureRowY,
+    rowHeight: LANDING_ROW_HEIGHT,
+    rowGap: LANDING_ROW_GAP,
+    rowSpan: LANDING_ROW_SPAN,
     onScroll,
     onScrollEndDrag: onScrollEnd,
     onMomentumScrollEnd: onScrollEnd,

@@ -1,6 +1,7 @@
 import type { LatLng, Region } from "react-native-maps";
 
 type OverlayCell = LatLng[];
+const overlayCellsCache = new WeakMap<[number, number][][], OverlayCell[]>();
 
 export function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -40,6 +41,9 @@ export function sanitizeRegion(region: Region, fallback?: Region): Region {
 
 export function overlayTuplesToCells(polygons: [number, number][][] | undefined): OverlayCell[] {
   if (!polygons?.length) return [];
+  const cached = overlayCellsCache.get(polygons);
+  if (cached) return cached;
+
   const cells = polygons
     .map((poly) =>
       poly
@@ -50,7 +54,9 @@ export function overlayTuplesToCells(polygons: [number, number][][] | undefined)
         .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
     )
     .filter((poly) => poly.length >= 3);
-  return cells.flatMap((poly) => splitPolygonOnDateline(poly));
+  const split = cells.flatMap((poly) => splitPolygonOnDateline(poly));
+  overlayCellsCache.set(polygons, split);
+  return split;
 }
 
 function splitPolygonOnDateline(poly: OverlayCell): OverlayCell[] {

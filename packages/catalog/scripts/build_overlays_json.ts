@@ -25,6 +25,10 @@ const __dirname = path.dirname(__filename);
 const catalogPath = path.resolve(__dirname, "../generated/catalog.generated.json");
 const outPath = path.resolve(__dirname, "../generated/overlays.generated.json");
 
+function outChunkPath(decade: number): string {
+  return path.resolve(__dirname, `../generated/overlays.${decade}s.generated.json`);
+}
+
 // ---------------------------------------------------------------------------
 // Tunables
 // ---------------------------------------------------------------------------
@@ -723,5 +727,23 @@ for (const e of catalog) {
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify(overlays, null, 0), "utf8");
 
+const byDecade = new Map<number, Record<string, OverlayResult>>();
+for (const [id, overlay] of Object.entries(overlays)) {
+  const year = Number(id.slice(0, 4));
+  if (!Number.isFinite(year)) continue;
+  const decade = Math.floor(year / 10) * 10;
+  const existing = byDecade.get(decade);
+  if (existing) {
+    existing[id] = overlay;
+  } else {
+    byDecade.set(decade, { [id]: overlay });
+  }
+}
+
+for (const [decade, entries] of [...byDecade.entries()].sort((a, b) => a[0] - b[0])) {
+  fs.writeFileSync(outChunkPath(decade), JSON.stringify(entries, null, 0), "utf8");
+}
+
 const sizeKb = Math.round(fs.statSync(outPath).size / 1024);
 console.log(`\nWrote ${outPath} (${sizeKb} KB, ${catalog.length} eclipses)`);
+console.log(`Wrote ${byDecade.size} decade chunk files for lazy overlay loading.`);

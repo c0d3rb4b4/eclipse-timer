@@ -2,7 +2,7 @@
 import type { Circumstances, EclipseRecord, Observer, EclipseKindAtLocation } from "@eclipse-timer/shared";
 import { findBrackets } from "../math/bracket";
 import { bisectRoot } from "../math/root";
-import { evaluateAtT, fPenumbra, fUmbraAbs } from "./functions";
+import { evaluateShadowMetricsAtT } from "./functions";
 import { t0TtDate, ttAtTHours } from "../time/t0";
 import { ttToUtcUsingDeltaT, toIsoUtc } from "../time/utc";
 
@@ -34,7 +34,15 @@ function scanMin(
   return { t: bestT, val: bestV };
 }
 
-function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes; kindAtLocation: EclipseKindAtLocation; debug: any } {
+function solveContacts(
+  e: EclipseRecord,
+  o: Observer
+): {
+  contacts: ContactTimes;
+  kindAtLocation: EclipseKindAtLocation;
+  maxEval?: ReturnType<typeof evaluateShadowMetricsAtT>;
+  debug: any;
+} {
   // NASA page says valid over 7.00 ≤ t ≤ 13.00 TDT and t0=10.000 ⇒ [-3, +3] hours from t0
   const tMin = -3;
   const tMax = +3;
@@ -42,8 +50,18 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   // Scan step for bracketing: 60 seconds
   const stepBracket = 1 / 60;
 
+  // Reuse full per-t evaluations across both metrics.
+  const metricsCache = new Map<number, ReturnType<typeof evaluateShadowMetricsAtT>>();
+  const metricsAt = (t: number): ReturnType<typeof evaluateShadowMetricsAtT> => {
+    const cached = metricsCache.get(t);
+    if (cached) return cached;
+    const next = evaluateShadowMetricsAtT(e, o, t);
+    metricsCache.set(t, next);
+    return next;
+  };
+
   // --- Solve penumbral roots (C1/C4) ---
-  const pen = (t: number) => fPenumbra(e, o, t);
+  const pen = (t: number) => metricsAt(t).penumbra;
   const penBrackets = findBrackets(pen, tMin, tMax, stepBracket);
 
   const penRootResults = penBrackets.map((b) => bisectRoot(pen, b.a, b.b, 1e-7));
@@ -56,7 +74,7 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   const c4 = penRoots.length >= 2 ? penRoots[penRoots.length - 1] : undefined;
 
   // --- Solve umbra/antumbra roots (C2/C3) ---
-  const umb = (t: number) => fUmbraAbs(e, o, t);
+  const umb = (t: number) => metricsAt(t).umbraAbs;
   const umbBrackets = findBrackets(umb, tMin, tMax, stepBracket);
 
   const umbRootResults = umbBrackets.map((b) => bisectRoot(umb, b.a, b.b, 1e-7));
@@ -96,31 +114,35 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   const stepFine = 1 / 600; // 6 seconds in hours
   let bestT: number | undefined;
   let bestMetric: number | undefined;
+  let maxEval: ReturnType<typeof evaluateShadowMetricsAtT> | undefined;
 
   if (visible && typeof c2 === "number" && typeof c3 === "number" && c3 > c2) {
     const r = scanMin(umb, c2, c3, stepFine);
     bestT = r.t;
     bestMetric = r.val;
 
-    const vAtMax = evaluateAtT(e, o, bestT);
+    const vAtMax = metricsAt(bestT);
+    maxEval = vAtMax;
     kindAtLocation = vAtMax.L2obs < 0 ? "total" : "annular";
   } else if (visible && typeof c1 === "number" && typeof c4 === "number" && c4 > c1) {
     const r = scanMin(pen, c1, c4, stepFine);
     bestT = r.t;
     bestMetric = r.val;
+    maxEval = metricsAt(bestT);
     kindAtLocation = "partial";
   } else {
     // fallback: scan whole window minimizing delta
     let bestDelta = Number.POSITIVE_INFINITY;
     let bestTFallback = 0;
     for (let t = tMin; t <= tMax + 1e-12; t += stepBracket) {
-      const v = evaluateAtT(e, o, t);
+      const v = metricsAt(t);
       if (Number.isFinite(v.delta) && v.delta < bestDelta) {
         bestDelta = v.delta;
         bestTFallback = t;
       }
     }
     bestT = bestTFallback;
+    maxEval = metricsAt(bestTFallback);
     bestMetric = undefined;
     kindAtLocation = visible ? "partial" : "none";
   }
@@ -128,6 +150,7 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   return {
     contacts: { c1, c2, max: bestT, c3, c4 },
     kindAtLocation,
+    maxEval,
     debug: {
       // scan/roots
       penBracketsCount: penBrackets.length,
@@ -145,8 +168,8 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
 }
 
 export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstances {
-  const { contacts, kindAtLocation, debug } = solveContacts(e, o);
-  const v = evaluateAtT(e, o, contacts.max!)
+  const { contacts, kindAtLocation, maxEval, debug } = solveContacts(e, o);
+  const v = maxEval ?? evaluateShadowMetricsAtT(e, o, contacts.max!);
 
   const t0tt = t0TtDate(e);
 
