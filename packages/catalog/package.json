@@ -11,7 +11,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo \"(add eslint later)\"",
-    "test": "echo \"(add tests later)\"",
+    "test": "vitest run --config ../../vitest.config.ts",
     "data:filter": "tsx scripts/filter_csv_1900_2100.ts",
     "data:build": "tsx scripts/build_catalog_json.ts",
     "data:overlays": "tsx scripts/build_overlays_json.ts",

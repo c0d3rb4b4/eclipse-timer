@@ -28,7 +28,7 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| T-01 | **No test framework installed** | 🔴 Critical | All `test` scripts across every package are `echo "(add tests later)"`. No test runner (Vitest, Jest, etc.) is configured anywhere. |
+| T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
 | T-02 | **Zero unit tests for the engine** | 🔴 Critical | The core eclipse computation (`computeCircumstances`, `evaluateAtT`, `fPenumbra`, `fUmbraAbs`, root-finding, polynomial evaluation) has no automated verification. Manual `dev/run_one.ts` is the only validation method. |
 | T-03 | **Zero unit tests for math helpers** | 🔴 Critical | `evalPoly`, `findBrackets`, `bisectRoot` are numerically sensitive pure functions — ideal for property-based and example-based tests but completely untested. |
 | T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
@@ -236,7 +236,7 @@
 ### 🔴 Critical — Fix First
 | ID | Summary |
 |----|---------|
-| T-01 | Install a test framework |
+| T-01 | ✅ Resolved 2026-02-13: install a test framework |
 | T-02 | Unit tests for core engine |
 | T-03 | Unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
