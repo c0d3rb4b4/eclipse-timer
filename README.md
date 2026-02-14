@@ -88,11 +88,110 @@ At a high level, the engine:
 
 ## Prerequisites
 
-- Node.js **18+**
+### Required for all platforms
+
+- Node.js **18+** (LTS recommended)
 - pnpm (**repo is pinned to `pnpm@9`**)
-- For mobile native simulators:
-  - iOS: Xcode + iOS Simulator (macOS)
-  - Android: Android Studio + Android SDK/emulator
+
+Check versions:
+
+```bash
+node -v
+pnpm -v
+```
+
+Install/activate pnpm via Corepack (recommended):
+
+```bash
+corepack enable
+corepack prepare pnpm@9 --activate
+```
+
+### macOS (iOS + Android simulators)
+
+1. Install Node.js (either method):
+   - Homebrew:
+     ```bash
+     brew install node
+     ```
+   - nvm:
+     ```bash
+     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+     nvm install --lts
+     ```
+2. Enable pnpm with Corepack:
+   ```bash
+   corepack enable
+   corepack prepare pnpm@9 --activate
+   ```
+3. Install Xcode from the App Store, then run:
+   ```bash
+   xcode-select --install
+   sudo xcodebuild -license accept
+   ```
+4. Open Xcode once, then install an iOS runtime in `Xcode -> Settings -> Platforms`.
+5. Install Android Studio. In `SDK Manager`, install:
+   - Android SDK Platform (latest stable)
+   - Android SDK Build-Tools
+   - Android SDK Command-line Tools
+   - Android Emulator
+6. Create and start an Android Virtual Device (AVD) in `Device Manager`.
+
+### Windows (Android emulator only)
+
+1. Install Node.js LTS (example with `winget`):
+   ```powershell
+   winget install OpenJS.NodeJS.LTS
+   ```
+2. Enable pnpm with Corepack:
+   ```powershell
+   corepack enable
+   corepack prepare pnpm@9 --activate
+   ```
+3. Install Android Studio:
+   ```powershell
+   winget install Google.AndroidStudio
+   ```
+4. In Android Studio `SDK Manager`, install:
+   - Android SDK Platform (latest stable)
+   - Android SDK Build-Tools
+   - Android SDK Command-line Tools
+   - Android Emulator
+5. Create and start an AVD in `Device Manager`.
+6. iOS Simulator is not available on Windows. Use a macOS machine for iOS Simulator runs.
+
+### Linux (Android emulator only)
+
+1. Install Node.js (nvm recommended):
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+   nvm install --lts
+   nvm use --lts
+   ```
+2. Enable pnpm with Corepack:
+   ```bash
+   corepack enable
+   corepack prepare pnpm@9 --activate
+   ```
+3. Install Android Studio (example with Snap):
+   ```bash
+   sudo snap install android-studio --classic
+   ```
+4. In Android Studio `SDK Manager`, install:
+   - Android SDK Platform (latest stable)
+   - Android SDK Build-Tools
+   - Android SDK Command-line Tools
+   - Android Emulator
+5. Create and start an AVD in `Device Manager`.
+6. iOS Simulator is not available on Linux. Use a macOS machine for iOS Simulator runs.
+
+### Android SDK environment variables (recommended)
+
+Set `ANDROID_SDK_ROOT` and add platform tools to your `PATH` so CLI launches work reliably:
+
+- macOS: `~/Library/Android/sdk`
+- Linux: `~/Android/Sdk`
+- Windows: `%LOCALAPPDATA%\Android\Sdk`
 
 ## Installation
 
