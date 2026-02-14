@@ -107,6 +107,12 @@ corepack enable
 corepack prepare pnpm@9 --activate
 ```
 
+If `corepack` is not found, use a fallback install:
+
+```bash
+npm install -g pnpm@9
+```
+
 ### macOS (iOS + Android simulators)
 
 1. Install Node.js (either method):
@@ -124,18 +130,39 @@ corepack prepare pnpm@9 --activate
    corepack enable
    corepack prepare pnpm@9 --activate
    ```
-3. Install Xcode from the App Store, then run:
+3. Install Xcode from the App Store and verify where it is installed:
    ```bash
-   xcode-select --install
+   ls -1 /Applications | grep -i xcode
+   ```
+   If nothing is listed, full Xcode is not installed yet (only Command Line Tools are present).
+4. Point `xcode-select` to full Xcode (not Command Line Tools):
+   ```bash
+   # Default App Store path
+   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+   # If your app name is different (for example Xcode-beta.app), use that path instead:
+   # sudo xcode-select -s /Applications/<YourXcodeName>.app/Contents/Developer
+   ```
+   Verify:
+   ```bash
+   xcode-select -p
+   xcodebuild -version
+   ```
+5. Run first-launch setup:
+   ```bash
+   sudo xcodebuild -runFirstLaunch
+   ```
+   If you still need to accept the license explicitly:
+   ```bash
    sudo xcodebuild -license accept
    ```
-4. Open Xcode once, then install an iOS runtime in `Xcode -> Settings -> Platforms`.
-5. Install Android Studio. In `SDK Manager`, install:
+6. Open Xcode once, then install an iOS runtime in `Xcode -> Settings -> Platforms`.
+7. Install Android Studio. In `SDK Manager`, install:
    - Android SDK Platform (latest stable)
    - Android SDK Build-Tools
    - Android SDK Command-line Tools
    - Android Emulator
-6. Create and start an Android Virtual Device (AVD) in `Device Manager`.
+8. Create and start an Android Virtual Device (AVD) in `Device Manager`.
 
 ### Windows (Android emulator only)
 
