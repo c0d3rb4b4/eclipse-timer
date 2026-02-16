@@ -13,6 +13,9 @@ export type NotificationSettings = {
   eclipseAlerts: boolean;
   countdownAlerts: boolean;
   vibrationEnabled: boolean;
+  soundEnabled: boolean;
+  remindOneHourBefore: boolean;
+  remindTenMinutesBefore: boolean;
 };
 
 export type FavoriteLocation = {
@@ -50,6 +53,9 @@ const initialState: AppState = {
     eclipseAlerts: true,
     countdownAlerts: true,
     vibrationEnabled: true,
+    soundEnabled: true,
+    remindOneHourBefore: true,
+    remindTenMinutesBefore: true,
   },
   favoriteLocations: [],
 };
@@ -90,6 +96,18 @@ function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof raw.vibrationEnabled === "boolean"
         ? raw.vibrationEnabled
         : initialState.notificationSettings.vibrationEnabled,
+    soundEnabled:
+      typeof raw.soundEnabled === "boolean"
+        ? raw.soundEnabled
+        : initialState.notificationSettings.soundEnabled,
+    remindOneHourBefore:
+      typeof raw.remindOneHourBefore === "boolean"
+        ? raw.remindOneHourBefore
+        : initialState.notificationSettings.remindOneHourBefore,
+    remindTenMinutesBefore:
+      typeof raw.remindTenMinutesBefore === "boolean"
+        ? raw.remindTenMinutesBefore
+        : initialState.notificationSettings.remindTenMinutesBefore,
   };
 }
 

@@ -14,17 +14,18 @@ type SettingRowProps = {
   title: string;
   description: string;
   value: boolean;
+  disabled?: boolean;
   onValueChange: (nextValue: boolean) => void;
 };
 
-function SettingRow({ title, description, value, onValueChange }: SettingRowProps) {
+function SettingRow({ title, description, value, disabled = false, onValueChange }: SettingRowProps) {
   return (
-    <View style={styles.rowCard}>
+    <View style={[styles.rowCard, disabled ? styles.rowCardDisabled : null]}>
       <View style={styles.rowMain}>
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} />
+      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
     </View>
   );
 }
@@ -62,6 +63,26 @@ export default function NotificationSettingsScreen({
           description="Vibrate when an enabled eclipse alert is delivered."
           value={settings.vibrationEnabled}
           onValueChange={(nextValue) => onSetSetting("vibrationEnabled", nextValue)}
+        />
+        <SettingRow
+          title="Sound"
+          description="Play sound for eclipse alerts and reminder notifications."
+          value={settings.soundEnabled}
+          onValueChange={(nextValue) => onSetSetting("soundEnabled", nextValue)}
+        />
+        <SettingRow
+          title="1 Hour Reminder"
+          description="Send a countdown reminder one hour before each enabled contact."
+          value={settings.remindOneHourBefore}
+          disabled={!settings.countdownAlerts}
+          onValueChange={(nextValue) => onSetSetting("remindOneHourBefore", nextValue)}
+        />
+        <SettingRow
+          title="10 Minute Reminder"
+          description="Send a countdown reminder ten minutes before each enabled contact."
+          value={settings.remindTenMinutesBefore}
+          disabled={!settings.countdownAlerts}
+          onValueChange={(nextValue) => onSetSetting("remindTenMinutesBefore", nextValue)}
         />
       </View>
     </SafeAreaView>
@@ -110,6 +131,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+  },
+  rowCardDisabled: {
+    opacity: 0.6,
   },
   rowMain: {
     flex: 1,

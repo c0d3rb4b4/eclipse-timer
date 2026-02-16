@@ -24,4 +24,11 @@ config.resolver.sourceExts = Array.from(
   new Set([...(config.resolver.sourceExts ?? []), "ts", "tsx"]),
 );
 
+// expo-notifications transitively imports "@ide/backoff", which requires Node "assert".
+// Provide a tiny React Native-safe alias so Metro doesn't require Node stdlib polyfills.
+config.resolver.extraNodeModules = {
+  ...(config.resolver.extraNodeModules ?? {}),
+  assert: path.resolve(projectRoot, "src/polyfills/assert.js"),
+};
+
 module.exports = config;

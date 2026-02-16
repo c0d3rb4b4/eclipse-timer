@@ -148,7 +148,7 @@ function LandingRoute({ navigation, catalog, onOpenMenu }: LandingRouteProps) {
 }
 
 function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
   const [activeEclipse, setActiveEclipse] = useState<EclipseRecord | null>(null);
   const [isActiveEclipseLoading, setIsActiveEclipseLoading] = useState(false);
 
@@ -177,7 +177,7 @@ function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
     };
   }, [state.activeEclipseId]);
 
-  const timerState = useTimerState(activeEclipse);
+  const timerState = useTimerState(activeEclipse, state.notificationSettings);
 
   useFocusEffect(
     useCallback(() => {
@@ -218,6 +218,7 @@ function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
       isActiveEclipseLoading={isActiveEclipseLoading}
       timer={timerState}
       favoriteLocations={state.favoriteLocations}
+      onAddFavoriteLocation={actions.addFavoriteLocation}
       onUseFavoriteLocation={useFavoriteLocation}
       onOpenMenu={onOpenMenu}
       onOpenPreview={openPreview}

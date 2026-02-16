@@ -1,12 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
@@ -23,6 +25,7 @@ import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
 const TOTALITY_PATH_COLOR = "rgba(255, 82, 82, 0.28)";
 const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
+const FAVORITE_COORD_EPSILON = 0.0001;
 
 function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   if (kind === "total") return "Total";
@@ -44,11 +47,35 @@ function formatDuration(seconds?: number) {
   return `${mm}m ${String(ss).padStart(2, "0")}s`;
 }
 
+function formatCardinalCoord(value: number, positiveHemisphere: string, negativeHemisphere: string) {
+  const hemisphere = value >= 0 ? positiveHemisphere : negativeHemisphere;
+  return `${Math.abs(value).toFixed(4)}${hemisphere}`;
+}
+
+function buildDefaultFavoriteName(lat: number, lon: number, favoriteLocations: FavoriteLocation[]) {
+  const base = `Pinned ${formatCardinalCoord(lat, "N", "S")} ${formatCardinalCoord(lon, "E", "W")}`;
+  const existingNames = new Set(
+    favoriteLocations.map((location) => location.name.trim().toLowerCase()).filter(Boolean),
+  );
+  if (!existingNames.has(base.toLowerCase())) return base;
+
+  let suffix = 2;
+  while (existingNames.has(`${base} ${suffix}`.toLowerCase())) {
+    suffix += 1;
+  }
+  return `${base} ${suffix}`;
+}
+
+function isSameFavoriteLocation(aLat: number, aLon: number, bLat: number, bLon: number) {
+  return Math.abs(aLat - bLat) <= FAVORITE_COORD_EPSILON && Math.abs(aLon - bLon) <= FAVORITE_COORD_EPSILON;
+}
+
 type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
   isActiveEclipseLoading: boolean;
   timer: TimerState;
   favoriteLocations: FavoriteLocation[];
+  onAddFavoriteLocation: (location: Omit<FavoriteLocation, "id">) => void;
   onUseFavoriteLocation: (location: FavoriteLocation) => void;
   onOpenMenu: () => void;
   onOpenPreview: (result: Circumstances) => void;
@@ -59,11 +86,16 @@ export default function TimerScreen({
   isActiveEclipseLoading,
   timer,
   favoriteLocations,
+  onAddFavoriteLocation,
   onUseFavoriteLocation,
   onOpenMenu,
   onOpenPreview,
 }: TimerScreenProps) {
   const insets = useSafeAreaInsets();
+  const [isAddFavoriteModalOpen, setIsAddFavoriteModalOpen] = useState(false);
+  const [favoriteModalName, setFavoriteModalName] = useState("");
+  const [favoriteModalDefaultName, setFavoriteModalDefaultName] = useState("");
+  const [favoriteModalPin, setFavoriteModalPin] = useState<{ lat: number; lon: number } | null>(null);
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
     () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),
@@ -76,6 +108,45 @@ export default function TimerScreen({
       : activeKindCode === "H"
         ? "Central Path"
         : "Totality Path";
+  const favoriteAtCurrentPin = useMemo(
+    () =>
+      favoriteLocations.find((location) =>
+        isSameFavoriteLocation(location.lat, location.lon, timer.pin.lat, timer.pin.lon),
+      ) ?? null,
+    [favoriteLocations, timer.pin.lat, timer.pin.lon],
+  );
+  const canAddCurrentPinToFavorites = !favoriteAtCurrentPin;
+
+  const closeAddFavoriteModal = () => {
+    setIsAddFavoriteModalOpen(false);
+    setFavoriteModalName("");
+    setFavoriteModalDefaultName("");
+    setFavoriteModalPin(null);
+  };
+
+  const openAddFavoriteModal = () => {
+    if (!canAddCurrentPinToFavorites) return;
+
+    const nextPin = { lat: timer.pin.lat, lon: timer.pin.lon };
+    const compiledDefaultName = buildDefaultFavoriteName(nextPin.lat, nextPin.lon, favoriteLocations);
+    setFavoriteModalPin(nextPin);
+    setFavoriteModalDefaultName(compiledDefaultName);
+    setFavoriteModalName(compiledDefaultName);
+    setIsAddFavoriteModalOpen(true);
+  };
+
+  const submitAddFavorite = () => {
+    if (!favoriteModalPin) return;
+    const name = favoriteModalName.trim() || favoriteModalDefaultName;
+
+    onAddFavoriteLocation({
+      name,
+      lat: favoriteModalPin.lat,
+      lon: favoriteModalPin.lon,
+    });
+    timer.setStatusMessage(`Saved ${name} to favorites`);
+    closeAddFavoriteModal();
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
@@ -201,6 +272,16 @@ export default function TimerScreen({
           >
             <Text style={styles.btnText}>Greatest Eclipse</Text>
           </Pressable>
+
+          <Pressable
+            style={[styles.btn, !canAddCurrentPinToFavorites ? styles.btnDisabled : null]}
+            onPress={openAddFavoriteModal}
+            disabled={!canAddCurrentPinToFavorites}
+          >
+            <Text style={styles.btnText}>
+              {canAddCurrentPinToFavorites ? "Add to Favorites" : "Already in Favorites"}
+            </Text>
+          </Pressable>
         </View>
 
         <Pressable
@@ -225,6 +306,43 @@ export default function TimerScreen({
           </View>
         </Pressable>
       </View>
+
+      <Modal
+        visible={isAddFavoriteModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAddFavoriteModal}
+      >
+        <View style={styles.favoriteModalBackdrop}>
+          <View style={styles.favoriteModalCard}>
+            <Text style={styles.favoriteModalTitle}>Add to Favorites</Text>
+            <Text style={styles.favoriteModalSubtitle}>Name this location (optional)</Text>
+            <TextInput
+              value={favoriteModalName}
+              onChangeText={setFavoriteModalName}
+              placeholder={favoriteModalDefaultName}
+              placeholderTextColor="#707070"
+              style={styles.favoriteModalInput}
+              autoCapitalize="words"
+              autoCorrect={false}
+              autoFocus
+            />
+            {favoriteModalPin ? (
+              <Text style={styles.favoriteModalCoords}>
+                {favoriteModalPin.lat.toFixed(4)}, {favoriteModalPin.lon.toFixed(4)}
+              </Text>
+            ) : null}
+            <View style={styles.favoriteModalActions}>
+              <Pressable style={styles.favoriteModalCancelBtn} onPress={closeAddFavoriteModal}>
+                <Text style={styles.favoriteModalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.favoriteModalSaveBtn} onPress={submitAddFavorite}>
+                <Text style={styles.favoriteModalSaveText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.favoriteWrap}>
         <Text style={styles.favoriteTitle}>Use Favorite Location</Text>
@@ -308,9 +426,22 @@ export default function TimerScreen({
                 </View>
               </View>
 
-              <Pressable style={styles.testAlarmBtn} onPress={timer.runAlarmTest}>
+              <Pressable
+                style={[
+                  styles.testAlarmBtn,
+                  !timer.notificationsEnabled ? styles.testAlarmBtnDisabled : null,
+                ]}
+                onPress={timer.runAlarmTest}
+                disabled={!timer.notificationsEnabled}
+              >
                 <Text style={styles.testAlarmBtnText}>Test Alarm</Text>
               </Pressable>
+
+              {!timer.notificationsEnabled ? (
+                <Text style={styles.notificationsDisabledHint}>
+                  Eclipse Event Alerts are off. Enable them in Notification Settings.
+                </Text>
+              ) : null}
 
               <View style={styles.sep} />
 
@@ -326,7 +457,7 @@ export default function TimerScreen({
                     <Switch
                       value={timer.alarmState[item.key]}
                       onValueChange={(enabled) => timer.toggleAlarm(item.key, enabled)}
-                      disabled={!item.iso}
+                      disabled={!item.iso || !timer.notificationsEnabled}
                     />
                   </View>
                 </View>
@@ -593,7 +724,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  testAlarmBtnDisabled: {
+    opacity: 0.45,
+  },
   testAlarmBtnText: { color: "white", fontSize: 13, fontWeight: "700" },
+  notificationsDisabledHint: {
+    marginTop: 8,
+    color: "#b6b6b6",
+    fontSize: 12,
+  },
   previewBtn: {
     marginTop: 4,
     paddingVertical: 10,
@@ -623,6 +762,75 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  favoriteModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.58)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  favoriteModalCard: {
+    width: "100%",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2f2f2f",
+    backgroundColor: "#121212",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  favoriteModalTitle: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  favoriteModalSubtitle: {
+    color: "#bdbdbd",
+    fontSize: 12,
+  },
+  favoriteModalInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2f2f2f",
+    backgroundColor: "#1b1b1b",
+    color: "white",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  favoriteModalCoords: {
+    color: "#9f9f9f",
+    fontSize: 12,
+  },
+  favoriteModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  favoriteModalCancelBtn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    backgroundColor: "#1f1f1f",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  favoriteModalCancelText: {
+    color: "#d5d5d5",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  favoriteModalSaveBtn: {
+    borderRadius: 10,
+    backgroundColor: "#2c3cff",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  favoriteModalSaveText: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "700",
   },
   sep: { height: 1, backgroundColor: "#2a2a2a", marginVertical: 10 },
 });

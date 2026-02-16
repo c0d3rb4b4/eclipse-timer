@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Alert, Animated, InteractionManager, Vibration } from "react-native";
+import { Alert, Animated, InteractionManager } from "react-native";
 import type { MapPressEvent, Region } from "react-native-maps";
 import type MapView from "react-native-maps";
 import * as Location from "expo-location";
@@ -20,6 +20,13 @@ import {
   sanitizeLatitude,
   sanitizeRegion,
 } from "../utils/map";
+import type { NotificationSettings } from "../state/appState";
+import {
+  cancelManagedScheduledNotificationsAsync,
+  rescheduleEclipseNotificationsAsync,
+  scheduleTestNotificationAsync,
+  type NotificationSchedulingSettings,
+} from "../services/notifications";
 
 type MapType3 = "standard" | "satellite" | "hybrid";
 
@@ -57,6 +64,7 @@ export type TimerState = {
   overlayCentralPolygons: ReturnType<typeof overlayTuplesToCells>;
   hasOverlayData: boolean;
   alarmState: AlarmState;
+  notificationsEnabled: boolean;
   contactItems: ContactItem[];
   nextEventCountdownText: string;
   onRegionChangeComplete: (r: Region) => void;
@@ -73,7 +81,20 @@ export type TimerState = {
   setStatusMessage: (msg: string) => void;
 };
 
-export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
+function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
+  return {
+    countdownAlerts: settings.countdownAlerts,
+    vibrationEnabled: settings.vibrationEnabled,
+    soundEnabled: settings.soundEnabled,
+    remindOneHourBefore: settings.remindOneHourBefore,
+    remindTenMinutesBefore: settings.remindTenMinutesBefore,
+  };
+}
+
+export function useTimerState(
+  activeEclipse: EclipseRecord | null,
+  notificationSettings: NotificationSettings,
+): TimerState {
   const mapRef = useRef<MapView>(null);
   const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
   const [mapType, setMapType] = useState<MapType3>("standard");
@@ -113,6 +134,11 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   const hasOverlayData = overlayVisiblePolygons.length > 0 || overlayCentralPolygons.length > 0;
 
   const contactItems = useMemo(() => (result ? buildContactItems(result) : []), [result]);
+  const schedulingSettings = useMemo(
+    () => toSchedulingSettings(notificationSettings),
+    [notificationSettings],
+  );
+  const notificationsEnabled = notificationSettings.eclipseAlerts;
   const nextEventCountdownText = useMemo(
     () => (result ? nextEventCountdown(result, countdownNowMs) : "No countdown available"),
     [result, countdownNowMs],
@@ -124,6 +150,48 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     const intervalId = setInterval(() => setCountdownNowMs(Date.now()), 1000);
     return () => clearInterval(intervalId);
   }, [result]);
+
+  useEffect(() => {
+    let didCancel = false;
+
+    const syncNotifications = async () => {
+      if (!notificationSettings.eclipseAlerts) {
+        await cancelManagedScheduledNotificationsAsync();
+        return;
+      }
+      if (!activeEclipse || !result) return;
+
+      const outcome = await rescheduleEclipseNotificationsAsync({
+        eclipseId: activeEclipse.id,
+        eclipseDateYmd: activeEclipse.dateYmd,
+        settings: schedulingSettings,
+        contacts: contactItems.map((item) => ({
+          key: item.key,
+          label: item.label,
+          iso: item.iso,
+          enabled: alarmState[item.key],
+        })),
+      });
+
+      if (didCancel) return;
+      if (!outcome.permissionGranted) {
+        setStatus("Notification permission denied");
+      }
+    };
+
+    void syncNotifications();
+
+    return () => {
+      didCancel = true;
+    };
+  }, [
+    activeEclipse,
+    alarmState,
+    contactItems,
+    notificationSettings.eclipseAlerts,
+    result,
+    schedulingSettings,
+  ]);
 
   const cancelPendingCompute = useCallback(() => {
     computeRunTokenRef.current += 1;
@@ -280,29 +348,39 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   };
 
   const runAlarmTest = () => {
-    if (!result) {
-      setStatus("Compute first to test alarms");
-      Alert.alert("Test Alarm", "Compute first to test alarms.");
+    if (!notificationSettings.eclipseAlerts) {
+      setStatus("Enable Eclipse Event Alerts in Notification Settings first");
+      Alert.alert("Test Alarm", "Enable Eclipse Event Alerts in Notification Settings first.");
       return;
     }
 
-    const enabledItems = buildContactItems(result).filter((item) => alarmState[item.key]);
-    if (!enabledItems.length) {
-      setStatus("Alarm test skipped: no alarms enabled");
-      Alert.alert("Test Alarm", "No alarms are enabled.");
-      return;
-    }
+    void scheduleTestNotificationAsync(schedulingSettings)
+      .then((outcome) => {
+        if (!outcome.ok) {
+          if (outcome.reason === "permission_denied") {
+            setStatus("Notification permission denied");
+            Alert.alert(
+              "Test Alarm",
+              "Notifications are blocked by system permissions. Enable them in device settings.",
+            );
+            return;
+          }
 
-    const firstEnabled = enabledItems[0];
-    if (!firstEnabled) return;
-    const target = enabledItems.find((item) => !!item.iso) ?? firstEnabled;
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    const ss = String(now.getSeconds()).padStart(2, "0");
-    setStatus(`Test alarm fired: ${target.label} at ${hh}:${mm}:${ss}`);
-    Alert.alert("Test Alarm", `${target.label}\n${hh}:${mm}:${ss}`);
-    Vibration.vibrate([0, 250, 120, 250]);
+          setStatus("Failed to schedule test notification");
+          Alert.alert("Test Alarm", "Failed to schedule a test notification.");
+          return;
+        }
+
+        const hh = String(outcome.fireDate.getHours()).padStart(2, "0");
+        const mm = String(outcome.fireDate.getMinutes()).padStart(2, "0");
+        const ss = String(outcome.fireDate.getSeconds()).padStart(2, "0");
+        setStatus(`Test notification scheduled for ${hh}:${mm}:${ss}`);
+        Alert.alert("Test Alarm", `Notification scheduled for ${hh}:${mm}:${ss}.`);
+      })
+      .catch(() => {
+        setStatus("Failed to schedule test notification");
+        Alert.alert("Test Alarm", "Failed to schedule a test notification.");
+      });
   };
 
   const resetForNewEclipse = useCallback(() => {
@@ -333,6 +411,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     overlayCentralPolygons,
     hasOverlayData,
     alarmState,
+    notificationsEnabled,
     contactItems,
     nextEventCountdownText,
     onRegionChangeComplete,

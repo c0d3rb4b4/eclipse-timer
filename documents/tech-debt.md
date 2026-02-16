@@ -72,7 +72,7 @@
 | A-04 | **No navigation library** | 🟡 Medium | ✅ Resolved 2026-02-13: added React Navigation native stack and moved screen switching to the navigator. |
 | A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | ✅ Resolved 2026-02-13: compute now runs via `InteractionManager.runAfterInteractions` with cancellation guards for reset/unmount paths. |
 | A-06 | **Countdown timer never re-renders** | 🟠 High | ✅ Resolved 2026-02-13: timer state now owns a 1-second interval and feeds a live `nextEventCountdownText` string to the UI. |
-| A-07 | **Alarm system is a UI stub** | 🟡 Medium | Alarm toggles and "Test Alarm" exist, but there is no background scheduling (e.g., `expo-notifications` local notifications). Alarms are effectively non-functional. |
+| A-07 | **Alarm system is a UI stub** | 🟡 Medium | ✅ Resolved 2026-02-16: wired `expo-notifications` local scheduling with per-contact toggles, test notification scheduling, and global reminder/sound/vibration controls in Notification Settings. |
 | A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
 | A-10 | **Hardcoded elevation `elevM: 0`** | 🟡 Medium | Observer elevation is always 0. GPS APIs provide altitude — it should be wired through. |
@@ -160,7 +160,7 @@
 |----|------|----------|---------|
 | F-01 | **Multi-eclipse selection on timer screen** | 🟠 High | Once on the timer screen, the user cannot switch eclipses without going back. A dropdown or swipe-to-switch would improve flow. |
 | F-02 | **Persisted user preferences** | 🟠 High | Selected eclipse, pin location, map type, and alarm settings are lost on app restart. Need AsyncStorage or MMKV persistence. |
-| F-03 | **Real alarm/notification scheduling** | 🟠 High | Users expect to set an alarm for C1 and get a push notification. Requires `expo-notifications` local scheduling. |
+| F-03 | **Real alarm/notification scheduling** | 🟠 High | ✅ Resolved 2026-02-16 via A-07: computed eclipse contacts now schedule local notifications with configurable reminder lead times. |
 | F-04 | **Offline support** | 🟡 Medium | Catalog JSON is bundled, but GIF previews require network. The app has no offline-first UX or cached assets. |
 | F-05 | **Elevation input / altitude from GPS** | 🟡 Medium | The engine supports `elevM` but the app hardcodes `0`. GPS provides altitude — wire it through. |
 | F-06 | **Share / export results** | 🟢 Low | No way to share computed contact times via OS share sheet or clipboard. |
@@ -260,7 +260,7 @@
 | U-01 / F-09 | ✅ Resolved 2026-02-13: show local time for contacts |
 | F-01 | Multi-eclipse switching on timer |
 | F-02 | Persist user preferences |
-| F-03 | Implement real alarm scheduling |
+| F-03 | ✅ Resolved 2026-02-16: implement real alarm scheduling |
 | CI-02 | Automate EAS Build jobs in CI for Android/iOS artifacts |
 
 ### 🟡 Medium — Plan Next
@@ -272,7 +272,7 @@
 | L-03 | Pre-commit hooks |
 | A-03 | ✅ Resolved 2026-02-13: extract helper functions from App.tsx |
 | A-04 | ✅ Resolved 2026-02-13: add navigation library |
-| A-07 | Wire up real notifications for alarms |
+| A-07 | ✅ Resolved 2026-02-16: wire up real notifications for alarms |
 | A-10 | Pass GPS altitude as `elevM` |
 | A-11 | Add error boundary |
 | E-03 | ✅ Resolved 2026-02-13: deduplicate `evaluateAtT` calls |
