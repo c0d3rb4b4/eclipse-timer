@@ -12,9 +12,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { EclipseKindAtLocation } from "@eclipse-timer/shared";
 
 import BurgerButton from "../components/BurgerButton";
+import { colorForContactKey } from "../utils/contactTheme";
+import type { ContactKey } from "../utils/contacts";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 
-type PreviewContactKey = "c1" | "c2" | "max" | "c3" | "c4";
+type PreviewContactKey = ContactKey;
 
 type TimelineEvent = {
   key: PreviewContactKey;
@@ -210,6 +212,7 @@ export default function EclipsePreviewScreen({ payload, onBack, onOpenMenu }: Ec
       timelineEvents.map((event) => ({
         ...event,
         progress: clamp01((event.t - timelineBounds.startMs) / timelineDurationMs),
+        color: colorForContactKey(event.key),
       })),
     [timelineBounds.startMs, timelineDurationMs, timelineEvents],
   );
@@ -314,8 +317,8 @@ export default function EclipsePreviewScreen({ payload, onBack, onOpenMenu }: Ec
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
             {eventMarkers.map((marker) => (
               <View key={marker.key} style={[styles.progressMarker, { left: `${marker.progress * 100}%` }]}>
-                <View style={styles.progressMarkerLine} />
-                <Text style={styles.progressMarkerText}>{marker.shortLabel}</Text>
+                <View style={[styles.progressMarkerLine, { backgroundColor: marker.color }]} />
+                <Text style={[styles.progressMarkerText, { color: marker.color }]}>{marker.shortLabel}</Text>
               </View>
             ))}
             <View style={[styles.progressThumb, { left: `${progress * 100}%` }]} />
@@ -325,6 +328,15 @@ export default function EclipsePreviewScreen({ payload, onBack, onOpenMenu }: Ec
         <View style={styles.timelineLabels}>
           <Text style={styles.timelineLabel}>{fmtLocalHuman(new Date(timelineBounds.startMs).toISOString())}</Text>
           <Text style={styles.timelineLabel}>{fmtLocalHuman(new Date(timelineBounds.endMs).toISOString())}</Text>
+        </View>
+
+        <View style={styles.contactLegendRow}>
+          {eventMarkers.map((marker) => (
+            <View key={`legend-${marker.key}`} style={[styles.contactLegendChip, { borderColor: marker.color }]}>
+              <View style={[styles.contactLegendDot, { backgroundColor: marker.color }]} />
+              <Text style={[styles.contactLegendText, { color: marker.color }]}>{marker.shortLabel}</Text>
+            </View>
+          ))}
         </View>
       </View>
     </SafeAreaView>
@@ -519,6 +531,32 @@ const styles = StyleSheet.create({
     color: "#d5dcff",
     fontSize: 9,
     fontWeight: "700",
+  },
+  contactLegendRow: {
+    marginTop: 2,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  contactLegendChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  contactLegendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+  },
+  contactLegendText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.3,
   },
   timelineLabels: {
     flexDirection: "row",

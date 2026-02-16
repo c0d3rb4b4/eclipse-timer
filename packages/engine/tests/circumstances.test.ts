@@ -279,6 +279,22 @@ describe("computeCircumstances", () => {
     }
   });
 
+  it("keeps Wales 2026 contact bearings in the western sky range", () => {
+    const e = getRecord("2026-08-12T");
+    const c = computeCircumstances(e, { latDeg: 52.5, lonDeg: -3.6 });
+
+    expect(c.visible).toBe(true);
+    const c1Bearing = requireDefined(c.c1BearingDeg, "2026-08-12T.c1BearingDeg");
+    const c4Bearing = requireDefined(c.c4BearingDeg, "2026-08-12T.c4BearingDeg");
+
+    // Bearings are compass azimuths from North (clockwise).
+    // ~270° is due west, so C1 and C4 should remain in the west/WNW sector.
+    expect(c1Bearing).toBeGreaterThan(240);
+    expect(c1Bearing).toBeLessThan(280);
+    expect(c4Bearing).toBeGreaterThan(270);
+    expect(c4Bearing).toBeLessThan(310);
+  });
+
   it("enforces root-count semantics by kind at greatest points", () => {
     const totalOrAnnularIds = [
       "1900-05-28T",

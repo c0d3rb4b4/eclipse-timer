@@ -19,6 +19,7 @@ import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 import type { TimerState } from "../hooks/useTimerState";
 import BurgerButton from "../components/BurgerButton";
 import type { FavoriteLocation } from "../state/appState";
+import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 
@@ -26,12 +27,6 @@ const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
 const TOTALITY_PATH_COLOR = "rgba(255, 82, 82, 0.28)";
 const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 const FAVORITE_COORD_EPSILON = 0.0001;
-const CONTACT_DIRECTION_COLORS = {
-  c1: "#67d2ff",
-  c2: "#8dff8d",
-  c3: "#ffd866",
-  c4: "#ff8f8f",
-} as const;
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 
@@ -165,14 +160,14 @@ export default function TimerScreen({
   );
   const canAddCurrentPinToFavorites = !favoriteAtCurrentPin;
   const contactDirectionOverlays = useMemo<ContactDirectionOverlay[]>(() => {
-    if (!timer.result || !timer.showOverlays) return [];
+    if (!timer.result) return [];
 
     const arrowDistanceDeg = clamp(timer.region.latitudeDelta * 0.28, 0.18, 2.2);
     const entries = [
-      { key: "c1", label: "C1", bearingDeg: timer.result.c1BearingDeg, color: CONTACT_DIRECTION_COLORS.c1 },
-      { key: "c2", label: "C2", bearingDeg: timer.result.c2BearingDeg, color: CONTACT_DIRECTION_COLORS.c2 },
-      { key: "c3", label: "C3", bearingDeg: timer.result.c3BearingDeg, color: CONTACT_DIRECTION_COLORS.c3 },
-      { key: "c4", label: "C4", bearingDeg: timer.result.c4BearingDeg, color: CONTACT_DIRECTION_COLORS.c4 },
+      { key: "c1", label: "C1", bearingDeg: timer.result.c1BearingDeg, color: colorForContactKey("c1") },
+      { key: "c2", label: "C2", bearingDeg: timer.result.c2BearingDeg, color: colorForContactKey("c2") },
+      { key: "c3", label: "C3", bearingDeg: timer.result.c3BearingDeg, color: colorForContactKey("c3") },
+      { key: "c4", label: "C4", bearingDeg: timer.result.c4BearingDeg, color: colorForContactKey("c4") },
     ] as const;
 
     const overlays: ContactDirectionOverlay[] = [];
@@ -188,7 +183,8 @@ export default function TimerScreen({
       });
     }
     return overlays;
-  }, [timer.pin.lat, timer.pin.lon, timer.region.latitudeDelta, timer.result, timer.showOverlays]);
+  }, [timer.pin.lat, timer.pin.lon, timer.region.latitudeDelta, timer.result]);
+  const hasDirectionsData = contactDirectionOverlays.length > 0;
 
   const closeAddFavoriteModal = () => {
     setIsAddFavoriteModalOpen(false);
@@ -246,7 +242,7 @@ export default function TimerScreen({
           onPress={timer.onMapPress}
           mapType={timer.mapType}
         >
-          {timer.showOverlays
+          {timer.showVisibleOverlay
             ? timer.overlayVisiblePolygons.map((coordinates, idx) => (
                 <Polygon
                   key={`visible-${idx}`}
@@ -257,7 +253,7 @@ export default function TimerScreen({
                 />
               ))
             : null}
-          {timer.showOverlays
+          {timer.showCentralOverlay
             ? timer.overlayCentralPolygons.map((coordinates, idx) => (
                 <Polygon
                   key={`central-${idx}`}
@@ -275,42 +271,46 @@ export default function TimerScreen({
             title="Observer"
             description={`${timer.pin.lat.toFixed(4)}, ${timer.pin.lon.toFixed(4)}`}
           />
-          {contactDirectionOverlays.map((direction) => (
-            <Polyline
-              key={`direction-line-${direction.key}`}
-              coordinates={[
-                { latitude: timer.pin.lat, longitude: timer.pin.lon },
-                direction.endpoint,
-              ]}
-              strokeColor={direction.color}
-              strokeWidth={2}
-              lineDashPattern={[5, 4]}
-            />
-          ))}
-          {contactDirectionOverlays.map((direction) => (
-            <Marker
-              key={`direction-marker-${direction.key}`}
-              coordinate={direction.endpoint}
-              anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
-              title={`${direction.label} direction`}
-              description={`${Math.round(direction.bearingDeg)}° from pin`}
-            >
-              <View style={styles.contactDirectionBadge}>
-                <Text
-                  style={[
-                    styles.contactDirectionArrow,
-                    { color: direction.color, transform: [{ rotate: `${direction.bearingDeg}deg` }] },
+          {timer.showDirectionsOverlay
+            ? contactDirectionOverlays.map((direction) => (
+                <Polyline
+                  key={`direction-line-${direction.key}`}
+                  coordinates={[
+                    { latitude: timer.pin.lat, longitude: timer.pin.lon },
+                    direction.endpoint,
                   ]}
+                  strokeColor={direction.color}
+                  strokeWidth={2}
+                  lineDashPattern={[5, 4]}
+                />
+              ))
+            : null}
+          {timer.showDirectionsOverlay
+            ? contactDirectionOverlays.map((direction) => (
+                <Marker
+                  key={`direction-marker-${direction.key}`}
+                  coordinate={direction.endpoint}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  tracksViewChanges={false}
+                  title={`${direction.label} direction`}
+                  description={`${Math.round(direction.bearingDeg)}° from pin`}
                 >
-                  ▲
-                </Text>
-                <Text style={[styles.contactDirectionLabel, { color: direction.color }]}>
-                  {direction.label}
-                </Text>
-              </View>
-            </Marker>
-          ))}
+                  <View style={styles.contactDirectionBadge}>
+                    <Text
+                      style={[
+                        styles.contactDirectionArrow,
+                        { color: direction.color, transform: [{ rotate: `${direction.bearingDeg}deg` }] },
+                      ]}
+                    >
+                      ▲
+                    </Text>
+                    <Text style={[styles.contactDirectionLabel, { color: direction.color }]}>
+                      {direction.label}
+                    </Text>
+                  </View>
+                </Marker>
+              ))
+            : null}
         </MapView>
 
         <Pressable
@@ -338,32 +338,72 @@ export default function TimerScreen({
           </Text>
         </Pressable>
 
-        <Pressable
-          style={[
-            styles.mapLegend,
-            !timer.showOverlays && timer.hasOverlayData ? styles.mapLegendMuted : null,
-          ]}
-          onPress={timer.toggleOverlays}
-          disabled={!timer.hasOverlayData}
-          accessibilityRole="button"
-          accessibilityLabel={timer.showOverlays ? "Hide eclipse overlays" : "Show eclipse overlays"}
-        >
-          <View style={styles.mapLegendRow}>
-            <View style={[styles.mapLegendSwatch, { backgroundColor: VISIBLE_PATH_COLOR }]} />
-            <Text style={styles.mapLegendText}>Eclipse Visible</Text>
-          </View>
-          <View style={styles.mapLegendRow}>
-            <View style={[styles.mapLegendSwatch, { backgroundColor: centralOverlayColor }]} />
-            <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
-          </View>
-          <Text style={styles.mapLegendHint}>
-            {!timer.hasOverlayData
-              ? "No precomputed overlay for this eclipse."
-              : timer.showOverlays
-                ? "Tap legend to hide both overlays."
-                : "Tap legend to show both overlays."}
-          </Text>
-        </Pressable>
+        <View style={styles.mapLegend}>
+          <Pressable
+            style={[
+              styles.mapLegendItem,
+              !timer.showVisibleOverlay ? styles.mapLegendMuted : null,
+              !timer.hasVisibleOverlayData ? styles.mapLegendDisabled : null,
+            ]}
+            onPress={timer.toggleVisibleOverlay}
+            disabled={!timer.hasVisibleOverlayData}
+            accessibilityRole="button"
+            accessibilityLabel={timer.showVisibleOverlay ? "Hide eclipse visible overlay" : "Show eclipse visible overlay"}
+          >
+            <View style={styles.mapLegendRow}>
+              <View style={[styles.mapLegendSwatch, { backgroundColor: VISIBLE_PATH_COLOR }]} />
+              <Text style={styles.mapLegendText}>Eclipse Visible</Text>
+            </View>
+            <Text style={styles.mapLegendState}>{timer.showVisibleOverlay ? "On" : "Off"}</Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.mapLegendItem,
+              !timer.showCentralOverlay ? styles.mapLegendMuted : null,
+              !timer.hasCentralOverlayData ? styles.mapLegendDisabled : null,
+            ]}
+            onPress={timer.toggleCentralOverlay}
+            disabled={!timer.hasCentralOverlayData}
+            accessibilityRole="button"
+            accessibilityLabel={timer.showCentralOverlay ? "Hide central path overlay" : "Show central path overlay"}
+          >
+            <View style={styles.mapLegendRow}>
+              <View style={[styles.mapLegendSwatch, { backgroundColor: centralOverlayColor }]} />
+              <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
+            </View>
+            <Text style={styles.mapLegendState}>{timer.showCentralOverlay ? "On" : "Off"}</Text>
+          </Pressable>
+        </View>
+
+        {timer.result ? (
+          <Pressable
+            style={[
+              styles.mapDirectionLegend,
+              !timer.showDirectionsOverlay ? styles.mapLegendMuted : null,
+              !hasDirectionsData ? styles.mapLegendDisabled : null,
+            ]}
+            onPress={timer.toggleDirectionsOverlay}
+            disabled={!hasDirectionsData}
+            accessibilityRole="button"
+            accessibilityLabel={
+              timer.showDirectionsOverlay ? "Hide direction overlays" : "Show direction overlays"
+            }
+          >
+            <View style={styles.mapDirectionLegendHeader}>
+              <Text style={styles.mapDirectionLegendTitle}>Directions</Text>
+              <Text style={styles.mapLegendState}>{timer.showDirectionsOverlay ? "On" : "Off"}</Text>
+            </View>
+            {contactDirectionOverlays.map((direction) => (
+              <View key={`direction-legend-${direction.key}`} style={styles.mapDirectionLegendRow}>
+                <View style={[styles.mapDirectionLegendLine, { borderTopColor: direction.color }]} />
+                <Text style={[styles.mapDirectionLegendText, { color: direction.color }]}>
+                  {direction.label}
+                </Text>
+              </View>
+            ))}
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.controls}>
@@ -557,9 +597,23 @@ export default function TimerScreen({
               {timer.contactItems.map((item) => (
                 <View style={styles.contactRow} key={item.key}>
                   <View style={styles.contactMain}>
-                    <Text style={styles.contactLabel}>{item.label}</Text>
+                    <View style={styles.contactLabelRow}>
+                      <View
+                        style={[
+                          styles.contactKeyBadge,
+                          { borderColor: colorForContactKey(item.key), backgroundColor: "rgba(255,255,255,0.04)" },
+                        ]}
+                      >
+                        <Text style={[styles.contactKeyBadgeText, { color: colorForContactKey(item.key) }]}>
+                          {item.key === "max" ? "MAX" : item.key.toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={styles.contactLabel}>{item.label}</Text>
+                    </View>
                     <Text style={styles.contactTime}>UTC: {fmtUtcHuman(item.iso)}</Text>
-                    <Text style={styles.contactTimeLocal}>Local: {fmtLocalHuman(item.iso)}</Text>
+                    <Text style={[styles.contactTimeLocal, { color: colorForContactKey(item.key) }]}>
+                      Local: {fmtLocalHuman(item.iso)}
+                    </Text>
                   </View>
                   <View style={styles.contactAlarm}>
                     <Text style={styles.alarmLabel}>Alarm</Text>
@@ -742,8 +796,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.62)",
     gap: 4,
   },
+  mapLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderRadius: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
   mapLegendMuted: {
     opacity: 0.72,
+  },
+  mapLegendDisabled: {
+    opacity: 0.45,
   },
   mapLegendRow: {
     flexDirection: "row",
@@ -762,10 +828,49 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-  mapLegendHint: {
-    color: "#c6c6c6",
+  mapLegendState: {
+    color: "#d6d6d6",
     fontSize: 10,
-    marginTop: 1,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  mapDirectionLegend: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.62)",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    gap: 4,
+  },
+  mapDirectionLegendHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  mapDirectionLegendTitle: {
+    color: "#e2e2e2",
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  mapDirectionLegendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  mapDirectionLegendLine: {
+    width: 18,
+    borderTopWidth: 2,
+    borderStyle: "dashed",
+  },
+  mapDirectionLegendText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.3,
   },
   contactDirectionBadge: {
     minWidth: 36,
@@ -883,6 +988,21 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   contactMain: { flex: 1 },
+  contactLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  contactKeyBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  contactKeyBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
   contactLabel: { color: "#e6e6e6", fontSize: 13, fontWeight: "600" },
   contactTime: { color: "#bdbdbd", fontSize: 12, marginTop: 2 },
   contactTimeLocal: { color: "#8fc8ff", fontSize: 12, marginTop: 2 },

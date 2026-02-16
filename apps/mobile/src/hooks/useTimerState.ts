@@ -54,7 +54,9 @@ export type TimerState = {
   pin: Pin;
   region: Region;
   mapType: MapType3;
-  showOverlays: boolean;
+  showVisibleOverlay: boolean;
+  showCentralOverlay: boolean;
+  showDirectionsOverlay: boolean;
   status: string;
   result: Circumstances | null;
   isComputing: boolean;
@@ -62,14 +64,17 @@ export type TimerState = {
   resultFlash: Animated.Value;
   overlayVisiblePolygons: ReturnType<typeof overlayTuplesToCells>;
   overlayCentralPolygons: ReturnType<typeof overlayTuplesToCells>;
-  hasOverlayData: boolean;
+  hasVisibleOverlayData: boolean;
+  hasCentralOverlayData: boolean;
   alarmState: AlarmState;
   notificationsEnabled: boolean;
   contactItems: ContactItem[];
   nextEventCountdownText: string;
   onRegionChangeComplete: (r: Region) => void;
   cycleMapType: () => void;
-  toggleOverlays: () => void;
+  toggleVisibleOverlay: () => void;
+  toggleCentralOverlay: () => void;
+  toggleDirectionsOverlay: () => void;
   jumpTo: (lat: number, lon: number, delta?: number) => void;
   onMapPress: (e: MapPressEvent) => void;
   onDragEnd: (e: MarkerDragEndEvent) => void;
@@ -98,7 +103,9 @@ export function useTimerState(
   const mapRef = useRef<MapView>(null);
   const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
   const [mapType, setMapType] = useState<MapType3>("standard");
-  const [showOverlays, setShowOverlays] = useState(true);
+  const [showVisibleOverlay, setShowVisibleOverlay] = useState(true);
+  const [showCentralOverlay, setShowCentralOverlay] = useState(true);
+  const [showDirectionsOverlay, setShowDirectionsOverlay] = useState(true);
   const [region, setRegion] = useState<Region>({
     latitude: sanitizeLatitude(pin.lat),
     longitude: normalizeLongitude(pin.lon),
@@ -131,7 +138,8 @@ export function useTimerState(
     () => overlayTuplesToCells(activeEclipse?.overlayCentralPolygons),
     [activeEclipse],
   );
-  const hasOverlayData = overlayVisiblePolygons.length > 0 || overlayCentralPolygons.length > 0;
+  const hasVisibleOverlayData = overlayVisiblePolygons.length > 0;
+  const hasCentralOverlayData = overlayCentralPolygons.length > 0;
 
   const contactItems = useMemo(() => (result ? buildContactItems(result) : []), [result]);
   const schedulingSettings = useMemo(
@@ -214,8 +222,14 @@ export function useTimerState(
   const cycleMapType = () => {
     setMapType((m) => (m === "standard" ? "satellite" : m === "satellite" ? "hybrid" : "standard"));
   };
-  const toggleOverlays = () => {
-    setShowOverlays((prev) => !prev);
+  const toggleVisibleOverlay = () => {
+    setShowVisibleOverlay((prev) => !prev);
+  };
+  const toggleCentralOverlay = () => {
+    setShowCentralOverlay((prev) => !prev);
+  };
+  const toggleDirectionsOverlay = () => {
+    setShowDirectionsOverlay((prev) => !prev);
   };
 
   const jumpTo = (lat: number, lon: number, delta = 3) => {
@@ -401,7 +415,9 @@ export function useTimerState(
     pin,
     region,
     mapType,
-    showOverlays,
+    showVisibleOverlay,
+    showCentralOverlay,
+    showDirectionsOverlay,
     status,
     result,
     isComputing,
@@ -409,14 +425,17 @@ export function useTimerState(
     resultFlash,
     overlayVisiblePolygons,
     overlayCentralPolygons,
-    hasOverlayData,
+    hasVisibleOverlayData,
+    hasCentralOverlayData,
     alarmState,
     notificationsEnabled,
     contactItems,
     nextEventCountdownText,
     onRegionChangeComplete,
     cycleMapType,
-    toggleOverlays,
+    toggleVisibleOverlay,
+    toggleCentralOverlay,
+    toggleDirectionsOverlay,
     jumpTo,
     onMapPress,
     onDragEnd,

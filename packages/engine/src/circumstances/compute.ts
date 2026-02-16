@@ -22,48 +22,26 @@ type ContactTimes = {
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 
-function clamp(value: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, value));
-}
-
-function normalizeLongitudeDeg(lonDeg: number): number {
-  return (((lonDeg % 360) + 540) % 360) - 180;
-}
-
-function bearingFromTo(lat1Deg: number, lon1Deg: number, lat2Deg: number, lon2Deg: number): number {
-  const dLon = (lon2Deg - lon1Deg) * DEG2RAD;
-  const lat1 = lat1Deg * DEG2RAD;
-  const lat2 = lat2Deg * DEG2RAD;
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  return (Math.atan2(y, x) * RAD2DEG + 360) % 360;
-}
-
-function shadowAxisLatLonAtTime(
-  e: EclipseRecord,
-  tHours: number,
-): { latDeg: number; lonDeg: number } | undefined {
-  const v = evaluateAtT(e, { latDeg: 0, lonDeg: 0, elevM: 0 }, tHours);
-  const sinD = Math.sin(v.d * DEG2RAD);
-  const cosD = Math.cos(v.d * DEG2RAD);
-  const r2 = v.x * v.x + v.y * v.y;
-  if (!Number.isFinite(r2) || r2 > 2.5) return undefined;
-
-  const zeta0 = r2 < 1 ? Math.sqrt(1 - r2) : 0;
-  const sinLat = sinD * zeta0 + v.y * cosD;
-  const lat = Math.asin(clamp(sinLat, -1, 1)) * RAD2DEG;
-  const cosLatZ = cosD * zeta0 - v.y * sinD;
-  const hourAngle = Math.atan2(v.x, cosLatZ);
-  const lon = normalizeLongitudeDeg((hourAngle - v.mu * DEG2RAD) * RAD2DEG);
-
-  return { latDeg: clamp(lat, -89, 89), lonDeg: lon };
-}
-
 function contactBearingDeg(e: EclipseRecord, o: Observer, tHours: number | undefined): number | undefined {
   if (typeof tHours !== "number" || !Number.isFinite(tHours)) return undefined;
-  const axis = shadowAxisLatLonAtTime(e, tHours);
-  if (!axis) return undefined;
-  return bearingFromTo(o.latDeg, o.lonDeg, axis.latDeg, axis.lonDeg);
+  const v = evaluateAtT(e, o, tHours);
+  if (!Number.isFinite(v.d) || !Number.isFinite(v.mu)) return undefined;
+
+  const lat = o.latDeg * DEG2RAD;
+  const dec = v.d * DEG2RAD;
+  const hourAngle = (v.mu + o.lonDeg) * DEG2RAD;
+  const azimuthDeg =
+    ((Math.atan2(
+      Math.sin(hourAngle),
+      Math.cos(hourAngle) * Math.sin(lat) - Math.tan(dec) * Math.cos(lat),
+    ) *
+      RAD2DEG +
+      180) %
+      360 +
+      360) %
+    360;
+
+  return Number.isFinite(azimuthDeg) ? azimuthDeg : undefined;
 }
 
 function scanMin(
