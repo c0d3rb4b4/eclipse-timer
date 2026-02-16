@@ -48,6 +48,10 @@ export type Circumstances = {
   maxUtc?: string;
   c3Utc?: string;
   c4Utc?: string;
+  c1BearingDeg?: number;
+  c2BearingDeg?: number;
+  c3BearingDeg?: number;
+  c4BearingDeg?: number;
 
   magnitude?: number;
   durationSeconds?: number;

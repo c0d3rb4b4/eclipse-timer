@@ -7,7 +7,7 @@ import type {
 } from "@eclipse-timer/shared";
 import { findBrackets } from "../math/bracket";
 import { bisectRoot } from "../math/root";
-import { evaluateShadowMetricsAtT } from "./functions";
+import { evaluateAtT, evaluateShadowMetricsAtT } from "./functions";
 import { t0TtDate, ttAtTHours } from "../time/t0";
 import { ttToUtcUsingDeltaT, toIsoUtc } from "../time/utc";
 
@@ -18,6 +18,53 @@ type ContactTimes = {
   c3?: number;
   c4?: number;
 };
+
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, value));
+}
+
+function normalizeLongitudeDeg(lonDeg: number): number {
+  return (((lonDeg % 360) + 540) % 360) - 180;
+}
+
+function bearingFromTo(lat1Deg: number, lon1Deg: number, lat2Deg: number, lon2Deg: number): number {
+  const dLon = (lon2Deg - lon1Deg) * DEG2RAD;
+  const lat1 = lat1Deg * DEG2RAD;
+  const lat2 = lat2Deg * DEG2RAD;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * RAD2DEG + 360) % 360;
+}
+
+function shadowAxisLatLonAtTime(
+  e: EclipseRecord,
+  tHours: number,
+): { latDeg: number; lonDeg: number } | undefined {
+  const v = evaluateAtT(e, { latDeg: 0, lonDeg: 0, elevM: 0 }, tHours);
+  const sinD = Math.sin(v.d * DEG2RAD);
+  const cosD = Math.cos(v.d * DEG2RAD);
+  const r2 = v.x * v.x + v.y * v.y;
+  if (!Number.isFinite(r2) || r2 > 2.5) return undefined;
+
+  const zeta0 = r2 < 1 ? Math.sqrt(1 - r2) : 0;
+  const sinLat = sinD * zeta0 + v.y * cosD;
+  const lat = Math.asin(clamp(sinLat, -1, 1)) * RAD2DEG;
+  const cosLatZ = cosD * zeta0 - v.y * sinD;
+  const hourAngle = Math.atan2(v.x, cosLatZ);
+  const lon = normalizeLongitudeDeg((hourAngle - v.mu * DEG2RAD) * RAD2DEG);
+
+  return { latDeg: clamp(lat, -89, 89), lonDeg: lon };
+}
+
+function contactBearingDeg(e: EclipseRecord, o: Observer, tHours: number | undefined): number | undefined {
+  if (typeof tHours !== "number" || !Number.isFinite(tHours)) return undefined;
+  const axis = shadowAxisLatLonAtTime(e, tHours);
+  if (!axis) return undefined;
+  return bearingFromTo(o.latDeg, o.lonDeg, axis.latDeg, axis.lonDeg);
+}
 
 function scanMin(
   f: (tHours: number) => number,
@@ -197,6 +244,10 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
   const maxUtc = toUtcIso(contacts.max);
   const c3Utc = toUtcIso(contacts.c3);
   const c4Utc = toUtcIso(contacts.c4);
+  const c1BearingDeg = contactBearingDeg(e, o, contacts.c1);
+  const c2BearingDeg = contactBearingDeg(e, o, contacts.c2);
+  const c3BearingDeg = contactBearingDeg(e, o, contacts.c3);
+  const c4BearingDeg = contactBearingDeg(e, o, contacts.c4);
 
   const visible = typeof contacts.c1 === "number" && typeof contacts.c4 === "number";
 
@@ -242,6 +293,10 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
     maxUtc,
     c3Utc,
     c4Utc,
+    c1BearingDeg,
+    c2BearingDeg,
+    c3BearingDeg,
+    c4BearingDeg,
     durationSeconds,
     magnitude,
     _debug: {

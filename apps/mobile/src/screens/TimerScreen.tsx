@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import MapView, { Marker, Polygon } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
@@ -26,6 +26,14 @@ const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
 const TOTALITY_PATH_COLOR = "rgba(255, 82, 82, 0.28)";
 const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 const FAVORITE_COORD_EPSILON = 0.0001;
+const CONTACT_DIRECTION_COLORS = {
+  c1: "#67d2ff",
+  c2: "#8dff8d",
+  c3: "#ffd866",
+  c4: "#ff8f8f",
+} as const;
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
 
 function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   if (kind === "total") return "Total";
@@ -69,6 +77,46 @@ function buildDefaultFavoriteName(lat: number, lon: number, favoriteLocations: F
 function isSameFavoriteLocation(aLat: number, aLon: number, bLat: number, bLon: number) {
   return Math.abs(aLat - bLat) <= FAVORITE_COORD_EPSILON && Math.abs(aLon - bLon) <= FAVORITE_COORD_EPSILON;
 }
+
+function clamp(value: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, value));
+}
+
+function normalizeLongitudeDeg(lonDeg: number) {
+  return (((lonDeg % 360) + 540) % 360) - 180;
+}
+
+function destinationPoint(
+  latDeg: number,
+  lonDeg: number,
+  bearingDeg: number,
+  distanceDeg: number,
+): { latitude: number; longitude: number } {
+  const lat1 = latDeg * DEG2RAD;
+  const lon1 = lonDeg * DEG2RAD;
+  const brng = bearingDeg * DEG2RAD;
+  const angularDistance = distanceDeg * DEG2RAD;
+  const sinLat1 = Math.sin(lat1);
+  const cosLat1 = Math.cos(lat1);
+  const sinD = Math.sin(angularDistance);
+  const cosD = Math.cos(angularDistance);
+  const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * Math.cos(brng));
+  const lon2 =
+    lon1 + Math.atan2(Math.sin(brng) * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
+
+  return {
+    latitude: clamp(lat2 * RAD2DEG, -89.9, 89.9),
+    longitude: normalizeLongitudeDeg(lon2 * RAD2DEG),
+  };
+}
+
+type ContactDirectionOverlay = {
+  key: "c1" | "c2" | "c3" | "c4";
+  label: "C1" | "C2" | "C3" | "C4";
+  color: string;
+  bearingDeg: number;
+  endpoint: { latitude: number; longitude: number };
+};
 
 type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
@@ -116,6 +164,31 @@ export default function TimerScreen({
     [favoriteLocations, timer.pin.lat, timer.pin.lon],
   );
   const canAddCurrentPinToFavorites = !favoriteAtCurrentPin;
+  const contactDirectionOverlays = useMemo<ContactDirectionOverlay[]>(() => {
+    if (!timer.result || !timer.showOverlays) return [];
+
+    const arrowDistanceDeg = clamp(timer.region.latitudeDelta * 0.28, 0.18, 2.2);
+    const entries = [
+      { key: "c1", label: "C1", bearingDeg: timer.result.c1BearingDeg, color: CONTACT_DIRECTION_COLORS.c1 },
+      { key: "c2", label: "C2", bearingDeg: timer.result.c2BearingDeg, color: CONTACT_DIRECTION_COLORS.c2 },
+      { key: "c3", label: "C3", bearingDeg: timer.result.c3BearingDeg, color: CONTACT_DIRECTION_COLORS.c3 },
+      { key: "c4", label: "C4", bearingDeg: timer.result.c4BearingDeg, color: CONTACT_DIRECTION_COLORS.c4 },
+    ] as const;
+
+    const overlays: ContactDirectionOverlay[] = [];
+    for (const entry of entries) {
+      if (typeof entry.bearingDeg !== "number" || !Number.isFinite(entry.bearingDeg)) continue;
+      const bearingDeg = ((entry.bearingDeg % 360) + 360) % 360;
+      overlays.push({
+        key: entry.key,
+        label: entry.label,
+        color: entry.color,
+        bearingDeg,
+        endpoint: destinationPoint(timer.pin.lat, timer.pin.lon, bearingDeg, arrowDistanceDeg),
+      });
+    }
+    return overlays;
+  }, [timer.pin.lat, timer.pin.lon, timer.region.latitudeDelta, timer.result, timer.showOverlays]);
 
   const closeAddFavoriteModal = () => {
     setIsAddFavoriteModalOpen(false);
@@ -202,6 +275,42 @@ export default function TimerScreen({
             title="Observer"
             description={`${timer.pin.lat.toFixed(4)}, ${timer.pin.lon.toFixed(4)}`}
           />
+          {contactDirectionOverlays.map((direction) => (
+            <Polyline
+              key={`direction-line-${direction.key}`}
+              coordinates={[
+                { latitude: timer.pin.lat, longitude: timer.pin.lon },
+                direction.endpoint,
+              ]}
+              strokeColor={direction.color}
+              strokeWidth={2}
+              lineDashPattern={[5, 4]}
+            />
+          ))}
+          {contactDirectionOverlays.map((direction) => (
+            <Marker
+              key={`direction-marker-${direction.key}`}
+              coordinate={direction.endpoint}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+              title={`${direction.label} direction`}
+              description={`${Math.round(direction.bearingDeg)}° from pin`}
+            >
+              <View style={styles.contactDirectionBadge}>
+                <Text
+                  style={[
+                    styles.contactDirectionArrow,
+                    { color: direction.color, transform: [{ rotate: `${direction.bearingDeg}deg` }] },
+                  ]}
+                >
+                  ▲
+                </Text>
+                <Text style={[styles.contactDirectionLabel, { color: direction.color }]}>
+                  {direction.label}
+                </Text>
+              </View>
+            </Marker>
+          ))}
         </MapView>
 
         <Pressable
@@ -657,6 +766,28 @@ const styles = StyleSheet.create({
     color: "#c6c6c6",
     fontSize: 10,
     marginTop: 1,
+  },
+  contactDirectionBadge: {
+    minWidth: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(0,0,0,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  contactDirectionArrow: {
+    fontSize: 14,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  contactDirectionLabel: {
+    marginTop: 1,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
   },
   btn: {
     paddingVertical: 10,
