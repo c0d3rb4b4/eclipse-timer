@@ -136,6 +136,7 @@ export function useTimerState(
     null,
   );
   const computeRunTokenRef = useRef(0);
+  const lastAutoComputeKeyRef = useRef("");
 
   const overlayVisiblePolygons = useMemo(
     () => overlayTuplesToCells(activeEclipse?.overlayVisiblePolygons),
@@ -154,6 +155,10 @@ export function useTimerState(
     () => (result ? nextEventCountdown(result, countdownNowMs) : "No countdown available"),
     [result, countdownNowMs],
   );
+  const autoComputeKey = useMemo(() => {
+    if (!activeEclipse) return "";
+    return `${activeEclipse.id}:${pin.lat.toFixed(6)}:${pin.lon.toFixed(6)}`;
+  }, [activeEclipse, pin.lat, pin.lon]);
   const isResultCurrentForPin = useMemo(() => {
     if (!result || !resultPin) return false;
     return !hasMeaningfulPinChange(resultPin, pin);
@@ -367,8 +372,12 @@ export function useTimerState(
   useEffect(() => {
     if (!activeEclipse) return;
     if (result && isResultCurrentForPin) return;
+    if (isComputing) return;
+    if (!autoComputeKey) return;
+    if (lastAutoComputeKeyRef.current === autoComputeKey) return;
+    lastAutoComputeKeyRef.current = autoComputeKey;
     runCompute();
-  }, [activeEclipse, isResultCurrentForPin, result, runCompute]);
+  }, [activeEclipse, autoComputeKey, isComputing, isResultCurrentForPin, result, runCompute]);
 
   useEffect(() => {
     if (!activeEclipse || !contactItems.length) return;
@@ -448,6 +457,7 @@ export function useTimerState(
     resultFlash.setValue(0);
     setResult(null);
     setResultPin(null);
+    lastAutoComputeKeyRef.current = "";
     setStatus("Ready");
   }, [cancelPendingCompute, resultFlash]);
 
