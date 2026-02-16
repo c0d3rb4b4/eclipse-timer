@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Alert, Animated, InteractionManager } from "react-native";
-import type { MapPressEvent, Region } from "react-native-maps";
+import type { Details, MapPressEvent, Region } from "react-native-maps";
 import type MapView from "react-native-maps";
 import * as Location from "expo-location";
 
@@ -43,10 +43,20 @@ type MarkerDragEndEvent = {
 };
 
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
+const MIN_REGION_DIFF = 0.00001;
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function hasMeaningfulRegionChange(prev: Region, next: Region): boolean {
+  return (
+    Math.abs(prev.latitude - next.latitude) > MIN_REGION_DIFF ||
+    Math.abs(prev.longitude - next.longitude) > MIN_REGION_DIFF ||
+    Math.abs(prev.latitudeDelta - next.latitudeDelta) > MIN_REGION_DIFF ||
+    Math.abs(prev.longitudeDelta - next.longitudeDelta) > MIN_REGION_DIFF
+  );
 }
 
 export type TimerState = {
@@ -70,7 +80,7 @@ export type TimerState = {
   notificationsEnabled: boolean;
   contactItems: ContactItem[];
   nextEventCountdownText: string;
-  onRegionChangeComplete: (r: Region) => void;
+  onRegionChangeComplete: (r: Region, details?: Details) => void;
   cycleMapType: () => void;
   toggleVisibleOverlay: () => void;
   toggleCentralOverlay: () => void;
@@ -215,9 +225,13 @@ export function useTimerState(
     [cancelPendingCompute],
   );
 
-  const onRegionChangeComplete = (r: Region) => {
-    setRegion((prev) => sanitizeRegion(r, prev));
-  };
+  const onRegionChangeComplete = useCallback((r: Region, details?: Details) => {
+    if (details?.isGesture === false) return;
+    setRegion((prev) => {
+      const next = sanitizeRegion(r, prev);
+      return hasMeaningfulRegionChange(prev, next) ? next : prev;
+    });
+  }, []);
 
   const cycleMapType = () => {
     setMapType((m) => (m === "standard" ? "satellite" : m === "satellite" ? "hybrid" : "standard"));
