@@ -22,8 +22,6 @@
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.anonymous.eclipsetimer"
@@ -39,6 +37,12 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Eclipse Timer to access your location to compute eclipse timings."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a29a7662-96be-4509-a79e-fbe4b5dac1ff"
+      }
+    },
+    "owner": "lallimaven"
   }
 }
