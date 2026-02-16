@@ -310,7 +310,7 @@
 | SP-01 | ✅ Resolved 2026-02-16: added pre-permission rationale Alert dialog before location request |
 | CI-04 | Add env config support |
 | CI-06 | Configure `expo-updates` for OTA |
-| CI-07 | Prepare app store metadata (screenshots, descriptions, icons) |
+| CI-07 | ✅ Partially resolved 2026-02-16: store descriptions, content rating answers, and icon fix completed. Screenshots and feature graphic still needed (manual). |
 | CI-10 | ✅ Resolved 2026-02-16: added `expo-splash-screen` with preventAutoHideAsync/hideAsync |
 | CI-11 | ✅ Resolved 2026-02-16: bumped to `1.0.0` with `buildNumber: "1"` and `versionCode: 1` |
 | D-01 | Write CONTRIBUTING.md |
@@ -376,11 +376,11 @@
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 4.1 | **Create production app icon** — verify `icon.png` (1024×1024, no alpha for iOS), `adaptive-icon.png` (432×432 foreground), and `favicon.png` meet store specs. | CI-07 | ⬜ Not started |
-| 4.2 | **Capture screenshots** — at least 3 per device class (iPhone 6.7", iPhone 6.5", iPad 12.9" for iOS; phone + 7" + 10" tablet for Android). Cover: landing list, map view, timer/results card. | CI-07 | ⬜ Not started |
-| 4.3 | **Write store description** — short description (80 chars), full description (4 000 chars), keywords, and "what's new" for v1.0.0. | CI-07 | ⬜ Not started |
-| 4.4 | **Set content rating** — fill out the App Store and Play Store content rating questionnaires (likely "Everyone" / "4+"). | CI-07 | ⬜ Not started |
-| 4.5 | **Create or verify Apple Developer & Google Play Console accounts** — ensure the `owner: "lallimaven"` in app.json maps to an active Expo/EAS account linked to store accounts. | — | ⬜ Not started |
+| 4.1 | **Create production app icon** — `icon.png` flattened to 24-bit RGB (no alpha) for iOS. `adaptive-icon.png` (1024×1024) and `favicon.png` (256×256) verified. Android feature graphic (1024×500) still needed. | CI-07 | ✅ Done 2026-02-16 |
+| 4.2 | **Capture screenshots** — requirements documented in `documents/store-metadata.md` with device classes, sizes, and recommended screens. Actual capture requires `eas build --profile preview` on device/simulator. | CI-07 | ⬜ Manual step |
+| 4.3 | **Write store description** — short description (71 chars), full description (1 753 chars), keywords (78 chars), and "what's new" for v1.0.0 written in `documents/store-metadata.md`. | CI-07 | ✅ Done 2026-02-16 |
+| 4.4 | **Set content rating** — questionnaire answers documented in `documents/store-metadata.md`. Expected: 4+ (iOS) / Everyone (Android). Fill out in store consoles during submission. | CI-07 | ✅ Done 2026-02-16 |
+| 4.5 | **Create or verify Apple Developer & Google Play Console accounts** — requirements documented. Verify `lallimaven` Expo account is linked to store accounts. | — | ⬜ Manual step |
 
 ### Phase 5 — CI/CD (strongly recommended before release)
 
