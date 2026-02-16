@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { EclipseKindAtLocation } from "@eclipse-timer/shared";
 
+import BurgerButton from "../components/BurgerButton";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 
 type PreviewContactKey = "c1" | "c2" | "max" | "c3" | "c4";
@@ -37,6 +38,7 @@ export type PreviewPayload = {
 type EclipsePreviewScreenProps = {
   payload: PreviewPayload;
   onBack: () => void;
+  onOpenMenu: () => void;
 };
 
 const DEFAULT_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -130,7 +132,7 @@ function phaseLabelForTime(nowMs: number, events: TimelineEvent[]) {
   return `Between ${previous.shortLabel} and ${next.shortLabel}`;
 }
 
-export default function EclipsePreviewScreen({ payload, onBack }: EclipsePreviewScreenProps) {
+export default function EclipsePreviewScreen({ payload, onBack, onOpenMenu }: EclipsePreviewScreenProps) {
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progressTrackWidth, setProgressTrackWidth] = useState(0);
@@ -244,6 +246,7 @@ export default function EclipsePreviewScreen({ payload, onBack }: EclipsePreview
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.headerRow}>
+        <BurgerButton onPress={onOpenMenu} />
         <Pressable style={styles.backBtn} onPress={onBack}>
           <Text style={styles.backBtnText}>Back</Text>
         </Pressable>

@@ -15,6 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 
 import type { TimerState } from "../hooks/useTimerState";
+import BurgerButton from "../components/BurgerButton";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 
@@ -46,6 +47,7 @@ type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
   isActiveEclipseLoading: boolean;
   timer: TimerState;
+  onOpenMenu: () => void;
   onOpenPreview: (result: Circumstances) => void;
 };
 
@@ -53,6 +55,7 @@ export default function TimerScreen({
   activeEclipse,
   isActiveEclipseLoading,
   timer,
+  onOpenMenu,
   onOpenPreview,
 }: TimerScreenProps) {
   const insets = useSafeAreaInsets();
@@ -72,14 +75,17 @@ export default function TimerScreen({
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Eclipse Timer (MVP)</Text>
-        <Text style={styles.subtitle}>
-          {isActiveEclipseLoading
-            ? "Loading eclipse data..."
-            : activeEclipse
-              ? `${activeEclipse.id} - ${activeEclipse.dateYmd}`
-              : "No eclipse loaded"}
-        </Text>
+        <BurgerButton onPress={onOpenMenu} />
+        <View style={styles.headerMeta}>
+          <Text style={styles.title}>Eclipse Timer (MVP)</Text>
+          <Text style={styles.subtitle}>
+            {isActiveEclipseLoading
+              ? "Loading eclipse data..."
+              : activeEclipse
+                ? `${activeEclipse.id} - ${activeEclipse.dateYmd}`
+                : "No eclipse loaded"}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.mapWrap}>
@@ -315,7 +321,18 @@ export default function TimerScreen({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0b0b0b" },
-  header: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6 },
+  header: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  headerMeta: {
+    flex: 1,
+    gap: 2,
+  },
   title: { color: "white", fontSize: 18, fontWeight: "700" },
   subtitle: { color: "#bdbdbd", fontSize: 12 },
   mapWrap: { height: 260, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },

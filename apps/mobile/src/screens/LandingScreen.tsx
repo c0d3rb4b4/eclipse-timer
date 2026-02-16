@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
 import type { LandingScrollState } from "../hooks/useLandingScroll";
+import BurgerButton from "../components/BurgerButton";
 
 type LandingScreenProps = {
   eclipses: LandingEclipseItem[];
@@ -23,6 +24,7 @@ type LandingScreenProps = {
   onSelect: (id: string) => void;
   onSearchQueryChange: (query: string) => void;
   onGo: () => void;
+  onOpenMenu: () => void;
   scroll: LandingScrollState;
 };
 
@@ -35,6 +37,7 @@ export default function LandingScreen({
   onSelect,
   onSearchQueryChange,
   onGo,
+  onOpenMenu,
   scroll,
 }: LandingScreenProps) {
   const selectedLanding = useMemo(
@@ -94,7 +97,10 @@ export default function LandingScreen({
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.landingWrap}>
-        <Text style={styles.landingTitle}>Eclipse Timer</Text>
+        <View style={styles.headerRow}>
+          <BurgerButton onPress={onOpenMenu} />
+          <Text style={styles.landingTitle}>Eclipse Timer</Text>
+        </View>
         <View style={styles.searchWrap}>
           <TextInput
             value={searchQuery}
@@ -192,6 +198,11 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 24,
     gap: 12,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
   searchWrap: {

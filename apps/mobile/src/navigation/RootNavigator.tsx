@@ -1,21 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { NavigationContainer, useFocusEffect, useIsFocused } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  useFocusEffect,
+  useIsFocused,
+  useNavigationContainerRef,
+} from "@react-navigation/native";
 import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import { enableScreens } from "react-native-screens";
-import { ActivityIndicator, InteractionManager, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, InteractionManager, StyleSheet, Text, View } from "react-native";
 
 import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 
 import LandingScreen from "../screens/LandingScreen";
 import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePreviewScreen";
+import LocationSettingsScreen from "../screens/LocationSettingsScreen";
+import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
 import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
 import { useTimerState } from "../hooks/useTimerState";
+import SideMenu, { type MenuRouteName } from "./SideMenu";
 import { useAppState } from "../state/appState";
 
 enableScreens();
@@ -24,12 +32,27 @@ type RootStackParamList = {
   Landing: undefined;
   Timer: undefined;
   Preview: { payload: PreviewPayload };
+  NotificationSettings: undefined;
+  LocationSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 type LandingRouteProps = NativeStackScreenProps<RootStackParamList, "Landing"> & {
   catalog: EclipseRecord[];
+  onOpenMenu: () => void;
+};
+
+type TimerRouteProps = NativeStackScreenProps<RootStackParamList, "Timer"> & {
+  onOpenMenu: () => void;
+};
+
+type PreviewRouteProps = NativeStackScreenProps<RootStackParamList, "Preview"> & {
+  onOpenMenu: () => void;
+};
+
+type RouteWithMenuProps = {
+  onOpenMenu: () => void;
 };
 
 function filterLandingEclipses(
@@ -69,7 +92,13 @@ function StartupLoadingScreen({ message }: { message: string }) {
   );
 }
 
-function LandingRoute({ navigation, catalog }: LandingRouteProps) {
+function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null {
+  if (route === "Landing" || route === "Timer") return route;
+  if (route === "NotificationSettings" || route === "LocationSettings") return route;
+  return null;
+}
+
+function LandingRoute({ navigation, catalog, onOpenMenu }: LandingRouteProps) {
   const { state, actions } = useAppState();
   const isFocused = useIsFocused();
   const [searchQuery, setSearchQuery] = useState("");
@@ -112,12 +141,13 @@ function LandingRoute({ navigation, catalog }: LandingRouteProps) {
       onSelect={actions.selectLanding}
       onSearchQueryChange={setSearchQuery}
       onGo={goToTimer}
+      onOpenMenu={onOpenMenu}
       scroll={landingScroll}
     />
   );
 }
 
-function TimerRoute({ navigation }: NativeStackScreenProps<RootStackParamList, "Timer">) {
+function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
   const { state } = useAppState();
   const [activeEclipse, setActiveEclipse] = useState<EclipseRecord | null>(null);
   const [isActiveEclipseLoading, setIsActiveEclipseLoading] = useState(false);
@@ -179,17 +209,88 @@ function TimerRoute({ navigation }: NativeStackScreenProps<RootStackParamList, "
       activeEclipse={activeEclipse}
       isActiveEclipseLoading={isActiveEclipseLoading}
       timer={timerState}
+      onOpenMenu={onOpenMenu}
       onOpenPreview={openPreview}
     />
   );
 }
 
-function PreviewRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, "Preview">) {
-  return <EclipsePreviewScreen payload={route.params.payload} onBack={() => navigation.goBack()} />;
+function PreviewRoute({ navigation, route, onOpenMenu }: PreviewRouteProps) {
+  return (
+    <EclipsePreviewScreen
+      payload={route.params.payload}
+      onBack={() => navigation.goBack()}
+      onOpenMenu={onOpenMenu}
+    />
+  );
+}
+
+function NotificationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
+  const { state, actions } = useAppState();
+
+  return (
+    <NotificationSettingsScreen
+      onOpenMenu={onOpenMenu}
+      settings={state.notificationSettings}
+      onSetSetting={actions.setNotificationSetting}
+    />
+  );
+}
+
+function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
+  const { state, actions } = useAppState();
+
+  return (
+    <LocationSettingsScreen
+      onOpenMenu={onOpenMenu}
+      favoriteLocations={state.favoriteLocations}
+      onAddFavoriteLocation={actions.addFavoriteLocation}
+      onRemoveFavoriteLocation={actions.removeFavoriteLocation}
+    />
+  );
 }
 
 export default function RootNavigator() {
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const [catalog, setCatalog] = useState<EclipseRecord[] | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
+
+  const closeMenu = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
+
+  const openMenu = useCallback(() => {
+    setIsMenuOpen(true);
+  }, []);
+
+  const updateRouteName = useCallback(() => {
+    const routeName = navigationRef.getCurrentRoute()?.name;
+    if (!routeName) return;
+    setCurrentRouteName(routeName);
+  }, [navigationRef]);
+
+  const onNavigateFromMenu = useCallback(
+    (route: MenuRouteName) => {
+      closeMenu();
+      if (!navigationRef.isReady()) return;
+      const currentRoute = navigationRef.getCurrentRoute()?.name;
+      if (currentRoute === route) return;
+      navigationRef.navigate(route);
+    },
+    [closeMenu, navigationRef],
+  );
+
+  const activeMenuRoute = useMemo(() => toMenuRouteName(currentRouteName), [currentRouteName]);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      closeMenu();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [closeMenu, isMenuOpen]);
 
   useEffect(() => {
     let didCancel = false;
@@ -212,14 +313,32 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Landing">
-          {(props) => <LandingRoute {...props} catalog={catalog} />}
-        </Stack.Screen>
-        <Stack.Screen name="Timer">{(props) => <TimerRoute {...props} />}</Stack.Screen>
-        <Stack.Screen name="Preview">{(props) => <PreviewRoute {...props} />}</Stack.Screen>
-      </Stack.Navigator>
+    <NavigationContainer ref={navigationRef} onReady={updateRouteName} onStateChange={updateRouteName}>
+      <View style={styles.navigationRoot}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Landing">
+            {(props) => <LandingRoute {...props} catalog={catalog} onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="Timer">
+            {(props) => <TimerRoute {...props} onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="Preview">
+            {(props) => <PreviewRoute {...props} onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="NotificationSettings">
+            {() => <NotificationSettingsRoute onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="LocationSettings">
+            {() => <LocationSettingsRoute onOpenMenu={openMenu} />}
+          </Stack.Screen>
+        </Stack.Navigator>
+        <SideMenu
+          visible={isMenuOpen}
+          activeRoute={activeMenuRoute}
+          onClose={closeMenu}
+          onNavigate={onNavigateFromMenu}
+        />
+      </View>
     </NavigationContainer>
   );
 }
@@ -251,5 +370,8 @@ const styles = StyleSheet.create({
   startupSubtitle: {
     color: "#bdbdbd",
     fontSize: 13,
+  },
+  navigationRoot: {
+    flex: 1,
   },
 });
