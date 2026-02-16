@@ -95,7 +95,7 @@ export default function LandingScreen({
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.landingWrap}>
         <View style={styles.headerRow}>
           <BurgerButton onPress={onOpenMenu} />
