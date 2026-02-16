@@ -28,12 +28,12 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| T-01 | **No test framework installed** | 🔴 Critical | All `test` scripts across every package are `echo "(add tests later)"`. No test runner (Vitest, Jest, etc.) is configured anywhere. |
-| T-02 | **Zero unit tests for the engine** | 🔴 Critical | The core eclipse computation (`computeCircumstances`, `evaluateAtT`, `fPenumbra`, `fUmbraAbs`, root-finding, polynomial evaluation) has no automated verification. Manual `dev/run_one.ts` is the only validation method. |
-| T-03 | **Zero unit tests for math helpers** | 🔴 Critical | `evalPoly`, `findBrackets`, `bisectRoot` are numerically sensitive pure functions — ideal for property-based and example-based tests but completely untested. |
-| T-04 | **Zero unit tests for geo/coords** | 🟠 High | `observerToFundamental` contains WGS84 geodetic math with no regression tests against known reference values. |
-| T-05 | **Zero unit tests for time utilities** | 🟠 High | `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT` have no tests; date math is notoriously bug-prone. |
-| T-06 | **No integration/snapshot tests for catalog scripts** | 🟡 Medium | `build_catalog_json.ts`, `build_overlays_json.ts`, `filter_csv_1900_2100.ts` have no automated output verification. A typo in CSV column mapping would silently produce bad data. |
+| T-01 | **No test framework installed** | 🔴 Critical | ✅ Resolved 2026-02-13: installed a root Vitest config and replaced placeholder `test` scripts with Vitest commands across packages/apps. |
+| T-02 | **Limited unit coverage for the engine** | 🔴 Critical | ✅ Resolved 2026-02-13: added comprehensive Vitest coverage for `computeCircumstances`, `evaluateAtT`, `fPenumbra`, and `fUmbraAbs` including deterministic regression vectors, whole-catalog greatest-point invariant sweeps, root-equation checks, partial-magnitude validation, and malformed-input/elevation robustness tests. |
+| T-03 | **Zero unit tests for math helpers** | 🔴 Critical | ✅ Resolved 2026-02-13: added dedicated Vitest coverage for `evalPoly`, `findBrackets`, and `bisectRoot` with example-based assertions and deterministic property-style sweeps (Horner equivalence, sign-change bracket guarantees, and bisection convergence/null-path behavior). |
+| T-04 | **Zero unit tests for geo/coords** | 🟠 High | ✅ Resolved 2026-02-13: added dedicated geo regression/invariant tests for `observerToFundamental` (reference vectors, periodicity checks, elevation sensitivity, and polar finiteness). |
+| T-05 | **Zero unit tests for time utilities** | 🟠 High | ✅ Resolved 2026-02-13: added tests for `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT`, and `toIsoUtc` covering fractional-hour conversion, boundary rounding, positive/negative ΔT, and invalid-date behavior. |
+| T-06 | **No integration/snapshot tests for catalog scripts** | 🟡 Medium | ✅ Resolved 2026-02-13: added catalog integration/snapshot tests validating `filter_csv_1900_2100` year-range output, `build_catalog_json` field mapping against CSV columns, `build_overlays_json` output shape/coordinate sanity, and artifact hash snapshots for generated files. |
 | T-07 | **No mobile component/screen tests** | 🟡 Medium | No React Native Testing Library or Detox setup. All UI behavior is manually verified. |
 | T-08 | **No end-to-end regression suite** | 🟡 Medium | No known-answer tests validating the full pipeline (catalog → engine → formatted output) against NASA reference data. |
 
@@ -49,8 +49,8 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| L-01 | **No linter configured** | 🟠 High | All `lint` scripts are `echo "(add eslint later)"`. No ESLint, Biome, or equivalent. |
-| L-02 | **No formatter configured** | 🟠 High | No Prettier/Biome/dprint config. Inconsistent indentation is already visible (e.g., mixed 2-space and realigned blocks in `App.tsx` styles). |
+| L-01 | **No linter configured** | 🟠 High | ✅ Resolved 2026-02-13: configured Biome at the workspace root and replaced placeholder `lint` scripts across app/package workspaces with `biome lint .`. |
+| L-02 | **No formatter configured** | 🟠 High | ✅ Resolved 2026-02-13: added shared Biome formatter config and `format` scripts (`biome format --write .`) across workspaces. |
 | L-03 | **No pre-commit hooks** | 🟡 Medium | No Husky/lint-staged setup. Nothing prevents committing broken types or unformatted code. |
 | L-04 | **No `.editorconfig`** | 🟢 Low | Helps enforce consistent whitespace across editors/contributors. |
 | L-05 | **No `.nvmrc` / `.node-version`** | 🟢 Low | README says "Node 18+" but nothing pins or validates it. |
@@ -70,8 +70,8 @@
 | A-02 | **No state management layer** | 🟠 High | ✅ Resolved 2026-02-12: added `AppStateProvider` with reducer/actions for screen + selection state. |
 | A-03 | **Helper functions defined outside module scope** | 🟡 Medium | ✅ Resolved 2026-02-13: helpers extracted into `utils/` and `hooks/` modules; `App.tsx` no longer hosts them. |
 | A-04 | **No navigation library** | 🟡 Medium | ✅ Resolved 2026-02-13: added React Navigation native stack and moved screen switching to the navigator. |
-| A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | The engine does iterative root-finding and scanning. On slow devices this blocks the UI thread. Should be offloaded to a worker or at minimum wrapped in `InteractionManager.runAfterInteractions`. |
-| A-06 | **Countdown timer never re-renders** | 🟠 High | `nextEventCountdown` calculates a live countdown string but is only computed on render — there is no `setInterval` or timer to tick it. The displayed countdown is stale immediately. |
+| A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | ✅ Resolved 2026-02-13: compute now runs via `InteractionManager.runAfterInteractions` with cancellation guards for reset/unmount paths. |
+| A-06 | **Countdown timer never re-renders** | 🟠 High | ✅ Resolved 2026-02-13: timer state now owns a 1-second interval and feeds a live `nextEventCountdownText` string to the UI. |
 | A-07 | **Alarm system is a UI stub** | 🟡 Medium | Alarm toggles and "Test Alarm" exist, but there is no background scheduling (e.g., `expo-notifications` local notifications). Alarms are effectively non-functional. |
 | A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
@@ -84,17 +84,17 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| U-01 | **No local time display** | 🟠 High | All contact times are shown in UTC only. Most users need local-time equivalents. |
-| U-02 | **"Central 10:00" button label is cryptic** | 🟡 Medium | The button jumps to the greatest-eclipse coordinates but the label is an internal jargon term. Should say "Greatest Eclipse" or similar. |
-| U-03 | **No loading/splash screen** | 🟡 Medium | Catalog and overlay loading is synchronous at startup with no visual feedback. |
+| U-01 | **No local time display** | 🟠 High | ✅ Resolved 2026-02-13: contact rows now show both UTC and local device time (`UTC±HH:MM`) for every available event. |
+| U-02 | **"Central 10:00" button label is cryptic** | 🟡 Medium | ✅ Resolved 2026-02-13: renamed the action button to **Greatest Eclipse** to match user-facing terminology. |
+| U-03 | **No loading/splash screen** | 🟡 Medium | ✅ Resolved 2026-02-13: added a startup loading screen for catalog bootstrapping and an in-screen loading state while active eclipse overlays hydrate. |
 | U-04 | **No empty state on timer screen** | 🟢 Low | If the user navigates to the timer without computing, the results card just says "Press Compute to run the engine." — could be more informative with an illustration or contextual guidance. |
 | U-05 | **No dark/light theme support** | 🟢 Low | The app is hardcoded to a dark theme. `useColorScheme` is not used. |
-| U-06 | **Landing list has no search or filter** | 🟡 Medium | With 200+ eclipses from 1900–2100, scrolling to find a specific one is tedious. Needs at minimum a date filter or search bar. |
+| U-06 | **Landing list has no search or filter** | 🟡 Medium | ✅ Resolved 2026-02-13: added a search bar with tokenized filtering (year/date/kind/ID) and live filtered-count feedback. |
 | U-07 | **No visual indicator of pin location on results card** | 🟢 Low | After compute, the selected-pin card is gone (only map shows it). Lat/lon should appear in the results context. |
-| U-08 | **GIF preview loads from NASA servers** | 🟡 Medium | No caching, no placeholder, no error fallback. On slow connections the preview card is blank. Needs a loading indicator and error state. |
-| U-09 | **Magnitude is displayed as `1` for total/annular** | 🟡 Medium | Magnitude for total eclipses should be the obscuration ratio (>1), not clamped to 1. This is an engine issue surfacing in UX. |
+| U-08 | **GIF preview loads from NASA servers** | 🟡 Medium | ✅ Resolved 2026-02-13: preview card now prefetches/caches, shows a loading placeholder, and provides an error fallback with retry. |
+| U-09 | **Magnitude is displayed as `1` for total/annular** | 🟡 Medium | ✅ Resolved 2026-02-13: engine now computes central magnitude from `L1/L2/Δ` instead of hardcoding `1`, and the results UI surfaces the corrected value. |
 | U-10 | **No haptic feedback on map interactions** | 🟢 Low | Pin drop and drag could benefit from subtle haptics for tactile confirmation. |
-| U-11 | **Countdown not ticking live** | 🟠 High | Same as A-06 — the "Next Event Timer" hero card is static text. Users expect a real-time ticking countdown. |
+| U-11 | **Countdown not ticking live** | 🟠 High | ✅ Resolved 2026-02-13 via A-06: hero card countdown is now driven by a ticking interval-backed state value. |
 | U-12 | **No landscape orientation support** | 🟢 Low | `app.json` locks to portrait. Map exploration benefits from landscape. |
 
 ---
@@ -105,9 +105,9 @@
 |----|------|----------|---------|
 | E-01 | **`deltaTSecondsApprox` is dead code** | 🟡 Medium | `time/deltaT.ts` exports `deltaTSecondsApprox` but it is never imported anywhere. The engine uses the per-record `deltaTSeconds` field instead. Should be deleted or integrated. |
 | E-02 | **`bessel/elements.ts` is dead code** | 🟡 Medium | `evalElements` duplicates what `evaluateAtT` already does in `functions.ts`. It is never imported by any consumer. |
-| E-03 | **Redundant evaluation in `fPenumbra` / `fUmbraAbs`** | 🟡 Medium | Each call to `fPenumbra` or `fUmbraAbs` calls `evaluateAtT` independently. During bracket scanning (~360 evaluations per eclipse × 2 functions), many evaluations are duplicated at the same `t`. Could return both metrics from a single evaluation. |
+| E-03 | **Redundant evaluation in `fPenumbra` / `fUmbraAbs`** | 🟡 Medium | ✅ Resolved 2026-02-13: introduced `evaluateShadowMetricsAtT` and shared per-`t` metric caching inside contact solving so penumbral/umbral scans reuse one `evaluateAtT` result. |
 | E-04 | **Magic numbers in `solveContacts`** | 🟡 Medium | `tMin = -3`, `tMax = +3`, `stepBracket = 1/60`, `stepFine = 1/600`, `tol = 1e-7` are inlined constants with no configuration or documentation of units beyond comments. |
-| E-05 | **Magnitude formula is oversimplified** | 🟠 High | For total/annular eclipses, magnitude is hardcoded to `1`. Astronomical magnitude for a total eclipse is typically `> 1` (ratio of apparent diameters). The partial formula `(L1obs - delta) / L1obs` may also be an approximation — should be validated against references. |
+| E-05 | **Magnitude formula is oversimplified** | 🟠 High | ✅ Resolved 2026-02-13: replaced central-event hardcode with geometric magnitude `(L1obs - delta) / (L1obs + L2obs)` (with kind-aware bounds), allowing total magnitudes >1 and annular magnitudes <1. |
 | E-06 | **No input validation** | 🟡 Medium | `computeCircumstances` trusts that `EclipseRecord` has valid polynomial arrays and numeric fields. A malformed record causes silent NaN propagation. |
 | E-07 | **`evalPoly` JSDoc says "minutes" but input is hours** | 🟢 Low | The comment `t is a number (we'll use minutes)` is incorrect — the engine passes hours from t0. |
 | E-08 | **No structured error type** | 🟡 Medium | Errors from the engine are thrown as generic `Error`. A typed result (`{ ok: true, data } | { ok: false, error }`) would be safer for the UI layer. |
@@ -120,7 +120,7 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| C-01 | **Cross-package deep import in `build_overlays_json.ts`** | 🔴 Critical | The overlay build script directly imports `../../engine/src/circumstances/functions.ts` — a deep relative path into another package's internals. This bypasses package boundaries and will break if the engine restructures. Should import from `@eclipse-timer/engine` public API. |
+| C-01 | **Cross-package deep import in `build_overlays_json.ts`** | 🔴 Critical | ✅ Resolved 2026-02-13: `build_overlays_json.ts` now imports `evaluateAtT` from `@eclipse-timer/engine`, and the engine exports `evaluateAtT` through its public API surface. |
 | C-02 | **`loadCatalog()` uses `require()` (CJS) in an ESM package** | 🟡 Medium | `catalog/src/index.ts` uses `require("../generated/overlays.generated.json")` in a package marked `"type": "module"`. This works via Metro/bundler magic but is a portability risk for Node.js consumers. |
 | C-03 | **Generated files are committed (implied)** | 🟡 Medium | `generated/catalog.generated.json` and `overlays.generated.json` appear in the repo. Large generated JSON files inflate the git history. Consider `.gitignore`-ing them and regenerating in CI. |
 | C-04 | **No checksum or version stamping on generated data** | 🟢 Low | There's no way to tell which CSV input or script version produced a given `.generated.json`. Adding a metadata header (timestamp, input hash) aids reproducibility. |
@@ -166,7 +166,7 @@
 | F-06 | **Share / export results** | 🟢 Low | No way to share computed contact times via OS share sheet or clipboard. |
 | F-07 | **Web platform support** | 🟢 Low | `app.json` lists only `ios`/`android`. Expo supports web — overlay rendering may need adjustment but the engine is platform-agnostic. |
 | F-08 | **Eclipse animation / sun coverage visualization** | 🟢 Low | Beyond the NASA GIF, a native real-time animation showing the moon transiting the sun at the observer's location would be a differentiating feature. |
-| F-09 | **Local time zone display for contacts** | 🟠 High | Contact times should be shown in the observer's local timezone (derivable from longitude or device TZ), not just UTC. |
+| F-09 | **Local time zone display for contacts** | 🟠 High | ✅ Resolved 2026-02-13 via U-01: contact rows now include local device-time equivalents alongside UTC. |
 | F-10 | **Geocoding / address search** | 🟡 Medium | Users should be able to type a city name to set the pin, not only tap the map or use GPS. |
 
 ---
@@ -175,11 +175,11 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| P-01 | **Entire 200-eclipse catalog loaded into memory at startup** | 🟡 Medium | `loadCatalog()` merges all catalog entries with overlay data eagerly. For mobile, lazy loading or pagination would reduce memory. |
-| P-02 | **Overlay JSON can be large** | 🟡 Medium | With 200+ eclipses, `overlays.generated.json` can be multiple MB. Metro bundles it into the JS bundle. Consider on-demand loading per eclipse. |
-| P-03 | **`splitPolygonOnDateline` runs on every render** | 🟢 Low | `overlayTuplesToCells` is wrapped in `useMemo` keyed on `activeEclipse`, which is correct. But the function allocates heavily — could be precomputed in the build script. |
-| P-04 | **Duplicate `evaluateAtT` calls during root solving** | 🟡 Medium | See E-03. Each bracket scan step calls `evaluateAtT` twice (once for penumbra, once for umbra), but the polynomial evaluation is identical — only the metric differs. |
-| P-05 | **Landing list renders all 200+ rows** | 🟡 Medium | Uses a plain `ScrollView` + `.map()`. Should be a `FlatList` with virtualization for smooth scrolling on low-end devices. |
+| P-01 | **Entire 200-eclipse catalog loaded into memory at startup** | 🟡 Medium | ✅ Resolved 2026-02-13: `loadCatalog()` now returns lightweight records and overlays are hydrated lazily only for the selected eclipse. |
+| P-02 | **Overlay JSON can be large** | 🟡 Medium | ✅ Resolved 2026-02-13: overlays are now emitted as decade chunk files and loaded on demand by eclipse year instead of eagerly loading a monolithic overlay map in the app path. |
+| P-03 | **`splitPolygonOnDateline` runs on every render** | 🟢 Low | ✅ Resolved 2026-02-13: `overlayTuplesToCells` now memoizes converted/split polygons in a `WeakMap`, eliminating repeat allocation work for previously seen overlay arrays. |
+| P-04 | **Duplicate `evaluateAtT` calls during root solving** | 🟡 Medium | ✅ Resolved 2026-02-13 via E-03: contact solving now shares one cached evaluation per `t` for both penumbral and umbral metrics. |
+| P-05 | **Landing list renders all 200+ rows** | 🟡 Medium | ✅ Resolved 2026-02-13: replaced `ScrollView` + `.map()` with a virtualized `FlatList` (batched rendering + clipped subviews + fixed item layout). |
 
 ---
 
@@ -236,26 +236,26 @@
 ### 🔴 Critical — Fix First
 | ID | Summary |
 |----|---------|
-| T-01 | Install a test framework |
-| T-02 | Unit tests for core engine |
-| T-03 | Unit tests for math helpers |
+| T-01 | ✅ Resolved 2026-02-13: install a test framework |
+| T-02 | ✅ Resolved 2026-02-13: unit tests for core engine |
+| T-03 | ✅ Resolved 2026-02-13: unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
-| C-01 | Fix cross-package deep import in overlay build |
+| C-01 | ✅ Resolved 2026-02-13: fix cross-package deep import in overlay build |
 | CI-01 | Set up a CI pipeline |
 
 ### 🟠 High — Fix Soon
 | ID | Summary |
 |----|---------|
-| T-04 | Tests for geo/coords |
-| T-05 | Tests for time utilities |
-| L-01 | Configure a linter |
-| L-02 | Configure a formatter |
+| T-04 | ✅ Resolved 2026-02-13: tests for geo/coords |
+| T-05 | ✅ Resolved 2026-02-13: tests for time utilities |
+| L-01 | ✅ Resolved 2026-02-13: configure a linter |
+| L-02 | ✅ Resolved 2026-02-13: configure a formatter |
 | A-02 | ✅ Resolved 2026-02-12: introduce state management |
-| A-05 | Offload compute from JS thread |
-| A-06 / U-11 | Make countdown timer tick in real time |
-| E-05 | Fix oversimplified magnitude formula |
+| A-05 | ✅ Resolved 2026-02-13: defer compute with `InteractionManager.runAfterInteractions` |
+| A-06 / U-11 | ✅ Resolved 2026-02-13: make countdown timer tick in real time |
+| E-05 | ✅ Resolved 2026-02-13: fix oversimplified magnitude formula |
 | AC-01 | Add accessibility labels |
-| U-01 / F-09 | Show local time for contacts |
+| U-01 / F-09 | ✅ Resolved 2026-02-13: show local time for contacts |
 | F-01 | Multi-eclipse switching on timer |
 | F-02 | Persist user preferences |
 | F-03 | Implement real alarm scheduling |
@@ -264,7 +264,7 @@
 ### 🟡 Medium — Plan Next
 | ID | Summary |
 |----|---------|
-| T-06 | Tests for catalog scripts |
+| T-06 | ✅ Resolved 2026-02-13: tests for catalog scripts |
 | T-07 | Mobile component tests |
 | T-08 | End-to-end regression suite |
 | L-03 | Pre-commit hooks |
@@ -273,7 +273,7 @@
 | A-07 | Wire up real notifications for alarms |
 | A-10 | Pass GPS altitude as `elevM` |
 | A-11 | Add error boundary |
-| E-03 | Deduplicate evaluateAtT calls |
+| E-03 | ✅ Resolved 2026-02-13: deduplicate `evaluateAtT` calls |
 | E-04 | Extract magic numbers to config |
 | E-06 | Add input validation to engine |
 | E-08 | Typed result instead of thrown errors |
@@ -284,15 +284,15 @@
 | S-02 | Add runtime type validation for catalog data |
 | M-01 | Enforce pnpm via Corepack |
 | M-04 | Add build step for packages |
-| U-02 | Rename "Central 10:00" button |
-| U-03 | Add splash/loading screen |
-| U-06 | Add search/filter to landing list |
-| U-08 | Handle GIF loading/error states |
-| U-09 | Fix magnitude display for total eclipses |
-| P-01 | Lazy-load catalog |
-| P-02 | On-demand overlay loading |
-| P-04 | Deduplicate polynomial evaluations |
-| P-05 | Virtualize landing list with FlatList |
+| U-02 | ✅ Resolved 2026-02-13: rename "Central 10:00" button |
+| U-03 | ✅ Resolved 2026-02-13: add splash/loading screen |
+| U-06 | ✅ Resolved 2026-02-13: add search/filter to landing list |
+| U-08 | ✅ Resolved 2026-02-13: handle GIF loading/error states |
+| U-09 | ✅ Resolved 2026-02-13: fix magnitude display for total eclipses |
+| P-01 | ✅ Resolved 2026-02-13: lazy-load catalog overlays |
+| P-02 | ✅ Resolved 2026-02-13: on-demand decade overlay chunks |
+| P-04 | ✅ Resolved 2026-02-13: deduplicate polynomial evaluations |
+| P-05 | ✅ Resolved 2026-02-13: virtualize landing list with FlatList |
 | AC-02 | Add non-color overlay differentiation |
 | AC-04 | Support dynamic font sizing |
 | SP-01 | Show location rationale before permission |

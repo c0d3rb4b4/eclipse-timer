@@ -28,8 +28,7 @@ export function buildContactItems(c: Circumstances): ContactItem[] {
   ];
 }
 
-export function nextEventCountdown(c: Circumstances) {
-  const now = Date.now();
+export function nextEventCountdown(c: Circumstances, nowMs = Date.now()) {
   const events = buildContactItems(c)
     .map((item) => {
       if (!item.iso) return null;
@@ -39,10 +38,10 @@ export function nextEventCountdown(c: Circumstances) {
     })
     .filter((e): e is { key: ContactKey; t: number } => !!e);
 
-  const future = events.filter((e) => e.t > now).sort((a, b) => a.t - b.t)[0];
+  const future = events.filter((e) => e.t > nowMs).sort((a, b) => a.t - b.t)[0];
   if (!future) return "No upcoming contact time (for this eclipse)";
 
-  const diffSec = Math.max(0, Math.floor((future.t - now) / 1000));
+  const diffSec = Math.max(0, Math.floor((future.t - nowMs) / 1000));
   const dd = Math.floor(diffSec / 86400);
   const hh = Math.floor((diffSec % 86400) / 3600);
   const mm = Math.floor((diffSec % 3600) / 60);

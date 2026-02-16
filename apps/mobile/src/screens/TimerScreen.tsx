@@ -1,40 +1,81 @@
-import React, { useMemo } from "react";
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useMemo } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { EclipseRecord } from "@eclipse-timer/shared";
 
 import type { TimerState } from "../hooks/useTimerState";
-import { fmtUtcHuman } from "../utils/date";
-import { nextEventCountdown } from "../utils/contacts";
+import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
 const TOTALITY_PATH_COLOR = "rgba(255, 82, 82, 0.28)";
 const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 
+function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
+  if (kind === "total") return "Total";
+  if (kind === "annular") return "Annular";
+  if (kind === "partial") return "Partial";
+  return "None";
+}
+
+function formatMagnitude(magnitude?: number) {
+  if (typeof magnitude !== "number" || !Number.isFinite(magnitude)) return "--";
+  return magnitude.toFixed(3);
+}
+
+function formatDuration(seconds?: number) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return "--";
+  const totalSeconds = Math.round(seconds);
+  const mm = Math.floor(totalSeconds / 60);
+  const ss = totalSeconds % 60;
+  return `${mm}m ${String(ss).padStart(2, "0")}s`;
+}
+
 type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
+  isActiveEclipseLoading: boolean;
   timer: TimerState;
 };
 
-export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) {
+export default function TimerScreen({
+  activeEclipse,
+  isActiveEclipseLoading,
+  timer,
+}: TimerScreenProps) {
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
     () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),
-    [activeEclipse]
+    [activeEclipse],
   );
   const centralOverlayColor = activeKindCode === "A" ? ANNULARITY_PATH_COLOR : TOTALITY_PATH_COLOR;
   const centralLegendLabel =
-    activeKindCode === "A" ? "Annularity Path" : activeKindCode === "H" ? "Central Path" : "Totality Path";
+    activeKindCode === "A"
+      ? "Annularity Path"
+      : activeKindCode === "H"
+        ? "Central Path"
+        : "Totality Path";
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Eclipse Timer (MVP)</Text>
         <Text style={styles.subtitle}>
-          {activeEclipse ? `${activeEclipse.id} - ${activeEclipse.dateYmd}` : "No eclipse loaded"}
+          {isActiveEclipseLoading
+            ? "Loading eclipse data..."
+            : activeEclipse
+              ? `${activeEclipse.id} - ${activeEclipse.dateYmd}`
+              : "No eclipse loaded"}
         </Text>
       </View>
 
@@ -76,7 +117,11 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
 
         <Pressable style={styles.mapOverlayBtn} onPress={timer.cycleMapType}>
           <Text style={styles.mapOverlayBtnText}>
-            {timer.mapType === "standard" ? "Standard" : timer.mapType === "satellite" ? "Satellite" : "Hybrid"}
+            {timer.mapType === "standard"
+              ? "Standard"
+              : timer.mapType === "satellite"
+                ? "Satellite"
+                : "Hybrid"}
           </Text>
         </Pressable>
 
@@ -102,7 +147,7 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
           </Pressable>
 
           <Pressable
-            style={styles.btn}
+            style={[styles.btn, isActiveEclipseLoading ? styles.btnDisabled : null]}
             onPress={() => {
               if (!activeEclipseCenter) {
                 timer.setStatusMessage("No center coordinates available for this eclipse");
@@ -110,20 +155,30 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
               }
               timer.jumpTo(activeEclipseCenter.lat, activeEclipseCenter.lon, 3);
             }}
+            disabled={isActiveEclipseLoading}
           >
-            <Text style={styles.btnText}>Central 10:00</Text>
+            <Text style={styles.btnText}>Greatest Eclipse</Text>
           </Pressable>
         </View>
 
         <Pressable
-          style={[styles.computeBtn, timer.isComputing ? styles.computeBtnDisabled : null]}
+          style={[
+            styles.computeBtn,
+            timer.isComputing || isActiveEclipseLoading ? styles.computeBtnDisabled : null,
+          ]}
           onPress={timer.runCompute}
-          disabled={timer.isComputing}
+          disabled={timer.isComputing || isActiveEclipseLoading}
         >
           <View style={styles.computeBtnInner}>
             {timer.isComputing ? <ActivityIndicator /> : null}
             <Text style={styles.computeBtnText}>
-              {timer.isComputing ? "Computing..." : timer.didComputeFlash ? "Done" : "Compute"}
+              {isActiveEclipseLoading
+                ? "Loading..."
+                : timer.isComputing
+                  ? "Computing..."
+                  : timer.didComputeFlash
+                    ? "Done"
+                    : "Compute"}
             </Text>
           </View>
         </Pressable>
@@ -154,13 +209,33 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
           ]}
         >
           <Text style={styles.cardTitle}>Results</Text>
-          {!timer.result ? (
+          {isActiveEclipseLoading && !timer.result ? (
+            <View style={styles.loadingCardState}>
+              <ActivityIndicator />
+              <Text style={styles.muted}>Loading overlays and eclipse metadata...</Text>
+            </View>
+          ) : !timer.result ? (
             <Text style={styles.muted}>Press Compute to run the engine.</Text>
           ) : (
             <>
               <View style={styles.timerHero}>
                 <Text style={styles.timerHeroLabel}>Next Event Timer</Text>
-                <Text style={styles.timerHeroText}>{nextEventCountdown(timer.result)}</Text>
+                <Text style={styles.timerHeroText}>{timer.nextEventCountdownText}</Text>
+              </View>
+
+              <View style={styles.metricRow}>
+                <View style={styles.metricTile}>
+                  <Text style={styles.metricLabel}>Type</Text>
+                  <Text style={styles.metricValue}>{localKindLabel(timer.result.kindAtLocation)}</Text>
+                </View>
+                <View style={styles.metricTile}>
+                  <Text style={styles.metricLabel}>Magnitude</Text>
+                  <Text style={styles.metricValue}>{formatMagnitude(timer.result.magnitude)}</Text>
+                </View>
+                <View style={styles.metricTile}>
+                  <Text style={styles.metricLabel}>Central Duration</Text>
+                  <Text style={styles.metricValue}>{formatDuration(timer.result.durationSeconds)}</Text>
+                </View>
               </View>
 
               <Pressable style={styles.testAlarmBtn} onPress={timer.runAlarmTest}>
@@ -173,7 +248,8 @@ export default function TimerScreen({ activeEclipse, timer }: TimerScreenProps) 
                 <View style={styles.contactRow} key={item.key}>
                   <View style={styles.contactMain}>
                     <Text style={styles.contactLabel}>{item.label}</Text>
-                    <Text style={styles.contactTime}>{fmtUtcHuman(item.iso)}</Text>
+                    <Text style={styles.contactTime}>UTC: {fmtUtcHuman(item.iso)}</Text>
+                    <Text style={styles.contactTimeLocal}>Local: {fmtLocalHuman(item.iso)}</Text>
                   </View>
                   <View style={styles.contactAlarm}>
                     <Text style={styles.alarmLabel}>Alarm</Text>
@@ -284,6 +360,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#1f1f1f",
   },
+  btnDisabled: {
+    opacity: 0.7,
+  },
   btnText: { color: "white", fontWeight: "600" },
   statusBar: { paddingHorizontal: 12, paddingTop: 8 },
   statusText: { color: "#bdbdbd", fontSize: 12 },
@@ -298,8 +377,40 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
   },
-  timerHeroLabel: { color: "#a8b1ff", fontSize: 11, fontWeight: "700", marginBottom: 4, textTransform: "uppercase" },
+  timerHeroLabel: {
+    color: "#a8b1ff",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
   timerHeroText: { color: "white", fontSize: 16, fontWeight: "800", lineHeight: 22 },
+  metricRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 8,
+  },
+  metricTile: {
+    flex: 1,
+    backgroundColor: "#1b1b1b",
+    borderWidth: 1,
+    borderColor: "#2d2d2d",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 3,
+  },
+  metricLabel: {
+    color: "#bdbdbd",
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  metricValue: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "700",
+  },
   testAlarmBtn: {
     marginTop: 10,
     paddingVertical: 10,
@@ -319,8 +430,14 @@ const styles = StyleSheet.create({
   contactMain: { flex: 1 },
   contactLabel: { color: "#e6e6e6", fontSize: 13, fontWeight: "600" },
   contactTime: { color: "#bdbdbd", fontSize: 12, marginTop: 2 },
+  contactTimeLocal: { color: "#8fc8ff", fontSize: 12, marginTop: 2 },
   contactAlarm: { alignItems: "center", justifyContent: "center" },
   alarmLabel: { color: "#bdbdbd", fontSize: 11, marginBottom: 2 },
   muted: { color: "#bdbdbd", fontSize: 13 },
+  loadingCardState: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   sep: { height: 1, backgroundColor: "#2a2a2a", marginVertical: 10 },
 });

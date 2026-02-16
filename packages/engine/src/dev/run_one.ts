@@ -1,7 +1,13 @@
-import { loadCatalog } from "@eclipse-timer/catalog";
+import type { EclipseRecord } from "@eclipse-timer/shared";
+import sampleCatalog from "../../../catalog/src/catalog.sample.json";
 import { computeCircumstances } from "../circumstances/compute";
 
-const e = loadCatalog()[0];
+declare const console: {
+  log: (...args: unknown[]) => void;
+};
+
+const catalog = sampleCatalog as EclipseRecord[];
+const e = catalog[0];
 if (!e) throw new Error("No eclipse in catalog");
 
 const gibraltar = { latDeg: 36.1408, lonDeg: -5.3536 };

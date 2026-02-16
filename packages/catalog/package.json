@@ -10,14 +10,16 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"(add eslint later)\"",
-    "test": "echo \"(add tests later)\"",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "test": "vitest run --config ../../vitest.config.ts",
     "data:filter": "tsx scripts/filter_csv_1900_2100.ts",
     "data:build": "tsx scripts/build_catalog_json.ts",
     "data:overlays": "tsx scripts/build_overlays_json.ts",
     "data:all": "pnpm data:filter && pnpm data:build && pnpm data:overlays"
   },
   "devDependencies": {
+    "@eclipse-timer/engine": "workspace:*",
     "csv-parse": "^6.1.0",
     "tsx": "^4.21.0",
     "typescript": "^5.4.0"

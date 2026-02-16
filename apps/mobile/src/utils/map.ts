@@ -1,6 +1,7 @@
 import type { LatLng, Region } from "react-native-maps";
 
 type OverlayCell = LatLng[];
+const overlayCellsCache = new WeakMap<[number, number][][], OverlayCell[]>();
 
 export function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -32,7 +33,9 @@ export function sanitizeRegion(region: Region, fallback?: Region): Region {
 
   return {
     latitude: sanitizeLatitude(Number.isFinite(region.latitude) ? region.latitude : fb.latitude),
-    longitude: normalizeLongitude(Number.isFinite(region.longitude) ? region.longitude : fb.longitude),
+    longitude: normalizeLongitude(
+      Number.isFinite(region.longitude) ? region.longitude : fb.longitude,
+    ),
     latitudeDelta: sanitizeDelta(region.latitudeDelta, fb.latitudeDelta),
     longitudeDelta: sanitizeDelta(region.longitudeDelta, fb.longitudeDelta),
   };
@@ -40,6 +43,9 @@ export function sanitizeRegion(region: Region, fallback?: Region): Region {
 
 export function overlayTuplesToCells(polygons: [number, number][][] | undefined): OverlayCell[] {
   if (!polygons?.length) return [];
+  const cached = overlayCellsCache.get(polygons);
+  if (cached) return cached;
+
   const cells = polygons
     .map((poly) =>
       poly
@@ -47,10 +53,12 @@ export function overlayTuplesToCells(polygons: [number, number][][] | undefined)
           latitude: sanitizeLatitude(lat),
           longitude: normalizeLongitude(lon),
         }))
-        .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+        .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)),
     )
     .filter((poly) => poly.length >= 3);
-  return cells.flatMap((poly) => splitPolygonOnDateline(poly));
+  const split = cells.flatMap((poly) => splitPolygonOnDateline(poly));
+  overlayCellsCache.set(polygons, split);
+  return split;
 }
 
 function splitPolygonOnDateline(poly: OverlayCell): OverlayCell[] {
@@ -64,8 +72,9 @@ function splitPolygonOnDateline(poly: OverlayCell): OverlayCell[] {
   };
 
   for (let i = 0; i < poly.length; i++) {
-    const a = poly[i]!;
-    const b = poly[(i + 1) % poly.length]!;
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    if (!a || !b) continue;
     if (!current.length) current.push({ ...a });
 
     const delta = b.longitude - a.longitude;

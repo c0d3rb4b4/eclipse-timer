@@ -18,6 +18,11 @@ export type EvalAtT = {
   L2obs: number;    // L2 projected to observer plane
 };
 
+export type ShadowMetricsAtT = EvalAtT & {
+  penumbra: number;
+  umbraAbs: number;
+};
+
 /**
  * Evaluate all needed quantities at time tHours from t0.
  */
@@ -49,12 +54,19 @@ export function evaluateAtT(e: EclipseRecord, o: Observer, tHours: number): Eval
   return { tHours, x, y, d, mu, l1, l2, xi, eta, zeta, delta, L1obs, L2obs };
 }
 
-export function fPenumbra(e: EclipseRecord, o: Observer, tHours: number): number {
+export function evaluateShadowMetricsAtT(e: EclipseRecord, o: Observer, tHours: number): ShadowMetricsAtT {
   const v = evaluateAtT(e, o, tHours);
-  return v.delta - v.L1obs;
+  return {
+    ...v,
+    penumbra: v.delta - v.L1obs,
+    umbraAbs: v.delta - Math.abs(v.L2obs),
+  };
+}
+
+export function fPenumbra(e: EclipseRecord, o: Observer, tHours: number): number {
+  return evaluateShadowMetricsAtT(e, o, tHours).penumbra;
 }
 
 export function fUmbraAbs(e: EclipseRecord, o: Observer, tHours: number): number {
-  const v = evaluateAtT(e, o, tHours);
-  return v.delta - Math.abs(v.L2obs);
+  return evaluateShadowMetricsAtT(e, o, tHours).umbraAbs;
 }

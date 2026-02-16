@@ -1,5 +1,5 @@
 export type RootResult = {
-  tHours: number;     // hours relative to t0 (TDT)
+  tHours: number; // hours relative to t0 (TDT)
   ok: boolean;
   iterations: number;
 };
@@ -9,10 +9,10 @@ export function bisectRoot(
   a: number,
   b: number,
   tol: number,
-  maxIter = 100
+  maxIter = 100,
 ): RootResult | null {
-  let fa = f(a);
-  let fb = f(b);
+  const fa = f(a);
+  const fb = f(b);
   if (!Number.isFinite(fa) || !Number.isFinite(fb)) return null;
   if (fa === 0) return { tHours: a, ok: true, iterations: 0 };
   if (fb === 0) return { tHours: b, ok: true, iterations: 0 };
@@ -21,7 +21,6 @@ export function bisectRoot(
   let lo = a;
   let hi = b;
   let flo = fa;
-  let fhi = fb;
 
   for (let i = 0; i < maxIter; i++) {
     const mid = (lo + hi) / 2;
@@ -34,7 +33,6 @@ export function bisectRoot(
 
     if (flo * fmid <= 0) {
       hi = mid;
-      fhi = fmid;
     } else {
       lo = mid;
       flo = fmid;

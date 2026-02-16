@@ -1,8 +1,13 @@
 // packages/engine/src/circumstances/compute.ts
-import type { Circumstances, EclipseRecord, Observer, EclipseKindAtLocation } from "@eclipse-timer/shared";
+import type {
+  Circumstances,
+  EclipseRecord,
+  Observer,
+  EclipseKindAtLocation,
+} from "@eclipse-timer/shared";
 import { findBrackets } from "../math/bracket";
 import { bisectRoot } from "../math/root";
-import { evaluateAtT, fPenumbra, fUmbraAbs } from "./functions";
+import { evaluateShadowMetricsAtT } from "./functions";
 import { t0TtDate, ttAtTHours } from "../time/t0";
 import { ttToUtcUsingDeltaT, toIsoUtc } from "../time/utc";
 
@@ -18,7 +23,7 @@ function scanMin(
   f: (tHours: number) => number,
   a: number,
   b: number,
-  stepHours: number
+  stepHours: number,
 ): { t: number; val: number } {
   let bestT = a;
   let bestV = Number.POSITIVE_INFINITY;
@@ -34,7 +39,15 @@ function scanMin(
   return { t: bestT, val: bestV };
 }
 
-function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes; kindAtLocation: EclipseKindAtLocation; debug: any } {
+function solveContacts(
+  e: EclipseRecord,
+  o: Observer,
+): {
+  contacts: ContactTimes;
+  kindAtLocation: EclipseKindAtLocation;
+  maxEval?: ReturnType<typeof evaluateShadowMetricsAtT>;
+  debug: Record<string, unknown>;
+} {
   // NASA page says valid over 7.00 ≤ t ≤ 13.00 TDT and t0=10.000 ⇒ [-3, +3] hours from t0
   const tMin = -3;
   const tMax = +3;
@@ -42,8 +55,18 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   // Scan step for bracketing: 60 seconds
   const stepBracket = 1 / 60;
 
+  // Reuse full per-t evaluations across both metrics.
+  const metricsCache = new Map<number, ReturnType<typeof evaluateShadowMetricsAtT>>();
+  const metricsAt = (t: number): ReturnType<typeof evaluateShadowMetricsAtT> => {
+    const cached = metricsCache.get(t);
+    if (cached) return cached;
+    const next = evaluateShadowMetricsAtT(e, o, t);
+    metricsCache.set(t, next);
+    return next;
+  };
+
   // --- Solve penumbral roots (C1/C4) ---
-  const pen = (t: number) => fPenumbra(e, o, t);
+  const pen = (t: number) => metricsAt(t).penumbra;
   const penBrackets = findBrackets(pen, tMin, tMax, stepBracket);
 
   const penRootResults = penBrackets.map((b) => bisectRoot(pen, b.a, b.b, 1e-7));
@@ -56,7 +79,7 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   const c4 = penRoots.length >= 2 ? penRoots[penRoots.length - 1] : undefined;
 
   // --- Solve umbra/antumbra roots (C2/C3) ---
-  const umb = (t: number) => fUmbraAbs(e, o, t);
+  const umb = (t: number) => metricsAt(t).umbraAbs;
   const umbBrackets = findBrackets(umb, tMin, tMax, stepBracket);
 
   const umbRootResults = umbBrackets.map((b) => bisectRoot(umb, b.a, b.b, 1e-7));
@@ -69,19 +92,24 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   const c3 = umbRoots.length >= 2 ? umbRoots[umbRoots.length - 1] : undefined;
 
   // Visible if we have sane C1 and C4
-  const visible = typeof c1 === "number" && Number.isFinite(c1) && typeof c4 === "number" && Number.isFinite(c4);
+  const visible =
+    typeof c1 === "number" && Number.isFinite(c1) && typeof c4 === "number" && Number.isFinite(c4);
 
   // Determine kind at location:
   let kindAtLocation: EclipseKindAtLocation = "none";
   if (!visible) {
     kindAtLocation = "none";
   } else if (
+    typeof c1 === "number" &&
+    Number.isFinite(c1) &&
+    typeof c4 === "number" &&
+    Number.isFinite(c4) &&
     typeof c2 === "number" &&
     Number.isFinite(c2) &&
     typeof c3 === "number" &&
     Number.isFinite(c3) &&
-    c2 > c1! &&
-    c3 < c4!
+    c2 > c1 &&
+    c3 < c4
   ) {
     // Decide total vs annular based on sign of L2obs near maximum.
     // We'll compute bestT first below, then decide.
@@ -96,31 +124,35 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   const stepFine = 1 / 600; // 6 seconds in hours
   let bestT: number | undefined;
   let bestMetric: number | undefined;
+  let maxEval: ReturnType<typeof evaluateShadowMetricsAtT> | undefined;
 
   if (visible && typeof c2 === "number" && typeof c3 === "number" && c3 > c2) {
     const r = scanMin(umb, c2, c3, stepFine);
     bestT = r.t;
     bestMetric = r.val;
 
-    const vAtMax = evaluateAtT(e, o, bestT);
+    const vAtMax = metricsAt(bestT);
+    maxEval = vAtMax;
     kindAtLocation = vAtMax.L2obs < 0 ? "total" : "annular";
   } else if (visible && typeof c1 === "number" && typeof c4 === "number" && c4 > c1) {
     const r = scanMin(pen, c1, c4, stepFine);
     bestT = r.t;
     bestMetric = r.val;
+    maxEval = metricsAt(bestT);
     kindAtLocation = "partial";
   } else {
     // fallback: scan whole window minimizing delta
     let bestDelta = Number.POSITIVE_INFINITY;
     let bestTFallback = 0;
     for (let t = tMin; t <= tMax + 1e-12; t += stepBracket) {
-      const v = evaluateAtT(e, o, t);
+      const v = metricsAt(t);
       if (Number.isFinite(v.delta) && v.delta < bestDelta) {
         bestDelta = v.delta;
         bestTFallback = t;
       }
     }
     bestT = bestTFallback;
+    maxEval = metricsAt(bestTFallback);
     bestMetric = undefined;
     kindAtLocation = visible ? "partial" : "none";
   }
@@ -128,6 +160,7 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
   return {
     contacts: { c1, c2, max: bestT, c3, c4 },
     kindAtLocation,
+    maxEval,
     debug: {
       // scan/roots
       penBracketsCount: penBrackets.length,
@@ -139,14 +172,16 @@ function solveContacts(e: EclipseRecord, o: Observer): { contacts: ContactTimes;
 
       // max selection
       bestT_hours: bestT,
-      bestMetric
-    }
+      bestMetric,
+    },
   };
 }
 
 export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstances {
-  const { contacts, kindAtLocation, debug } = solveContacts(e, o);
-  const v = evaluateAtT(e, o, contacts.max!)
+  const { contacts, kindAtLocation, maxEval, debug } = solveContacts(e, o);
+  const fallbackMaxT =
+    typeof contacts.max === "number" && Number.isFinite(contacts.max) ? contacts.max : 0;
+  const v = maxEval ?? evaluateShadowMetricsAtT(e, o, fallbackMaxT);
 
   const t0tt = t0TtDate(e);
 
@@ -166,7 +201,11 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
   const visible = typeof contacts.c1 === "number" && typeof contacts.c4 === "number";
 
   let durationSeconds: number | undefined;
-  if (typeof contacts.c2 === "number" && typeof contacts.c3 === "number" && contacts.c3 > contacts.c2) {
+  if (
+    typeof contacts.c2 === "number" &&
+    typeof contacts.c3 === "number" &&
+    contacts.c3 > contacts.c2
+  ) {
     durationSeconds = (contacts.c3 - contacts.c2) * 3600;
   }
 
@@ -175,13 +214,25 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
   if (!visible || !v || !Number.isFinite(v.L1obs) || v.L1obs <= 0) {
     magnitude = undefined;
   } else if (kindAtLocation === "total" || kindAtLocation === "annular") {
-    magnitude = 1;
+    const denom = v.L1obs + v.L2obs;
+    if (!Number.isFinite(v.L2obs) || !Number.isFinite(v.delta) || !Number.isFinite(denom) || denom <= 0) {
+      magnitude = undefined;
+    } else {
+      const raw = (v.L1obs - v.delta) / denom;
+      if (!Number.isFinite(raw)) {
+        magnitude = undefined;
+      } else if (kindAtLocation === "total") {
+        magnitude = Math.max(1, raw);
+      } else {
+        magnitude = Math.max(0, Math.min(1, raw));
+      }
+    }
   } else {
     // partial eclipse
     const raw = (v.L1obs - v.delta) / v.L1obs;
     magnitude = Math.max(0, Math.min(1, raw));
   }
-  
+
   return {
     eclipseId: e.id,
     visible,
@@ -198,7 +249,7 @@ export function computeCircumstances(e: EclipseRecord, o: Observer): Circumstanc
       t0UtcApprox: ttToUtcUsingDeltaT(t0tt, e).toISOString(),
       deltaTSeconds: e.deltaTSeconds,
       nasaGreatestEclipseUtc: e.greatestEclipseUtc,
-      ...debug
-    }
+      ...debug,
+    },
   };
 }

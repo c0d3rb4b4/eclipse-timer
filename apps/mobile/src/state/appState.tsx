@@ -1,13 +1,11 @@
-import React, { createContext, useContext, useMemo, useReducer } from "react";
+import { createContext, useContext, useMemo, useReducer, type ReactNode } from "react";
 
 type AppState = {
   selectedLandingId: string | null;
   activeEclipseId: string | null;
 };
 
-type AppAction =
-  | { type: "SELECT_LANDING"; id: string }
-  | { type: "ACTIVATE_SELECTED" };
+type AppAction = { type: "SELECT_LANDING"; id: string } | { type: "ACTIVATE_SELECTED" };
 
 const initialState: AppState = {
   selectedLandingId: null,
@@ -39,7 +37,7 @@ type AppStateContextValue = {
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
 
-export function AppStateProvider({ children }: { children: React.ReactNode }) {
+export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const actions = useMemo(
@@ -47,7 +45,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       selectLanding: (id: string) => dispatch({ type: "SELECT_LANDING", id }),
       activateSelected: () => dispatch({ type: "ACTIVATE_SELECTED" }),
     }),
-    []
+    [],
   );
 
   return <AppStateContext.Provider value={{ state, actions }}>{children}</AppStateContext.Provider>;

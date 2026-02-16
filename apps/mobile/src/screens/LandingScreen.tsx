@@ -1,5 +1,14 @@
-import React, { useMemo } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
@@ -8,86 +17,158 @@ import type { LandingScrollState } from "../hooks/useLandingScroll";
 type LandingScreenProps = {
   eclipses: LandingEclipseItem[];
   selectedId: string | null;
+  searchQuery: string;
+  filteredCount: number;
+  totalCount: number;
   onSelect: (id: string) => void;
+  onSearchQueryChange: (query: string) => void;
   onGo: () => void;
-  firstFutureIndex: number;
   scroll: LandingScrollState;
 };
 
 export default function LandingScreen({
   eclipses,
   selectedId,
+  searchQuery,
+  filteredCount,
+  totalCount,
   onSelect,
+  onSearchQueryChange,
   onGo,
-  firstFutureIndex,
   scroll,
 }: LandingScreenProps) {
   const selectedLanding = useMemo(
     () => eclipses.find((e) => e.id === selectedId) ?? null,
-    [eclipses, selectedId]
+    [eclipses, selectedId],
   );
   const canGo = !!selectedLanding;
+  const previewUri = selectedLanding?.gifUrl;
+  const [previewState, setPreviewState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!previewUri) {
+      setPreviewState("idle");
+      return;
+    }
+    setPreviewReloadKey(0);
+    setPreviewState("loading");
+    Image.prefetch(previewUri).catch(() => undefined);
+  }, [previewUri]);
+
+  const retryPreview = useCallback(() => {
+    if (!previewUri) return;
+    setPreviewReloadKey((v) => v + 1);
+    setPreviewState("loading");
+    Image.prefetch(previewUri).catch(() => undefined);
+  }, [previewUri]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: LandingEclipseItem }) => (
+      <Pressable
+        style={[
+          styles.landingListItem,
+          item.isPast ? styles.landingListItemPast : null,
+          selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
+        ]}
+        onPress={() => onSelect(item.id)}
+      >
+        <Text
+          style={[
+            styles.landingListItemTitle,
+            item.isPast ? styles.landingListItemTitlePast : null,
+          ]}
+        >
+          {item.dateYmd} {item.kindLabel}
+        </Text>
+        <Text
+          style={[styles.landingListItemMeta, item.isPast ? styles.landingListItemMetaPast : null]}
+        >
+          {item.id} - {item.isPast ? "Past" : "Upcoming"}
+        </Text>
+      </Pressable>
+    ),
+    [onSelect, selectedLanding?.id],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <ScrollView contentContainerStyle={styles.landingWrap}>
+      <View style={styles.landingWrap}>
         <Text style={styles.landingTitle}>Eclipse Timer</Text>
+        <View style={styles.searchWrap}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={onSearchQueryChange}
+            style={styles.searchInput}
+            placeholder="Search by year, date, kind, or ID"
+            placeholderTextColor="#6f6f6f"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+          <Text style={styles.searchMeta}>
+            {filteredCount} of {totalCount}
+          </Text>
+        </View>
 
         <View style={styles.landingListBox}>
-          <ScrollView
+          <FlatList
             ref={scroll.landingListRef}
-            nestedScrollEnabled
+            data={eclipses}
+            keyExtractor={(item) => item.id}
             style={styles.landingListScroll}
             contentContainerStyle={styles.landingListScrollContent}
+            renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={{ height: scroll.rowGap }} />}
+            getItemLayout={(_, index) => ({
+              length: scroll.rowSpan,
+              offset: scroll.rowSpan * index,
+              index,
+            })}
             onScroll={scroll.onScroll}
             onScrollEndDrag={scroll.onScrollEndDrag}
             onMomentumScrollEnd={scroll.onMomentumScrollEnd}
             scrollEventThrottle={16}
-          >
-            {eclipses.map((item, index) => (
-              <Pressable
-                key={item.id}
-                style={[
-                  styles.landingListItem,
-                  item.isPast ? styles.landingListItemPast : null,
-                  selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
-                ]}
-                onPress={() => onSelect(item.id)}
-                onLayout={(e) => {
-                  scroll.landingRowYByIdRef.current[item.id] = e.nativeEvent.layout.y;
-                  if (index === firstFutureIndex) {
-                    scroll.setFirstFutureRowY(e.nativeEvent.layout.y);
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.landingListItemTitle,
-                    item.isPast ? styles.landingListItemTitlePast : null,
-                  ]}
-                >
-                  {item.dateYmd} {item.kindLabel}
-                </Text>
-                <Text
-                  style={[
-                    styles.landingListItemMeta,
-                    item.isPast ? styles.landingListItemMetaPast : null,
-                  ]}
-                >
-                  {item.id} - {item.isPast ? "Past" : "Upcoming"}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+            initialNumToRender={18}
+            maxToRenderPerBatch={24}
+            windowSize={11}
+            removeClippedSubviews
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyTitle}>No eclipses found</Text>
+                <Text style={styles.emptyMeta}>Try a different search query.</Text>
+              </View>
+            }
+          />
         </View>
 
         {selectedLanding ? (
           <View style={styles.previewCard}>
-            <Image
-              source={{ uri: selectedLanding.gifUrl }}
-              style={styles.previewGif}
-              resizeMode="contain"
-            />
+            <View style={styles.previewMedia}>
+              <Image
+                key={`${previewUri}-${previewReloadKey}`}
+                source={{ uri: selectedLanding.gifUrl, cache: "force-cache" }}
+                style={styles.previewGif}
+                resizeMode="contain"
+                onLoadStart={() => setPreviewState("loading")}
+                onLoad={() => setPreviewState("ready")}
+                onError={() => setPreviewState("error")}
+              />
+              {previewState === "loading" ? (
+                <View style={styles.previewOverlay}>
+                  <ActivityIndicator />
+                  <Text style={styles.previewOverlayText}>Loading NASA preview...</Text>
+                </View>
+              ) : null}
+              {previewState === "error" ? (
+                <View style={styles.previewOverlay}>
+                  <Text style={styles.previewOverlayText}>Preview unavailable right now.</Text>
+                  <Pressable style={styles.previewRetryBtn} onPress={retryPreview}>
+                    <Text style={styles.previewRetryText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -98,7 +179,7 @@ export default function LandingScreen({
         >
           <Text style={styles.goBtnText}>GO</Text>
         </Pressable>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -106,30 +187,58 @@ export default function LandingScreen({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0b0b0b" },
   landingWrap: {
+    flex: 1,
     paddingHorizontal: 12,
     paddingTop: 24,
     paddingBottom: 24,
     gap: 12,
   },
   landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
+  searchWrap: {
+    backgroundColor: "#121212",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2b2b2b",
+    padding: 10,
+    gap: 8,
+  },
+  searchInput: {
+    color: "white",
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#313131",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  searchMeta: {
+    color: "#9b9b9b",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   landingListBox: {
+    flex: 1,
+    minHeight: 220,
     backgroundColor: "#121212",
     borderRadius: 12,
     padding: 8,
   },
   landingListScroll: {
-    maxHeight: 360,
+    flex: 1,
   },
   landingListScrollContent: {
-    gap: 8,
+    paddingBottom: 2,
   },
   landingListItem: {
+    height: 68,
     backgroundColor: "#1f1f1f",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#2b2b2b",
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
+    justifyContent: "center",
   },
   landingListItemSelected: {
     borderColor: "#2c3cff",
@@ -143,6 +252,14 @@ const styles = StyleSheet.create({
   landingListItemTitlePast: { color: "#9b9b9b" },
   landingListItemMeta: { color: "#bdbdbd", fontSize: 12, marginTop: 4 },
   landingListItemMetaPast: { color: "#7f7f7f" },
+  emptyWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 36,
+    gap: 6,
+  },
+  emptyTitle: { color: "#dedede", fontSize: 14, fontWeight: "700" },
+  emptyMeta: { color: "#8d8d8d", fontSize: 12 },
   previewCard: {
     backgroundColor: "#121212",
     borderRadius: 12,
@@ -150,11 +267,40 @@ const styles = StyleSheet.create({
     borderColor: "#2b2b2b",
     padding: 8,
   },
-  previewGif: {
+  previewMedia: {
     width: "100%",
     height: 220,
     borderRadius: 8,
+    overflow: "hidden",
     backgroundColor: "#0b0b0b",
+  },
+  previewGif: {
+    width: "100%",
+    height: "100%",
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(11, 11, 11, 0.85)",
+    paddingHorizontal: 16,
+  },
+  previewOverlayText: {
+    color: "#d8d8d8",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  previewRetryBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#2c3cff",
+  },
+  previewRetryText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "700",
   },
   goBtn: {
     marginTop: 4,

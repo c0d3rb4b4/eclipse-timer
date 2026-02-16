@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "csv-parse/sync";
-import type { EclipseRecord } from "@eclipse-timer/shared";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const inPath = path.resolve(__dirname, "../generated/eclipse_besselian_1900_2100.csv");
 const outPath = path.resolve(__dirname, "../generated/catalog.generated.json");
 
-const toNum = (v: any) => {
+const toNum = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : NaN;
 };
@@ -35,7 +34,7 @@ const catalog = rows.map((r) => {
 
   const id = `${ymd}T`;
 
-  const kind = (String(r.eclipse_type || r.etype || "P").trim() as EclipseKind);
+  const kind = String(r.eclipse_type || r.etype || "P").trim() as EclipseKind;
   const greatestEclipseLatDeg = toNum(r.lat_dd_ge);
   const greatestEclipseLonDeg = toNum(r.lng_dd_ge);
 
@@ -61,8 +60,12 @@ const catalog = rows.map((r) => {
     // optional
     greatestEclipseUtc: undefined,
     greatestDurationUtc: undefined,
-    greatestEclipseLatDeg: Number.isFinite(greatestEclipseLatDeg) ? greatestEclipseLatDeg : undefined,
-    greatestEclipseLonDeg: Number.isFinite(greatestEclipseLonDeg) ? greatestEclipseLonDeg : undefined,
+    greatestEclipseLatDeg: Number.isFinite(greatestEclipseLatDeg)
+      ? greatestEclipseLatDeg
+      : undefined,
+    greatestEclipseLonDeg: Number.isFinite(greatestEclipseLonDeg)
+      ? greatestEclipseLonDeg
+      : undefined,
   };
 
   return record;
