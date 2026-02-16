@@ -10,9 +10,9 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { EclipseRecord } from "@eclipse-timer/shared";
+import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 
 import type { TimerState } from "../hooks/useTimerState";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
@@ -46,13 +46,16 @@ type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
   isActiveEclipseLoading: boolean;
   timer: TimerState;
+  onOpenPreview: (result: Circumstances) => void;
 };
 
 export default function TimerScreen({
   activeEclipse,
   isActiveEclipseLoading,
   timer,
+  onOpenPreview,
 }: TimerScreenProps) {
+  const insets = useSafeAreaInsets();
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
     () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),
@@ -67,7 +70,7 @@ export default function TimerScreen({
         : "Totality Path";
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Eclipse Timer (MVP)</Text>
         <Text style={styles.subtitle}>
@@ -216,7 +219,10 @@ export default function TimerScreen({
         <Text style={styles.statusText}>{timer.status}</Text>
       </View>
 
-      <ScrollView style={styles.results}>
+      <ScrollView
+        style={styles.results}
+        contentContainerStyle={[styles.resultsContent, { paddingBottom: Math.max(28, insets.bottom + 18) }]}
+      >
         <Animated.View
           style={[
             styles.card,
@@ -289,6 +295,16 @@ export default function TimerScreen({
                   </View>
                 </View>
               ))}
+
+              <Pressable
+                style={styles.previewBtn}
+                onPress={() => {
+                  if (!timer.result) return;
+                  onOpenPreview(timer.result);
+                }}
+              >
+                <Text style={styles.previewBtnText}>Preview</Text>
+              </Pressable>
             </>
           )}
         </Animated.View>
@@ -445,6 +461,7 @@ const styles = StyleSheet.create({
   statusBar: { paddingHorizontal: 12, paddingTop: 8 },
   statusText: { color: "#bdbdbd", fontSize: 12 },
   results: { flex: 1, paddingHorizontal: 12, paddingTop: 10 },
+  resultsContent: { paddingBottom: 28 },
   card: { backgroundColor: "#121212", borderRadius: 12, padding: 12, marginBottom: 10 },
   cardTitle: { color: "white", fontSize: 14, fontWeight: "700", marginBottom: 6 },
   timerHero: {
@@ -498,6 +515,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   testAlarmBtnText: { color: "white", fontSize: 13, fontWeight: "700" },
+  previewBtn: {
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#3f3f3f",
+    backgroundColor: "#1e1e1e",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewBtnText: { color: "white", fontSize: 13, fontWeight: "700" },
   contactRow: {
     flexDirection: "row",
     alignItems: "center",

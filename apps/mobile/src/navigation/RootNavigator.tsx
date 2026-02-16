@@ -8,9 +8,10 @@ import { enableScreens } from "react-native-screens";
 import { ActivityIndicator, InteractionManager, StyleSheet, Text, View } from "react-native";
 
 import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
-import type { EclipseRecord } from "@eclipse-timer/shared";
+import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 
 import LandingScreen from "../screens/LandingScreen";
+import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePreviewScreen";
 import TimerScreen from "../screens/TimerScreen";
 import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
@@ -22,6 +23,7 @@ enableScreens();
 type RootStackParamList = {
   Landing: undefined;
   Timer: undefined;
+  Preview: { payload: PreviewPayload };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -115,7 +117,7 @@ function LandingRoute({ navigation, catalog }: LandingRouteProps) {
   );
 }
 
-function TimerRoute(_props: NativeStackScreenProps<RootStackParamList, "Timer">) {
+function TimerRoute({ navigation }: NativeStackScreenProps<RootStackParamList, "Timer">) {
   const { state } = useAppState();
   const [activeEclipse, setActiveEclipse] = useState<EclipseRecord | null>(null);
   const [isActiveEclipseLoading, setIsActiveEclipseLoading] = useState(false);
@@ -153,13 +155,37 @@ function TimerRoute(_props: NativeStackScreenProps<RootStackParamList, "Timer">)
     }, [timerState.resetForNewEclipse, state.activeEclipseId]),
   );
 
+  const openPreview = useCallback(
+    (result: Circumstances) => {
+      const payload: PreviewPayload = {
+        eclipseId: activeEclipse?.id ?? result.eclipseId,
+        eclipseDateYmd: activeEclipse?.dateYmd ?? "",
+        kindAtLocation: result.kindAtLocation,
+        magnitude: result.magnitude,
+        c1Utc: result.c1Utc,
+        c2Utc: result.c2Utc,
+        maxUtc: result.maxUtc,
+        c3Utc: result.c3Utc,
+        c4Utc: result.c4Utc,
+      };
+
+      navigation.navigate("Preview", { payload });
+    },
+    [activeEclipse?.dateYmd, activeEclipse?.id, navigation],
+  );
+
   return (
     <TimerScreen
       activeEclipse={activeEclipse}
       isActiveEclipseLoading={isActiveEclipseLoading}
       timer={timerState}
+      onOpenPreview={openPreview}
     />
   );
+}
+
+function PreviewRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, "Preview">) {
+  return <EclipsePreviewScreen payload={route.params.payload} onBack={() => navigation.goBack()} />;
 }
 
 export default function RootNavigator() {
@@ -192,6 +218,7 @@ export default function RootNavigator() {
           {(props) => <LandingRoute {...props} catalog={catalog} />}
         </Stack.Screen>
         <Stack.Screen name="Timer">{(props) => <TimerRoute {...props} />}</Stack.Screen>
+        <Stack.Screen name="Preview">{(props) => <PreviewRoute {...props} />}</Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
   );
