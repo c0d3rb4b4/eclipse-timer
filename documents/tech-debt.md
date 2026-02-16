@@ -52,9 +52,9 @@
 |----|------|----------|---------|
 | L-01 | **No linter configured** | 🟠 High | ✅ Resolved 2026-02-13: configured Biome at the workspace root and replaced placeholder `lint` scripts across app/package workspaces with `biome lint .`. |
 | L-02 | **No formatter configured** | 🟠 High | ✅ Resolved 2026-02-13: added shared Biome formatter config and `format` scripts (`biome format --write .`) across workspaces. |
-| L-03 | **No pre-commit hooks** | 🟡 Medium | No Husky/lint-staged setup. Nothing prevents committing broken types or unformatted code. |
+| L-03 | **No pre-commit hooks** | 🟡 Medium | ✅ Resolved 2026-02-16: installed Husky + lint-staged; pre-commit hook runs `biome check --write` on staged files. |
 | L-04 | **No `.editorconfig`** | 🟢 Low | Helps enforce consistent whitespace across editors/contributors. |
-| L-05 | **No `.nvmrc` / `.node-version`** | 🟢 Low | README says "Node 18+" but nothing pins or validates it. |
+| L-05 | **No `.nvmrc` / `.node-version`** | 🟢 Low | ✅ Resolved 2026-02-16: created `.nvmrc` pinning Node 20 at repo root. |
 
 ### Recommended actions
 - Add ESLint 9 flat config (or Biome) with TypeScript + React Native rules.
@@ -76,7 +76,7 @@
 | A-07 | **Alarm system is a UI stub** | 🟡 Medium | ✅ Resolved 2026-02-16: wired `expo-notifications` local scheduling with per-contact toggles, test notification scheduling, and global reminder/sound/vibration controls in Notification Settings. |
 | A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
-| A-10 | **Hardcoded elevation `elevM: 0`** | 🟡 Medium | Observer elevation is always 0. GPS APIs provide altitude — it should be wired through. |
+| A-10 | **Hardcoded elevation `elevM: 0`** | 🟡 Medium | ✅ Resolved 2026-02-16: GPS altitude now captured from `coords.altitude` and threaded through `Pin.elevM` to `Observer.elevM`. Map taps default to 0. |
 | A-11 | **No error boundary** | 🟠 High | ✅ Resolved 2026-02-16: added `ErrorBoundary` class component wrapping `<RootNavigator />` with recovery UI ("Restart" button), integrated with Sentry for crash capture. |
 
 ---
@@ -213,7 +213,7 @@
 | CI-01 | **No CI pipeline** | 🔴 Critical | ✅ Resolved 2026-02-16: created `.github/workflows/ci.yml` (GitHub Actions) running `pnpm typecheck`, `pnpm lint`, `pnpm test` on push/PR to `main`. |
 | CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI → EAS Build → EAS Submit pipeline. Triggered on `main` push or manual dispatch. Submit job gated behind `environment: production` approval. |
 | CI-03 | **No app signing / keystore management** | 🟠 High | No `eas.json`, no code-signing config. Android `gradle.properties` still references debug keystore only. Required for store distribution. Severity upgraded — this blocks store submission. |
-| CI-04 | **No environment configuration** | 🟡 Medium | No `.env` / `.env.example`, no `expo-constants`, no staging vs. production config. API keys or feature flags have no mechanism. |
+| CI-04 | **No environment configuration** | 🟡 Medium | ✅ Resolved 2026-02-16: created `apps/mobile/.env.example` with Sentry and EAS placeholders. |
 | CI-05 | **No crash reporting / analytics** | 🟠 High | ✅ Resolved 2026-02-16: installed `@sentry/react-native`, configured `app.json` plugin, wrapped root with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder requires replacement before production. |
 | CI-06 | **No OTA update mechanism** | 🟡 Medium | ✅ Resolved 2026-02-16: installed `expo-updates`, configured `runtimeVersion` (appVersion policy) and `updates` URL pointing to EAS project in `app.json`. |
 | CI-07 | **No app store metadata** | 🟡 Medium | No screenshots, store description, keyword list, or promotional assets. Required for both App Store Connect and Google Play Console submission. Severity upgraded — blocks submission. |
@@ -229,7 +229,7 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | D-01 | **No CONTRIBUTING.md** | 🟡 Medium | No guide for external or new contributors on branch strategy, PR process, or code conventions. |
-| D-02 | **No CHANGELOG** | 🟡 Medium | No version history. Makes it hard to track what changed between releases. |
+| D-02 | **No CHANGELOG** | 🟡 Medium | ✅ Resolved 2026-02-16: created `CHANGELOG.md` with full v1.0.0 entry following Keep a Changelog format. |
 | D-03 | **API reference for engine is prose-only** | 🟢 Low | `engine-algorithm.md` describes the algorithm but there's no auto-generated TSDoc/TypeDoc API reference. |
 | D-04 | **No architecture decision records (ADRs)** | 🟢 Low | Key decisions (Besselian approach, WGS84 vs spherical, ΔT strategy, overlay tracing method) are embedded in code comments. ADRs would capture rationale more durably. |
 | D-05 | **`evalPoly` JSDoc is wrong** | 🟢 Low | See E-07. Says "minutes" when the actual unit is hours. |
@@ -280,11 +280,11 @@
 | T-06 | ✅ Resolved 2026-02-13: tests for catalog scripts |
 | T-07 | Mobile component tests |
 | T-08 | End-to-end regression suite |
-| L-03 | Pre-commit hooks |
+| L-03 | ✅ Resolved 2026-02-16: installed Husky + lint-staged pre-commit hooks |
 | A-03 | ✅ Resolved 2026-02-13: extract helper functions from App.tsx |
 | A-04 | ✅ Resolved 2026-02-13: add navigation library |
 | A-07 | ✅ Resolved 2026-02-16: wire up real notifications for alarms |
-| A-10 | Pass GPS altitude as `elevM` |
+| A-10 | ✅ Resolved 2026-02-16: wired GPS altitude through to engine `elevM` |
 | E-03 | ✅ Resolved 2026-02-13: deduplicate `evaluateAtT` calls |
 | E-04 | Extract magic numbers to config |
 | E-06 | Add input validation to engine |
@@ -308,22 +308,22 @@
 | AC-02 | Add non-color overlay differentiation |
 | AC-04 | Support dynamic font sizing |
 | SP-01 | ✅ Resolved 2026-02-16: added pre-permission rationale Alert dialog before location request |
-| CI-04 | Add env config support |
+| CI-04 | ✅ Resolved 2026-02-16: created `.env.example` with Sentry/EAS placeholders |
 | CI-06 | ✅ Resolved 2026-02-16: installed + configured `expo-updates` with runtimeVersion and EAS update URL |
 | CI-07 | ✅ Partially resolved 2026-02-16: store descriptions, content rating answers, and icon fix completed. Screenshots and feature graphic still needed (manual). |
 | CI-10 | ✅ Resolved 2026-02-16: added `expo-splash-screen` with preventAutoHideAsync/hideAsync |
 | CI-11 | ✅ Resolved 2026-02-16: bumped to `1.0.0` with `buildNumber: "1"` and `versionCode: 1` |
 | D-01 | Write CONTRIBUTING.md |
-| D-02 | Start a CHANGELOG |
+| D-02 | ✅ Resolved 2026-02-16: created `CHANGELOG.md` with v1.0.0 entry |
 | D-06 | Document catalog data provenance |
 | F-04 | Offline support |
-| F-05 | Elevation from GPS |
+| F-05 | ✅ Resolved 2026-02-16: GPS altitude wired through to engine `elevM` |
 | F-10 | Geocoding / address search |
 
 ### 🟢 Low — Backlog
 | IDs | Summary |
 |-----|---------|
-| L-04, L-05 | `.editorconfig`, `.nvmrc` |
+| L-04 | `.editorconfig` |\n| L-05 | ✅ Resolved 2026-02-16: pinned Node 20 via `.nvmrc` |
 | A-08, A-09 | Minor code organization |
 | E-07, E-09, E-10 | Docs fix, `_debug` type, optimizer upgrade |
 | C-03, C-04, C-07, C-08 | Generated file hygiene |
@@ -395,11 +395,11 @@
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 6.1 | Add pre-commit hooks (Husky + lint-staged) to prevent committing broken code. | L-03 | ⬜ Not started |
-| 6.2 | Add `.env.example` and `expo-constants` for environment configuration. | CI-04 | ⬜ Not started |
-| 6.3 | Start a `CHANGELOG.md`. | D-02 | ⬜ Not started |
-| 6.4 | Pin Node version with `.nvmrc` (e.g., `20`). | L-05 | ⬜ Not started |
-| 6.5 | Wire GPS altitude through to engine `elevM` for improved accuracy. | A-10, F-05 | ⬜ Not started |
+| 6.1 | Add pre-commit hooks (Husky + lint-staged) to prevent committing broken code. Configured `biome check --write` on staged files via `lint-staged` in root `package.json`. | L-03 | ✅ Done 2026-02-16 |
+| 6.2 | Add `.env.example` and `expo-constants` for environment configuration. Created `apps/mobile/.env.example` with `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, and `EXPO_PROJECT_ID` placeholders. | CI-04 | ✅ Done 2026-02-16 |
+| 6.3 | Start a `CHANGELOG.md`. Created with full v1.0.0 entry covering all Added/Changed/Fixed items. | D-02 | ✅ Done 2026-02-16 |
+| 6.4 | Pin Node version with `.nvmrc` (e.g., `20`). Created `.nvmrc` at repo root. | L-05 | ✅ Done 2026-02-16 |
+| 6.5 | Wire GPS altitude through to engine `elevM` for improved accuracy. `useGps` now captures `coords.altitude` and threads it through the `Pin` type to `Observer.elevM`. Map taps default to 0. | A-10, F-05 | ✅ Done 2026-02-16 |
 
 ### Summary: Minimum Viable Store Submission
 
@@ -419,3 +419,31 @@ The absolute minimum to submit to both stores (phases 1–4):
 ```
 
 Phase 5 (CI/CD) is strongly recommended but not strictly required for a manual first submission. Phase 6 items improve developer experience and code quality but are not store blockers.
+
+### Remaining Items (manual steps across all phases)
+
+All automatable work across Phases 1–6 is complete. The items below require manual action before the app can be submitted to the stores.
+
+#### Before first build (Phase 1)
+| # | Action | Where |
+|---|--------|-------|
+| 1.4 | Run `eas build --profile production --platform all` to verify builds complete and EAS manages signing credentials (keystore + provisioning profiles). | Terminal / EAS dashboard |
+
+#### Before store submission (Phases 2–4)
+| # | Action | Where |
+|---|--------|-------|
+| — | Replace `__YOUR_SENTRY_DSN__` with a real Sentry DSN. | `apps/mobile/src/App.tsx` line 16 |
+| — | Replace `__YOUR_SENTRY_ORG__` and `__YOUR_SENTRY_PROJECT__` with real Sentry values. | `apps/mobile/app.json` → plugins → `@sentry/react-native/expo` |
+| — | Fill `eas.json` submit credentials: `appleId`, `ascAppId`, `appleTeamId` (iOS) and `serviceAccountKeyPath` (Android). | `apps/mobile/eas.json` → submit → production |
+| — | Host `PRIVACY_POLICY.md` at a public URL (e.g., GitHub Pages) and link it in both store listings. | GitHub repo settings or hosting provider |
+| 2.6 | Test on physical devices (iOS + Android) using `eas build --profile preview`. Validate notifications, location, map, and deep-link scheme. | Physical devices |
+| 4.2 | Capture screenshots for all required device classes (see `documents/store-metadata.md` for sizes and recommended screens). | Simulator / physical devices |
+| — | Create Android feature graphic (1024×500) for Google Play listing. | Design tool (Figma, etc.) |
+| 4.4 | Fill out content rating questionnaires in App Store Connect and Google Play Console (answers documented in `documents/store-metadata.md`). | Store consoles |
+| 4.5 | Verify Apple Developer and Google Play Console accounts. Ensure `lallimaven` Expo account is linked to both store accounts. | Apple Developer / Google Play Console |
+
+#### Before CI/CD workflows work (Phase 5)
+| # | Action | Where |
+|---|--------|-------|
+| — | Add `EXPO_TOKEN` secret to GitHub repo. Generate at [expo.dev account settings](https://expo.dev/accounts/lallimaven/settings/access-tokens). | GitHub → Settings → Secrets → Actions |
+| — | Create a `production` environment in GitHub for the EAS Submit approval gate. | GitHub → Settings → Environments |

@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Animated, Alert, InteractionManager } from "react-native";
-import type { Details, MapPressEvent, Region } from "react-native-maps";
-import type MapView from "react-native-maps";
-import * as Location from "expo-location";
-
 import { computeCircumstances } from "@eclipse-timer/engine";
 import type { Circumstances, EclipseRecord, Observer } from "@eclipse-timer/shared";
-
+import * as Location from "expo-location";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, InteractionManager } from "react-native";
+import type MapView from "react-native-maps";
+import type { Details, MapPressEvent, Region } from "react-native-maps";
+import {
+  type NotificationEntry,
+  type NotificationSettings,
+  notificationEntryId,
+} from "../state/appState";
 import {
   buildContactItems,
-  nextEventCountdown,
   type ContactItem,
   type ContactKey,
+  nextEventCountdown,
 } from "../utils/contacts";
 import {
   normalizeLongitude,
@@ -20,17 +23,12 @@ import {
   sanitizeLatitude,
   sanitizeRegion,
 } from "../utils/map";
-import {
-  notificationEntryId,
-  type NotificationEntry,
-  type NotificationSettings,
-} from "../state/appState";
 
 type MapType3 = "standard" | "satellite" | "hybrid";
 
 type AlarmState = Record<ContactKey, boolean>;
 
-type Pin = { lat: number; lon: number };
+type Pin = { lat: number; lon: number; elevM: number };
 type MarkerDragEndEvent = {
   nativeEvent: {
     coordinate: {
@@ -40,7 +38,7 @@ type MarkerDragEndEvent = {
   };
 };
 
-const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
+const GIBRALTAR: Pin = { lat: 36.1408, lon: -5.3536, elevM: 0 };
 const MIN_REGION_DIFF = 0.00001;
 const MIN_PIN_DIFF = 0.000001;
 const EMPTY_ALARM_STATE: AlarmState = {
@@ -66,7 +64,9 @@ function hasMeaningfulRegionChange(prev: Region, next: Region): boolean {
 }
 
 function hasMeaningfulPinChange(prev: Pin, next: Pin): boolean {
-  return Math.abs(prev.lat - next.lat) > MIN_PIN_DIFF || Math.abs(prev.lon - next.lon) > MIN_PIN_DIFF;
+  return (
+    Math.abs(prev.lat - next.lat) > MIN_PIN_DIFF || Math.abs(prev.lon - next.lon) > MIN_PIN_DIFF
+  );
 }
 
 export type TimerState = {
@@ -114,7 +114,7 @@ export function useTimerState(
   removeNotificationEntry: (id: string) => void,
 ): TimerState {
   const mapRef = useRef<MapView>(null);
-  const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
+  const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon, elevM: 0 });
   const [mapType, setMapType] = useState<MapType3>("standard");
   const [showVisibleOverlay, setShowVisibleOverlay] = useState(true);
   const [showCentralOverlay, setShowCentralOverlay] = useState(true);
@@ -219,11 +219,11 @@ export function useTimerState(
     setShowDirectionsOverlay((prev) => !prev);
   };
 
-  const jumpTo = (lat: number, lon: number, delta = 3) => {
+  const jumpTo = (lat: number, lon: number, delta = 3, elevM = 0) => {
     const safeLat = sanitizeLatitude(lat);
     const safeLon = normalizeLongitude(lon);
     const safeDelta = sanitizeDelta(delta, 3);
-    const nextPin: Pin = { lat: safeLat, lon: safeLon };
+    const nextPin: Pin = { lat: safeLat, lon: safeLon, elevM };
     const nextRegion: Region = {
       latitude: safeLat,
       longitude: safeLon,
@@ -250,7 +250,7 @@ export function useTimerState(
   const movePinKeepZoom = (lat: number, lon: number) => {
     const safeLat = sanitizeLatitude(lat);
     const safeLon = normalizeLongitude(lon);
-    const nextPin: Pin = { lat: safeLat, lon: safeLon };
+    const nextPin: Pin = { lat: safeLat, lon: safeLon, elevM: 0 };
     const pinMoved = hasMeaningfulPinChange(pin, nextPin);
 
     if (pinMoved) {
@@ -310,7 +310,8 @@ export function useTimerState(
 
       const last = await Location.getLastKnownPositionAsync();
       if (last?.coords) {
-        jumpTo(last.coords.latitude, last.coords.longitude, 2);
+        const alt = last.coords.altitude ?? 0;
+        jumpTo(last.coords.latitude, last.coords.longitude, 2, alt);
         setStatus("Pin set from last known location");
       }
 
@@ -330,7 +331,8 @@ export function useTimerState(
       ]);
 
       if (current?.coords) {
-        jumpTo(current.coords.latitude, current.coords.longitude, 2);
+        const alt = current.coords.altitude ?? 0;
+        jumpTo(current.coords.latitude, current.coords.longitude, 2, alt);
         setStatus("Pin set from GPS");
       } else if (!last) {
         setStatus("GPS timed out (try again or move near a window)");
@@ -346,7 +348,7 @@ export function useTimerState(
       return;
     }
 
-    const observer: Observer = { latDeg: pin.lat, lonDeg: pin.lon, elevM: 0 };
+    const observer: Observer = { latDeg: pin.lat, lonDeg: pin.lon, elevM: pin.elevM };
 
     cancelPendingCompute();
     const runToken = computeRunTokenRef.current;
@@ -364,7 +366,7 @@ export function useTimerState(
         if (computeRunTokenRef.current !== runToken) return;
 
         setResult(out);
-        setResultPin({ lat: observer.latDeg, lon: observer.lonDeg });
+        setResultPin({ lat: observer.latDeg, lon: observer.lonDeg, elevM: observer.elevM ?? 0 });
         setStatus("Computed");
 
         resultFlash.setValue(0);
