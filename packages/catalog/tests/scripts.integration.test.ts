@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "csv-parse/sync";
 import generatedCatalog from "../generated/catalog.generated.json";
@@ -47,10 +48,11 @@ function sha256(pathname: string): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-const filteredCsvPath = new URL("../generated/eclipse_besselian_1900_2100.csv", import.meta.url)
-  .pathname;
-const catalogPath = new URL("../generated/catalog.generated.json", import.meta.url).pathname;
-const overlaysPath = new URL("../generated/overlays.generated.json", import.meta.url).pathname;
+const filteredCsvPath = fileURLToPath(
+  new URL("../generated/eclipse_besselian_1900_2100.csv", import.meta.url),
+);
+const catalogPath = fileURLToPath(new URL("../generated/catalog.generated.json", import.meta.url));
+const overlaysPath = fileURLToPath(new URL("../generated/overlays.generated.json", import.meta.url));
 
 describe("catalog scripts integration outputs", () => {
   it("keeps filtered CSV inside the 1900-2100 range", () => {

@@ -14,8 +14,7 @@ const LANDING_ROW_GAP = 8;
 const LANDING_ROW_SPAN = LANDING_ROW_HEIGHT + LANDING_ROW_GAP;
 
 export type LandingScrollState = {
-  landingListRef: RefObject<ScrollView | null>;
-  landingRowYByIdRef: MutableRefObject<Record<string, number>>;
+  landingListRef: RefObject<FlatList<LandingEclipseItem> | null>;
   didAutoScrollRef: MutableRefObject<boolean>;
   landingListScrollYRef: MutableRefObject<number>;
   rowHeight: number;

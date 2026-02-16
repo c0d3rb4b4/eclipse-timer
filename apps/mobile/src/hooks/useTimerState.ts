@@ -47,6 +47,7 @@ export type TimerState = {
   pin: Pin;
   region: Region;
   mapType: MapType3;
+  showOverlays: boolean;
   status: string;
   result: Circumstances | null;
   isComputing: boolean;
@@ -60,6 +61,7 @@ export type TimerState = {
   nextEventCountdownText: string;
   onRegionChangeComplete: (r: Region) => void;
   cycleMapType: () => void;
+  toggleOverlays: () => void;
   jumpTo: (lat: number, lon: number, delta?: number) => void;
   onMapPress: (e: MapPressEvent) => void;
   onDragEnd: (e: MarkerDragEndEvent) => void;
@@ -75,6 +77,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
   const mapRef = useRef<MapView>(null);
   const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
   const [mapType, setMapType] = useState<MapType3>("standard");
+  const [showOverlays, setShowOverlays] = useState(true);
   const [region, setRegion] = useState<Region>({
     latitude: sanitizeLatitude(pin.lat),
     longitude: normalizeLongitude(pin.lon),
@@ -142,6 +145,9 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
 
   const cycleMapType = () => {
     setMapType((m) => (m === "standard" ? "satellite" : m === "satellite" ? "hybrid" : "standard"));
+  };
+  const toggleOverlays = () => {
+    setShowOverlays((prev) => !prev);
   };
 
   const jumpTo = (lat: number, lon: number, delta = 3) => {
@@ -317,6 +323,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     pin,
     region,
     mapType,
+    showOverlays,
     status,
     result,
     isComputing,
@@ -330,6 +337,7 @@ export function useTimerState(activeEclipse: EclipseRecord | null): TimerState {
     nextEventCountdownText,
     onRegionChangeComplete,
     cycleMapType,
+    toggleOverlays,
     jumpTo,
     onMapPress,
     onDragEnd,

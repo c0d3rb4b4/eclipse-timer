@@ -2,6 +2,7 @@ import type { LatLng, Region } from "react-native-maps";
 
 type OverlayCell = LatLng[];
 const overlayCellsCache = new WeakMap<[number, number][][], OverlayCell[]>();
+const MIN_REGION_DELTA = 0.0001;
 
 export function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -20,7 +21,7 @@ export function sanitizeLatitude(latDeg: number): number {
 
 export function sanitizeDelta(delta: number, fallback: number): number {
   if (!Number.isFinite(delta)) return fallback;
-  return clamp(Math.abs(delta), 0.02, 180);
+  return clamp(Math.abs(delta), MIN_REGION_DELTA, 180);
 }
 
 export function sanitizeRegion(region: Region, fallback?: Region): Region {

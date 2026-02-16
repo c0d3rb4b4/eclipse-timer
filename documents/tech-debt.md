@@ -208,8 +208,9 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
+| CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | The project currently relies on an Expo Go-centric workflow. Move to EAS Build with explicit `development`/`preview`/`production` profiles so release artifacts can be produced consistently for Android and iOS. |
 | CI-01 | **No CI pipeline** | 🔴 Critical | No GitHub Actions, no GitLab CI, no any CI config. Nothing runs `typecheck`, `lint`, or `test` automatically on push/PR. |
-| CI-02 | **No automated mobile builds** | 🟠 High | No EAS Build configuration for Expo. Building release APK/IPA is entirely manual. |
+| CI-02 | **No automated mobile builds in CI** | 🟠 High | Even after EAS setup, there is no CI workflow that runs EAS builds to produce Android and iOS release artifacts automatically. |
 | CI-03 | **No app signing / keystore management** | 🟡 Medium | No `eas.json`, no code-signing config. Required for store distribution. |
 | CI-04 | **No environment configuration** | 🟡 Medium | No `.env` support, no staging vs. production config. API keys or feature flags have no mechanism. |
 | CI-05 | **No crash reporting / analytics** | 🟡 Medium | No Sentry, Bugsnag, or similar. Production crashes will be invisible. |
@@ -241,6 +242,7 @@
 | T-03 | ✅ Resolved 2026-02-13: unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
 | C-01 | ✅ Resolved 2026-02-13: fix cross-package deep import in overlay build |
+| CI-00 | Convert from Expo Go to EAS Build for production releases |
 | CI-01 | Set up a CI pipeline |
 
 ### 🟠 High — Fix Soon
@@ -259,7 +261,7 @@
 | F-01 | Multi-eclipse switching on timer |
 | F-02 | Persist user preferences |
 | F-03 | Implement real alarm scheduling |
-| CI-02 | Set up EAS Build |
+| CI-02 | Automate EAS Build jobs in CI for Android/iOS artifacts |
 
 ### 🟡 Medium — Plan Next
 | ID | Summary |

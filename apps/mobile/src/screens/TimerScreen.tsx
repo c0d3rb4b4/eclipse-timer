@@ -88,24 +88,28 @@ export default function TimerScreen({
           onPress={timer.onMapPress}
           mapType={timer.mapType}
         >
-          {timer.overlayVisiblePolygons.map((coordinates, idx) => (
-            <Polygon
-              key={`visible-${idx}`}
-              coordinates={coordinates}
-              fillColor={VISIBLE_PATH_COLOR}
-              strokeColor="rgba(79, 195, 247, 0.05)"
-              strokeWidth={0.5}
-            />
-          ))}
-          {timer.overlayCentralPolygons.map((coordinates, idx) => (
-            <Polygon
-              key={`central-${idx}`}
-              coordinates={coordinates}
-              fillColor={centralOverlayColor}
-              strokeColor="rgba(255,255,255,0.08)"
-              strokeWidth={0.5}
-            />
-          ))}
+          {timer.showOverlays
+            ? timer.overlayVisiblePolygons.map((coordinates, idx) => (
+                <Polygon
+                  key={`visible-${idx}`}
+                  coordinates={coordinates}
+                  fillColor={VISIBLE_PATH_COLOR}
+                  strokeColor="rgba(79, 195, 247, 0.05)"
+                  strokeWidth={0.5}
+                />
+              ))
+            : null}
+          {timer.showOverlays
+            ? timer.overlayCentralPolygons.map((coordinates, idx) => (
+                <Polygon
+                  key={`central-${idx}`}
+                  coordinates={coordinates}
+                  fillColor={centralOverlayColor}
+                  strokeColor="rgba(255,255,255,0.08)"
+                  strokeWidth={0.5}
+                />
+              ))
+            : null}
           <Marker
             coordinate={{ latitude: timer.pin.lat, longitude: timer.pin.lon }}
             draggable
@@ -114,6 +118,21 @@ export default function TimerScreen({
             description={`${timer.pin.lat.toFixed(4)}, ${timer.pin.lon.toFixed(4)}`}
           />
         </MapView>
+
+        <Pressable
+          style={styles.mapGpsBtn}
+          onPress={timer.useGps}
+          accessibilityRole="button"
+          accessibilityLabel="Use current GPS location"
+        >
+          <View style={styles.mapGpsIcon}>
+            <View style={styles.mapGpsIconCrossVertical} />
+            <View style={styles.mapGpsIconCrossHorizontal} />
+            <View style={styles.mapGpsIconRing}>
+              <View style={styles.mapGpsIconDot} />
+            </View>
+          </View>
+        </Pressable>
 
         <Pressable style={styles.mapOverlayBtn} onPress={timer.cycleMapType}>
           <Text style={styles.mapOverlayBtnText}>
@@ -125,7 +144,16 @@ export default function TimerScreen({
           </Text>
         </Pressable>
 
-        <View style={styles.mapLegend}>
+        <Pressable
+          style={[
+            styles.mapLegend,
+            !timer.showOverlays && timer.hasOverlayData ? styles.mapLegendMuted : null,
+          ]}
+          onPress={timer.toggleOverlays}
+          disabled={!timer.hasOverlayData}
+          accessibilityRole="button"
+          accessibilityLabel={timer.showOverlays ? "Hide eclipse overlays" : "Show eclipse overlays"}
+        >
           <View style={styles.mapLegendRow}>
             <View style={[styles.mapLegendSwatch, { backgroundColor: VISIBLE_PATH_COLOR }]} />
             <Text style={styles.mapLegendText}>Eclipse Visible</Text>
@@ -134,18 +162,18 @@ export default function TimerScreen({
             <View style={[styles.mapLegendSwatch, { backgroundColor: centralOverlayColor }]} />
             <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
           </View>
-          {!timer.hasOverlayData ? (
-            <Text style={styles.mapLegendHint}>No precomputed overlay for this eclipse.</Text>
-          ) : null}
-        </View>
+          <Text style={styles.mapLegendHint}>
+            {!timer.hasOverlayData
+              ? "No precomputed overlay for this eclipse."
+              : timer.showOverlays
+                ? "Tap legend to hide both overlays."
+                : "Tap legend to show both overlays."}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.controls}>
         <View style={styles.btnRow}>
-          <Pressable style={styles.btn} onPress={timer.useGps}>
-            <Text style={styles.btnText}>Use GPS</Text>
-          </Pressable>
-
           <Pressable
             style={[styles.btn, isActiveEclipseLoading ? styles.btnDisabled : null]}
             onPress={() => {
@@ -322,6 +350,53 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 12,
   },
+  mapGpsBtn: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.68)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapGpsIcon: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapGpsIconCrossVertical: {
+    position: "absolute",
+    width: 2,
+    height: 20,
+    borderRadius: 1,
+    backgroundColor: "white",
+  },
+  mapGpsIconCrossHorizontal: {
+    position: "absolute",
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "white",
+  },
+  mapGpsIconRing: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: "white",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+  },
+  mapGpsIconDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "white",
+  },
   mapLegend: {
     position: "absolute",
     left: 10,
@@ -331,6 +406,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "rgba(0,0,0,0.62)",
     gap: 4,
+  },
+  mapLegendMuted: {
+    opacity: 0.72,
   },
   mapLegendRow: {
     flexDirection: "row",
