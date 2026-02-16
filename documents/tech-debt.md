@@ -200,7 +200,7 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | SP-01 | **Location permission requested without prior explanation** | 🟡 Medium | ✅ Resolved 2026-02-16: added a custom `Alert.alert` rationale dialog explaining on-device-only location use before the OS permission prompt. |
-| SP-02 | **No privacy policy or data usage disclosure** | � High | App requests location and loads remote GIFs (NASA). Both App Store and Play Store **require** a privacy policy URL during submission. Blocks store listing. |
+| SP-02 | **No privacy policy or data usage disclosure** | 🟠 High | ✅ Resolved 2026-02-16: wrote `PRIVACY_POLICY.md`, created `documents/store-privacy-declarations.md` with Apple App Privacy and Google Play Data Safety declarations, added iOS privacy manifest to `app.json`. Remaining: host the policy at a public URL and link in store listings. |
 | SP-03 | **External URL (NASA GIF) loaded without HTTPS validation** | 🟢 Low | The URL is constructed dynamically. A malformed date could produce a broken URL — no sanitization. |
 
 ---
@@ -272,7 +272,7 @@
 | CI-02 | Automate EAS Build jobs in CI for Android/iOS artifacts |
 | CI-03 | Configure app signing / keystore (blocks store submission) |
 | CI-05 | ✅ Resolved 2026-02-16: integrated @sentry/react-native with Sentry.wrap + ErrorBoundary |
-| SP-02 | Write & host privacy policy (required by both stores) |
+| SP-02 | ✅ Resolved 2026-02-16: privacy policy written, store privacy declarations documented, iOS privacy manifest added |
 
 ### 🟡 Medium — Plan Next
 | ID | Summary |
@@ -367,10 +367,10 @@
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 3.1 | **Write a privacy policy** covering: location data (used locally, not transmitted), network requests (NASA GIF URLs), notification permissions, no analytics/tracking. Host on a public URL (GitHub Pages works). | SP-02 | ⬜ Not started |
-| 3.2 | **Add the privacy policy URL** to `app.json` → `expo.ios.privacyManifests` (if targeting iOS 17+) and to both store listings. | SP-02 | ⬜ Not started |
-| 3.3 | **Prepare Apple App Privacy labels** (App Store Connect) — declare Location (used for functionality), no data collected for tracking. | SP-02 | ⬜ Not started |
-| 3.4 | **Prepare Google Play Data Safety section** — declare location access, notification permissions, no data shared with third parties. | SP-02 | ⬜ Not started |
+| 3.1 | **Write a privacy policy** covering: location data (used locally, not transmitted), network requests (NASA GIF URLs), notification permissions, Sentry crash reporting, no analytics/tracking. Hosted at `PRIVACY_POLICY.md` — deploy to a public URL (e.g., GitHub Pages) before store submission. | SP-02 | ✅ Done 2026-02-16 |
+| 3.2 | **Add the privacy policy URL** to `app.json` → `expo.ios.privacyManifests` (iOS 17+ privacy manifest with `NSPrivacyAccessedAPITypes` and `NSPrivacyCollectedDataTypes`). Also added `infoPlist.NSLocationWhenInUseUsageDescription`. Deploy public URL and link in store listings. | SP-02 | ✅ Done 2026-02-16 |
+| 3.3 | **Prepare Apple App Privacy labels** — documented in `documents/store-privacy-declarations.md`. Declares Precise Location (app functionality, not linked, not tracking) and Crash Data (app functionality, not linked, not tracking). | SP-02 | ✅ Done 2026-02-16 |
+| 3.4 | **Prepare Google Play Data Safety section** — documented in `documents/store-privacy-declarations.md`. Declares precise location (ephemeral, optional), crash logs (shared with Sentry), no personal info / ads / tracking. | SP-02 | ✅ Done 2026-02-16 |
 
 ### Phase 4 — Store Metadata & Assets (required for listing)
 
