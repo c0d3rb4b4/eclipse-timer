@@ -1,13 +1,21 @@
-import { StyleSheet, Switch, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import BurgerButton from "../components/BurgerButton";
-import type { NotificationSettings } from "../state/appState";
+import type { NotificationEntry, NotificationSettings } from "../state/appState";
+import {
+  scheduleTestNotificationAsync,
+  type NotificationSchedulingSettings,
+} from "../services/notifications";
+import { fmtLocalHuman } from "../utils/date";
 
 type NotificationSettingsScreenProps = {
   onOpenMenu: () => void;
   settings: NotificationSettings;
+  notificationEntries: NotificationEntry[];
   onSetSetting: (key: keyof NotificationSettings, value: boolean) => void;
+  onRemoveNotificationEntry: (id: string) => void;
 };
 
 type SettingRowProps = {
@@ -30,11 +38,95 @@ function SettingRow({ title, description, value, disabled = false, onValueChange
   );
 }
 
+function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
+  return {
+    countdownAlerts: settings.countdownAlerts,
+    vibrationEnabled: settings.vibrationEnabled,
+    soundEnabled: settings.soundEnabled,
+    useTtsVoice: settings.useTtsVoice,
+    remindOneHourBefore: settings.remindOneHourBefore,
+    remindTenMinutesBefore: settings.remindTenMinutesBefore,
+  };
+}
+
 export default function NotificationSettingsScreen({
   onOpenMenu,
   settings,
+  notificationEntries,
   onSetSetting,
+  onRemoveNotificationEntry,
 }: NotificationSettingsScreenProps) {
+  const [isSchedulingTest, setIsSchedulingTest] = useState(false);
+  const groupedEntries = useMemo(() => {
+    const sorted = [...notificationEntries].sort((a, b) => {
+      if (a.eclipseDateYmd !== b.eclipseDateYmd) return a.eclipseDateYmd.localeCompare(b.eclipseDateYmd);
+      const aTs = Date.parse(a.iso);
+      const bTs = Date.parse(b.iso);
+      if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return aTs - bTs;
+      if (a.contactLabel !== b.contactLabel) return a.contactLabel.localeCompare(b.contactLabel);
+      return a.id.localeCompare(b.id);
+    });
+
+    const groups = new Map<
+      string,
+      { key: string; eclipseLabel: string; eclipseDateYmd: string; entries: NotificationEntry[] }
+    >();
+
+    for (const entry of sorted) {
+      const key = `${entry.eclipseId}::${entry.eclipseDateYmd}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.entries.push(entry);
+        continue;
+      }
+
+      groups.set(key, {
+        key,
+        eclipseLabel: entry.eclipseLabel || entry.eclipseId,
+        eclipseDateYmd: entry.eclipseDateYmd,
+        entries: [entry],
+      });
+    }
+
+    return [...groups.values()];
+  }, [notificationEntries]);
+
+  const runNotificationTest = () => {
+    if (!settings.eclipseAlerts) {
+      Alert.alert("Test Notification", "Enable Eclipse Event Alerts first.");
+      return;
+    }
+
+    setIsSchedulingTest(true);
+
+    void scheduleTestNotificationAsync(toSchedulingSettings(settings))
+      .then((outcome) => {
+        if (!outcome.ok) {
+          if (outcome.reason === "permission_denied") {
+            Alert.alert(
+              "Test Notification",
+              "Notifications are blocked by system permissions. Enable them in device settings.",
+            );
+            return;
+          }
+
+          Alert.alert("Test Notification", "Failed to schedule a test notification.");
+          return;
+        }
+
+        const hh = String(outcome.fireDate.getHours()).padStart(2, "0");
+        const mm = String(outcome.fireDate.getMinutes()).padStart(2, "0");
+        const ss = String(outcome.fireDate.getSeconds()).padStart(2, "0");
+        Alert.alert("Test Notification", `Notification scheduled for ${hh}:${mm}:${ss}.`);
+      })
+      .catch(() => {
+        Alert.alert("Test Notification", "Failed to schedule a test notification.");
+      })
+      .finally(() => {
+        setIsSchedulingTest(false);
+      });
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.headerRow}>
@@ -45,7 +137,7 @@ export default function NotificationSettingsScreen({
         </View>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         <SettingRow
           title="Eclipse Event Alerts"
           description="Enable notifications around eclipse contact events."
@@ -66,9 +158,16 @@ export default function NotificationSettingsScreen({
         />
         <SettingRow
           title="Sound"
-          description="Play sound for eclipse alerts and reminder notifications."
+          description="Use default system notification sound."
           value={settings.soundEnabled}
+          disabled={settings.useTtsVoice}
           onValueChange={(nextValue) => onSetSetting("soundEnabled", nextValue)}
+        />
+        <SettingRow
+          title="Voice (TTS)"
+          description="Speak event details instead of system sound (foreground playback for now)."
+          value={settings.useTtsVoice}
+          onValueChange={(nextValue) => onSetSetting("useTtsVoice", nextValue)}
         />
         <SettingRow
           title="1 Hour Reminder"
@@ -84,7 +183,62 @@ export default function NotificationSettingsScreen({
           disabled={!settings.countdownAlerts}
           onValueChange={(nextValue) => onSetSetting("remindTenMinutesBefore", nextValue)}
         />
-      </View>
+
+        <View style={styles.testCard}>
+          <Text style={styles.testTitle}>Test Notification</Text>
+          <Text style={styles.testDescription}>
+            Send a test alert using your current sound/vibration settings.
+          </Text>
+          <Pressable
+            style={[styles.testButton, isSchedulingTest ? styles.testButtonDisabled : null]}
+            onPress={runNotificationTest}
+            disabled={isSchedulingTest}
+            accessibilityRole="button"
+            accessibilityLabel="Send test notification"
+          >
+            <Text style={styles.testButtonText}>
+              {isSchedulingTest ? "Scheduling..." : "Send Test Notification"}
+            </Text>
+          </Pressable>
+          {!settings.eclipseAlerts ? (
+            <Text style={styles.testHint}>Enable Eclipse Event Alerts to run test notifications.</Text>
+          ) : null}
+        </View>
+
+        <View style={styles.listCard}>
+          <Text style={styles.listTitle}>Enabled Event Notifications</Text>
+          {!groupedEntries.length ? (
+            <Text style={styles.listEmpty}>
+              No event alarms enabled yet. Enable alarms from the Timer screen contacts list.
+            </Text>
+          ) : (
+            groupedEntries.map((group) => (
+              <View key={group.key} style={styles.eclipseGroup}>
+                <View style={styles.eclipseHeader}>
+                  <Text style={styles.eclipseTitle}>{group.eclipseLabel}</Text>
+                  <Text style={styles.eclipseDate}>{group.eclipseDateYmd}</Text>
+                </View>
+                {group.entries.map((entry) => (
+                  <View key={entry.id} style={styles.entryRow}>
+                    <View style={styles.entryMain}>
+                      <Text style={styles.entryLabel}>{entry.contactLabel}</Text>
+                      <Text style={styles.entryTime}>{fmtLocalHuman(entry.iso)}</Text>
+                    </View>
+                    <Pressable
+                      style={styles.removeButton}
+                      onPress={() => onRemoveNotificationEntry(entry.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${entry.contactLabel}`}
+                    >
+                      <Text style={styles.removeButtonText}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -116,8 +270,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentInner: {
     paddingHorizontal: 12,
     paddingTop: 14,
+    paddingBottom: 24,
     gap: 10,
   },
   rowCard: {
@@ -148,5 +305,128 @@ const styles = StyleSheet.create({
     color: "#a8a8a8",
     fontSize: 12,
     lineHeight: 18,
+  },
+  testCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+    backgroundColor: "#141414",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  testTitle: {
+    color: "#f7f7f7",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  testDescription: {
+    color: "#a8a8a8",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  testButton: {
+    marginTop: 2,
+    borderRadius: 10,
+    backgroundColor: "#2c3cff",
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  testButtonDisabled: {
+    opacity: 0.7,
+  },
+  testButtonText: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  testHint: {
+    color: "#b6b6b6",
+    fontSize: 12,
+  },
+  listCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+    backgroundColor: "#141414",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  listTitle: {
+    color: "#f7f7f7",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  listEmpty: {
+    color: "#a8a8a8",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  eclipseGroup: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2f2f2f",
+    backgroundColor: "#191919",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  eclipseHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  eclipseTitle: {
+    flex: 1,
+    color: "#f2f2f2",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  eclipseDate: {
+    color: "#a8a8a8",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  entryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#303030",
+    backgroundColor: "#121212",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  entryMain: {
+    flex: 1,
+    gap: 2,
+  },
+  entryLabel: {
+    color: "#e6e6e6",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  entryTime: {
+    color: "#9e9e9e",
+    fontSize: 11,
+  },
+  removeButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    backgroundColor: "#1f1f1f",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  removeButtonText: {
+    color: "#d5d5d5",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
 });

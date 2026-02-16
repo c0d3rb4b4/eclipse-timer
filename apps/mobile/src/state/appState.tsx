@@ -14,8 +14,19 @@ export type NotificationSettings = {
   countdownAlerts: boolean;
   vibrationEnabled: boolean;
   soundEnabled: boolean;
+  useTtsVoice: boolean;
   remindOneHourBefore: boolean;
   remindTenMinutesBefore: boolean;
+};
+
+export type NotificationEntry = {
+  id: string;
+  eclipseId: string;
+  eclipseDateYmd: string;
+  eclipseLabel: string;
+  contactKey: string;
+  contactLabel: string;
+  iso: string;
 };
 
 export type FavoriteLocation = {
@@ -25,14 +36,22 @@ export type FavoriteLocation = {
   lon: number;
 };
 
+export function notificationEntryId(eclipseId: string, contactKey: string) {
+  return `${eclipseId.trim()}:${contactKey.trim().toLowerCase()}`;
+}
+
 type AppState = {
   selectedLandingId: string | null;
   activeEclipseId: string | null;
   notificationSettings: NotificationSettings;
   favoriteLocations: FavoriteLocation[];
+  notificationEntries: NotificationEntry[];
 };
 
-type PersistedPreferences = Pick<AppState, "notificationSettings" | "favoriteLocations">;
+type PersistedPreferences = Pick<
+  AppState,
+  "notificationSettings" | "favoriteLocations" | "notificationEntries"
+>;
 
 type AppAction =
   | { type: "SELECT_LANDING"; id: string }
@@ -44,7 +63,9 @@ type AppAction =
       value: boolean;
     }
   | { type: "ADD_FAVORITE_LOCATION"; location: FavoriteLocation }
-  | { type: "REMOVE_FAVORITE_LOCATION"; id: string };
+  | { type: "REMOVE_FAVORITE_LOCATION"; id: string }
+  | { type: "UPSERT_NOTIFICATION_ENTRY"; entry: NotificationEntry }
+  | { type: "REMOVE_NOTIFICATION_ENTRY"; id: string };
 
 const initialState: AppState = {
   selectedLandingId: null,
@@ -54,10 +75,12 @@ const initialState: AppState = {
     countdownAlerts: true,
     vibrationEnabled: true,
     soundEnabled: true,
+    useTtsVoice: false,
     remindOneHourBefore: true,
     remindTenMinutesBefore: true,
   },
   favoriteLocations: [],
+  notificationEntries: [],
 };
 
 const APP_PREFERENCES_STORAGE_KEY = "eclipse_timer/preferences.v1";
@@ -83,6 +106,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseNotificationSettings(raw: unknown): NotificationSettings {
   if (!isRecord(raw)) return initialState.notificationSettings;
 
+  const soundEnabled =
+    typeof raw.soundEnabled === "boolean"
+      ? raw.soundEnabled
+      : initialState.notificationSettings.soundEnabled;
+  const useTtsVoice =
+    typeof raw.useTtsVoice === "boolean"
+      ? raw.useTtsVoice
+      : initialState.notificationSettings.useTtsVoice;
+
   return {
     eclipseAlerts:
       typeof raw.eclipseAlerts === "boolean"
@@ -96,10 +128,8 @@ function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof raw.vibrationEnabled === "boolean"
         ? raw.vibrationEnabled
         : initialState.notificationSettings.vibrationEnabled,
-    soundEnabled:
-      typeof raw.soundEnabled === "boolean"
-        ? raw.soundEnabled
-        : initialState.notificationSettings.soundEnabled,
+    soundEnabled: useTtsVoice ? false : soundEnabled,
+    useTtsVoice,
     remindOneHourBefore:
       typeof raw.remindOneHourBefore === "boolean"
         ? raw.remindOneHourBefore
@@ -144,6 +174,46 @@ function parseFavoriteLocations(raw: unknown): FavoriteLocation[] {
   return nextLocations;
 }
 
+function parseNotificationEntry(raw: unknown): NotificationEntry | null {
+  if (!isRecord(raw)) return null;
+
+  const eclipseId = typeof raw.eclipseId === "string" ? raw.eclipseId.trim() : "";
+  const contactKey = typeof raw.contactKey === "string" ? raw.contactKey.trim().toLowerCase() : "";
+  const id = typeof raw.id === "string" ? raw.id.trim() : notificationEntryId(eclipseId, contactKey);
+  const eclipseDateYmd = typeof raw.eclipseDateYmd === "string" ? raw.eclipseDateYmd.trim() : "";
+  const eclipseLabel = typeof raw.eclipseLabel === "string" ? raw.eclipseLabel.trim() : eclipseId;
+  const contactLabel = typeof raw.contactLabel === "string" ? raw.contactLabel.trim() : "";
+  const iso = typeof raw.iso === "string" ? raw.iso.trim() : "";
+
+  if (!id || !eclipseId || !contactKey || !eclipseDateYmd || !contactLabel || !iso) return null;
+
+  const timestamp = Date.parse(iso);
+  if (!Number.isFinite(timestamp)) return null;
+
+  return {
+    id,
+    eclipseId,
+    eclipseDateYmd,
+    eclipseLabel: eclipseLabel || eclipseId,
+    contactKey,
+    contactLabel,
+    iso,
+  };
+}
+
+function parseNotificationEntries(raw: unknown): NotificationEntry[] {
+  if (!Array.isArray(raw)) return [];
+
+  const nextEntries: NotificationEntry[] = [];
+  for (const item of raw) {
+    const parsed = parseNotificationEntry(item);
+    if (!parsed) continue;
+    if (nextEntries.some((entry) => entry.id === parsed.id)) continue;
+    nextEntries.push(parsed);
+  }
+  return nextEntries;
+}
+
 function parsePersistedPreferences(raw: string): PersistedPreferences | null {
   try {
     const parsed = JSON.parse(raw);
@@ -152,6 +222,7 @@ function parsePersistedPreferences(raw: string): PersistedPreferences | null {
     return {
       notificationSettings: parseNotificationSettings(parsed.notificationSettings),
       favoriteLocations: parseFavoriteLocations(parsed.favoriteLocations),
+      notificationEntries: parseNotificationEntries(parsed.notificationEntries),
     };
   } catch {
     return null;
@@ -173,15 +244,27 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         notificationSettings: action.preferences.notificationSettings,
         favoriteLocations: action.preferences.favoriteLocations,
+        notificationEntries: action.preferences.notificationEntries,
       };
     case "SET_NOTIFICATION_SETTING":
-      return {
-        ...state,
-        notificationSettings: {
+      {
+        const nextSettings: NotificationSettings = {
           ...state.notificationSettings,
           [action.key]: action.value,
-        },
-      };
+        };
+
+        if (action.key === "useTtsVoice" && action.value) {
+          nextSettings.soundEnabled = false;
+        }
+        if (action.key === "soundEnabled" && action.value) {
+          nextSettings.useTtsVoice = false;
+        }
+
+        return {
+          ...state,
+          notificationSettings: nextSettings,
+        };
+      }
     case "ADD_FAVORITE_LOCATION":
       if (state.favoriteLocations.some((location) => location.id === action.location.id)) return state;
       return {
@@ -192,6 +275,40 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         favoriteLocations: state.favoriteLocations.filter((location) => location.id !== action.id),
+      };
+    case "UPSERT_NOTIFICATION_ENTRY": {
+      const existingIndex = state.notificationEntries.findIndex((entry) => entry.id === action.entry.id);
+      if (existingIndex < 0) {
+        return {
+          ...state,
+          notificationEntries: [...state.notificationEntries, action.entry],
+        };
+      }
+
+      const existing = state.notificationEntries[existingIndex];
+      if (!existing) return state;
+      if (
+        existing.eclipseId === action.entry.eclipseId &&
+        existing.eclipseDateYmd === action.entry.eclipseDateYmd &&
+        existing.eclipseLabel === action.entry.eclipseLabel &&
+        existing.contactKey === action.entry.contactKey &&
+        existing.contactLabel === action.entry.contactLabel &&
+        existing.iso === action.entry.iso
+      ) {
+        return state;
+      }
+
+      const nextEntries = [...state.notificationEntries];
+      nextEntries[existingIndex] = action.entry;
+      return {
+        ...state,
+        notificationEntries: nextEntries,
+      };
+    }
+    case "REMOVE_NOTIFICATION_ENTRY":
+      return {
+        ...state,
+        notificationEntries: state.notificationEntries.filter((entry) => entry.id !== action.id),
       };
     default:
       return state;
@@ -206,6 +323,8 @@ type AppStateContextValue = {
     setNotificationSetting: (key: keyof NotificationSettings, value: boolean) => void;
     addFavoriteLocation: (location: Omit<FavoriteLocation, "id">) => void;
     removeFavoriteLocation: (id: string) => void;
+    upsertNotificationEntry: (entry: NotificationEntry) => void;
+    removeNotificationEntry: (id: string) => void;
   };
 };
 
@@ -245,6 +364,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const payload: PersistedPreferences = {
       notificationSettings: state.notificationSettings,
       favoriteLocations: state.favoriteLocations,
+      notificationEntries: state.notificationEntries,
     };
 
     void AsyncStorage.setItem(APP_PREFERENCES_STORAGE_KEY, JSON.stringify(payload)).catch(
@@ -252,7 +372,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         console.warn("Failed to save app preferences:", err);
       },
     );
-  }, [hasHydratedPreferences, state.favoriteLocations, state.notificationSettings]);
+  }, [hasHydratedPreferences, state.favoriteLocations, state.notificationEntries, state.notificationSettings]);
 
   const actions = useMemo(
     () => ({
@@ -280,6 +400,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         });
       },
       removeFavoriteLocation: (id: string) => dispatch({ type: "REMOVE_FAVORITE_LOCATION", id }),
+      upsertNotificationEntry: (entry: NotificationEntry) =>
+        dispatch({
+          type: "UPSERT_NOTIFICATION_ENTRY",
+          entry: {
+            ...entry,
+            id: entry.id.trim() || notificationEntryId(entry.eclipseId, entry.contactKey),
+            eclipseId: entry.eclipseId.trim(),
+            eclipseDateYmd: entry.eclipseDateYmd.trim(),
+            eclipseLabel: entry.eclipseLabel.trim() || entry.eclipseId.trim(),
+            contactKey: entry.contactKey.trim().toLowerCase(),
+            contactLabel: entry.contactLabel.trim(),
+            iso: entry.iso.trim(),
+          },
+        }),
+      removeNotificationEntry: (id: string) =>
+        dispatch({ type: "REMOVE_NOTIFICATION_ENTRY", id: id.trim() }),
     }),
     [],
   );

@@ -160,7 +160,7 @@ export default function TimerScreen({
   );
   const canAddCurrentPinToFavorites = !favoriteAtCurrentPin;
   const contactDirectionOverlays = useMemo<ContactDirectionOverlay[]>(() => {
-    if (!timer.result) return [];
+    if (!timer.result || !timer.isResultCurrentForPin) return [];
 
     const arrowDistanceDeg = clamp(timer.region.latitudeDelta * 0.28, 0.18, 2.2);
     const entries = [
@@ -183,7 +183,7 @@ export default function TimerScreen({
       });
     }
     return overlays;
-  }, [timer.pin.lat, timer.pin.lon, timer.region.latitudeDelta, timer.result]);
+  }, [timer.isResultCurrentForPin, timer.pin.lat, timer.pin.lon, timer.region.latitudeDelta, timer.result]);
   const hasDirectionsData = contactDirectionOverlays.length > 0;
 
   const closeAddFavoriteModal = () => {
@@ -376,7 +376,7 @@ export default function TimerScreen({
           </Pressable>
         </View>
 
-        {timer.result ? (
+        {timer.result && timer.isResultCurrentForPin ? (
           <Pressable
             style={[
               styles.mapDirectionLegend,
@@ -432,28 +432,6 @@ export default function TimerScreen({
             </Text>
           </Pressable>
         </View>
-
-        <Pressable
-          style={[
-            styles.computeBtn,
-            timer.isComputing || isActiveEclipseLoading ? styles.computeBtnDisabled : null,
-          ]}
-          onPress={timer.runCompute}
-          disabled={timer.isComputing || isActiveEclipseLoading}
-        >
-          <View style={styles.computeBtnInner}>
-            {timer.isComputing ? <ActivityIndicator /> : null}
-            <Text style={styles.computeBtnText}>
-              {isActiveEclipseLoading
-                ? "Loading..."
-                : timer.isComputing
-                  ? "Computing..."
-                  : timer.didComputeFlash
-                    ? "Done"
-                    : "Compute"}
-            </Text>
-          </View>
-        </Pressable>
       </View>
 
       <Modal
@@ -552,7 +530,11 @@ export default function TimerScreen({
               <Text style={styles.muted}>Loading overlays and eclipse metadata...</Text>
             </View>
           ) : !timer.result ? (
-            <Text style={styles.muted}>Press Compute to run the engine.</Text>
+            <Text style={styles.muted}>
+              {timer.isComputing
+                ? "Computing eclipse circumstances..."
+                : "Eclipse circumstances will auto-compute for the current pin."}
+            </Text>
           ) : (
             <>
               <View style={styles.timerHero}>
@@ -574,17 +556,6 @@ export default function TimerScreen({
                   <Text style={styles.metricValue}>{formatDuration(timer.result.durationSeconds)}</Text>
                 </View>
               </View>
-
-              <Pressable
-                style={[
-                  styles.testAlarmBtn,
-                  !timer.notificationsEnabled ? styles.testAlarmBtnDisabled : null,
-                ]}
-                onPress={timer.runAlarmTest}
-                disabled={!timer.notificationsEnabled}
-              >
-                <Text style={styles.testAlarmBtnText}>Test Alarm</Text>
-              </Pressable>
 
               {!timer.notificationsEnabled ? (
                 <Text style={styles.notificationsDisabledHint}>
@@ -620,7 +591,7 @@ export default function TimerScreen({
                     <Switch
                       value={timer.alarmState[item.key]}
                       onValueChange={(enabled) => timer.toggleAlarm(item.key, enabled)}
-                      disabled={!item.iso || !timer.notificationsEnabled}
+                      disabled={!item.iso}
                     />
                   </View>
                 </View>
@@ -659,17 +630,8 @@ const styles = StyleSheet.create({
   },
   title: { color: "white", fontSize: 18, fontWeight: "700" },
   subtitle: { color: "#bdbdbd", fontSize: 12 },
-  mapWrap: { height: 260, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
+  mapWrap: { height: 280, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
-  computeBtnDisabled: {
-    opacity: 0.75,
-  },
-  computeBtnInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
   controls: {
     paddingHorizontal: 12,
     paddingTop: 10,
@@ -711,19 +673,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-  },
-  computeBtn: {
-    width: "100%",
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#2c3cff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  computeBtnText: {
-    color: "white",
-    fontWeight: "800",
-    fontSize: 16,
   },
   mapOverlayBtn: {
     position: "absolute",
@@ -952,18 +901,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-  testAlarmBtn: {
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#2c3cff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  testAlarmBtnDisabled: {
-    opacity: 0.45,
-  },
-  testAlarmBtnText: { color: "white", fontSize: 13, fontWeight: "700" },
   notificationsDisabledHint: {
     marginTop: 8,
     color: "#b6b6b6",

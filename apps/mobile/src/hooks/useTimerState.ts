@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Alert, Animated, InteractionManager } from "react-native";
+import { Animated, InteractionManager } from "react-native";
 import type { Details, MapPressEvent, Region } from "react-native-maps";
 import type MapView from "react-native-maps";
 import * as Location from "expo-location";
@@ -20,13 +20,11 @@ import {
   sanitizeLatitude,
   sanitizeRegion,
 } from "../utils/map";
-import type { NotificationSettings } from "../state/appState";
 import {
-  cancelManagedScheduledNotificationsAsync,
-  rescheduleEclipseNotificationsAsync,
-  scheduleTestNotificationAsync,
-  type NotificationSchedulingSettings,
-} from "../services/notifications";
+  notificationEntryId,
+  type NotificationEntry,
+  type NotificationSettings,
+} from "../state/appState";
 
 type MapType3 = "standard" | "satellite" | "hybrid";
 
@@ -44,6 +42,14 @@ type MarkerDragEndEvent = {
 
 const GIBRALTAR = { lat: 36.1408, lon: -5.3536 };
 const MIN_REGION_DIFF = 0.00001;
+const MIN_PIN_DIFF = 0.000001;
+const EMPTY_ALARM_STATE: AlarmState = {
+  c1: false,
+  c2: false,
+  max: false,
+  c3: false,
+  c4: false,
+};
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -59,6 +65,10 @@ function hasMeaningfulRegionChange(prev: Region, next: Region): boolean {
   );
 }
 
+function hasMeaningfulPinChange(prev: Pin, next: Pin): boolean {
+  return Math.abs(prev.lat - next.lat) > MIN_PIN_DIFF || Math.abs(prev.lon - next.lon) > MIN_PIN_DIFF;
+}
+
 export type TimerState = {
   mapRef: RefObject<MapView | null>;
   pin: Pin;
@@ -67,6 +77,7 @@ export type TimerState = {
   showVisibleOverlay: boolean;
   showCentralOverlay: boolean;
   showDirectionsOverlay: boolean;
+  isResultCurrentForPin: boolean;
   status: string;
   result: Circumstances | null;
   isComputing: boolean;
@@ -91,24 +102,16 @@ export type TimerState = {
   useGps: () => Promise<void>;
   runCompute: () => void;
   toggleAlarm: (key: ContactKey, enabled: boolean) => void;
-  runAlarmTest: () => void;
   resetForNewEclipse: () => void;
   setStatusMessage: (msg: string) => void;
 };
 
-function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
-  return {
-    countdownAlerts: settings.countdownAlerts,
-    vibrationEnabled: settings.vibrationEnabled,
-    soundEnabled: settings.soundEnabled,
-    remindOneHourBefore: settings.remindOneHourBefore,
-    remindTenMinutesBefore: settings.remindTenMinutesBefore,
-  };
-}
-
 export function useTimerState(
   activeEclipse: EclipseRecord | null,
   notificationSettings: NotificationSettings,
+  notificationEntries: NotificationEntry[],
+  upsertNotificationEntry: (entry: NotificationEntry) => void,
+  removeNotificationEntry: (id: string) => void,
 ): TimerState {
   const mapRef = useRef<MapView>(null);
   const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon });
@@ -124,6 +127,7 @@ export function useTimerState(
   });
   const [status, setStatus] = useState("Ready");
   const [result, setResult] = useState<Circumstances | null>(null);
+  const [resultPin, setResultPin] = useState<Pin | null>(null);
   const [isComputing, setIsComputing] = useState(false);
   const [didComputeFlash, setDidComputeFlash] = useState(false);
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
@@ -132,13 +136,6 @@ export function useTimerState(
     null,
   );
   const computeRunTokenRef = useRef(0);
-  const [alarmState, setAlarmState] = useState<AlarmState>({
-    c1: true,
-    c2: true,
-    max: true,
-    c3: true,
-    c4: true,
-  });
 
   const overlayVisiblePolygons = useMemo(
     () => overlayTuplesToCells(activeEclipse?.overlayVisiblePolygons),
@@ -152,15 +149,28 @@ export function useTimerState(
   const hasCentralOverlayData = overlayCentralPolygons.length > 0;
 
   const contactItems = useMemo(() => (result ? buildContactItems(result) : []), [result]);
-  const schedulingSettings = useMemo(
-    () => toSchedulingSettings(notificationSettings),
-    [notificationSettings],
-  );
   const notificationsEnabled = notificationSettings.eclipseAlerts;
   const nextEventCountdownText = useMemo(
     () => (result ? nextEventCountdown(result, countdownNowMs) : "No countdown available"),
     [result, countdownNowMs],
   );
+  const isResultCurrentForPin = useMemo(() => {
+    if (!result || !resultPin) return false;
+    return !hasMeaningfulPinChange(resultPin, pin);
+  }, [pin, result, resultPin]);
+  const alarmState = useMemo<AlarmState>(() => {
+    if (!activeEclipse) return EMPTY_ALARM_STATE;
+    const nextState: AlarmState = { ...EMPTY_ALARM_STATE };
+
+    for (const entry of notificationEntries) {
+      if (entry.eclipseId !== activeEclipse.id) continue;
+      const key = entry.contactKey as ContactKey;
+      if (!(key in nextState)) continue;
+      nextState[key] = true;
+    }
+
+    return nextState;
+  }, [activeEclipse, notificationEntries]);
 
   useEffect(() => {
     if (!result) return;
@@ -168,48 +178,6 @@ export function useTimerState(
     const intervalId = setInterval(() => setCountdownNowMs(Date.now()), 1000);
     return () => clearInterval(intervalId);
   }, [result]);
-
-  useEffect(() => {
-    let didCancel = false;
-
-    const syncNotifications = async () => {
-      if (!notificationSettings.eclipseAlerts) {
-        await cancelManagedScheduledNotificationsAsync();
-        return;
-      }
-      if (!activeEclipse || !result) return;
-
-      const outcome = await rescheduleEclipseNotificationsAsync({
-        eclipseId: activeEclipse.id,
-        eclipseDateYmd: activeEclipse.dateYmd,
-        settings: schedulingSettings,
-        contacts: contactItems.map((item) => ({
-          key: item.key,
-          label: item.label,
-          iso: item.iso,
-          enabled: alarmState[item.key],
-        })),
-      });
-
-      if (didCancel) return;
-      if (!outcome.permissionGranted) {
-        setStatus("Notification permission denied");
-      }
-    };
-
-    void syncNotifications();
-
-    return () => {
-      didCancel = true;
-    };
-  }, [
-    activeEclipse,
-    alarmState,
-    contactItems,
-    notificationSettings.eclipseAlerts,
-    result,
-    schedulingSettings,
-  ]);
 
   const cancelPendingCompute = useCallback(() => {
     computeRunTokenRef.current += 1;
@@ -250,6 +218,7 @@ export function useTimerState(
     const safeLat = sanitizeLatitude(lat);
     const safeLon = normalizeLongitude(lon);
     const safeDelta = sanitizeDelta(delta, 3);
+    const nextPin: Pin = { lat: safeLat, lon: safeLon };
     const nextRegion: Region = {
       latitude: safeLat,
       longitude: safeLon,
@@ -257,7 +226,17 @@ export function useTimerState(
       longitudeDelta: safeDelta,
     };
 
-    setPin({ lat: safeLat, lon: safeLon });
+    const pinMoved = hasMeaningfulPinChange(pin, nextPin);
+    if (pinMoved) {
+      cancelPendingCompute();
+      setIsComputing(false);
+      setDidComputeFlash(false);
+      if (isComputing || (resultPin && hasMeaningfulPinChange(resultPin, nextPin))) {
+        setStatus("Pin moved. Recomputing...");
+      }
+    }
+
+    setPin(nextPin);
     setRegion((r) => sanitizeRegion(nextRegion, r));
 
     mapRef.current?.animateToRegion(nextRegion, 450);
@@ -266,7 +245,19 @@ export function useTimerState(
   const movePinKeepZoom = (lat: number, lon: number) => {
     const safeLat = sanitizeLatitude(lat);
     const safeLon = normalizeLongitude(lon);
-    setPin({ lat: safeLat, lon: safeLon });
+    const nextPin: Pin = { lat: safeLat, lon: safeLon };
+    const pinMoved = hasMeaningfulPinChange(pin, nextPin);
+
+    if (pinMoved) {
+      cancelPendingCompute();
+      setIsComputing(false);
+      setDidComputeFlash(false);
+      if (isComputing || (resultPin && hasMeaningfulPinChange(resultPin, nextPin))) {
+        setStatus("Pin moved. Recomputing...");
+      }
+    }
+
+    setPin(nextPin);
     setRegion((r) => ({ ...sanitizeRegion(r), latitude: safeLat, longitude: safeLon }));
   };
 
@@ -325,7 +316,7 @@ export function useTimerState(
     }
   };
 
-  const runCompute = () => {
+  const runCompute = useCallback(() => {
     if (!activeEclipse) {
       setStatus("Select an eclipse from the landing page first");
       return;
@@ -349,6 +340,7 @@ export function useTimerState(
         if (computeRunTokenRef.current !== runToken) return;
 
         setResult(out);
+        setResultPin({ lat: observer.latDeg, lon: observer.lonDeg });
         setStatus("Computed");
 
         resultFlash.setValue(0);
@@ -363,53 +355,91 @@ export function useTimerState(
         if (computeRunTokenRef.current !== runToken) return;
         setStatus(`Compute error: ${getErrorMessage(err)}`);
         setResult(null);
+        setResultPin(null);
       } finally {
         if (computeRunTokenRef.current !== runToken) return;
         computeTaskRef.current = null;
         setIsComputing(false);
       }
     });
-  };
+  }, [activeEclipse, cancelPendingCompute, pin.lat, pin.lon, resultFlash]);
 
-  const toggleAlarm = (key: ContactKey, enabled: boolean) => {
-    setAlarmState((prev) => ({ ...prev, [key]: enabled }));
-  };
+  useEffect(() => {
+    if (!activeEclipse) return;
+    if (result && isResultCurrentForPin) return;
+    runCompute();
+  }, [activeEclipse, isResultCurrentForPin, result, runCompute]);
 
-  const runAlarmTest = () => {
-    if (!notificationSettings.eclipseAlerts) {
-      setStatus("Enable Eclipse Event Alerts in Notification Settings first");
-      Alert.alert("Test Alarm", "Enable Eclipse Event Alerts in Notification Settings first.");
-      return;
-    }
+  useEffect(() => {
+    if (!activeEclipse || !contactItems.length) return;
 
-    void scheduleTestNotificationAsync(schedulingSettings)
-      .then((outcome) => {
-        if (!outcome.ok) {
-          if (outcome.reason === "permission_denied") {
-            setStatus("Notification permission denied");
-            Alert.alert(
-              "Test Alarm",
-              "Notifications are blocked by system permissions. Enable them in device settings.",
-            );
-            return;
-          }
+    const entriesById = new Map(notificationEntries.map((entry) => [entry.id, entry]));
 
-          setStatus("Failed to schedule test notification");
-          Alert.alert("Test Alarm", "Failed to schedule a test notification.");
-          return;
-        }
+    for (const item of contactItems) {
+      const id = notificationEntryId(activeEclipse.id, item.key);
+      const existing = entriesById.get(id);
+      if (!existing) continue;
 
-        const hh = String(outcome.fireDate.getHours()).padStart(2, "0");
-        const mm = String(outcome.fireDate.getMinutes()).padStart(2, "0");
-        const ss = String(outcome.fireDate.getSeconds()).padStart(2, "0");
-        setStatus(`Test notification scheduled for ${hh}:${mm}:${ss}`);
-        Alert.alert("Test Alarm", `Notification scheduled for ${hh}:${mm}:${ss}.`);
-      })
-      .catch(() => {
-        setStatus("Failed to schedule test notification");
-        Alert.alert("Test Alarm", "Failed to schedule a test notification.");
+      if (!item.iso) {
+        removeNotificationEntry(id);
+        continue;
+      }
+
+      if (
+        existing.iso === item.iso &&
+        existing.contactLabel === item.label &&
+        existing.eclipseDateYmd === activeEclipse.dateYmd &&
+        existing.eclipseLabel === activeEclipse.id
+      ) {
+        continue;
+      }
+
+      upsertNotificationEntry({
+        id,
+        eclipseId: activeEclipse.id,
+        eclipseDateYmd: activeEclipse.dateYmd,
+        eclipseLabel: activeEclipse.id,
+        contactKey: item.key,
+        contactLabel: item.label,
+        iso: item.iso,
       });
-  };
+    }
+  }, [
+    activeEclipse,
+    contactItems,
+    notificationEntries,
+    removeNotificationEntry,
+    upsertNotificationEntry,
+  ]);
+
+  const toggleAlarm = useCallback(
+    (key: ContactKey, enabled: boolean) => {
+      if (!activeEclipse) return;
+      const id = notificationEntryId(activeEclipse.id, key);
+
+      if (!enabled) {
+        removeNotificationEntry(id);
+        return;
+      }
+
+      const contact = contactItems.find((item) => item.key === key);
+      if (!contact?.iso) {
+        setStatus("Cannot enable alarm yet because event time is unavailable.");
+        return;
+      }
+
+      upsertNotificationEntry({
+        id,
+        eclipseId: activeEclipse.id,
+        eclipseDateYmd: activeEclipse.dateYmd,
+        eclipseLabel: activeEclipse.id,
+        contactKey: key,
+        contactLabel: contact.label,
+        iso: contact.iso,
+      });
+    },
+    [activeEclipse, contactItems, removeNotificationEntry, upsertNotificationEntry],
+  );
 
   const resetForNewEclipse = useCallback(() => {
     cancelPendingCompute();
@@ -417,6 +447,7 @@ export function useTimerState(
     setDidComputeFlash(false);
     resultFlash.setValue(0);
     setResult(null);
+    setResultPin(null);
     setStatus("Ready");
   }, [cancelPendingCompute, resultFlash]);
 
@@ -432,6 +463,7 @@ export function useTimerState(
     showVisibleOverlay,
     showCentralOverlay,
     showDirectionsOverlay,
+    isResultCurrentForPin,
     status,
     result,
     isComputing,
@@ -456,7 +488,6 @@ export function useTimerState(
     useGps,
     runCompute,
     toggleAlarm,
-    runAlarmTest,
     resetForNewEclipse,
     setStatusMessage,
   };

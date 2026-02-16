@@ -22,6 +22,7 @@ import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
 import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
+import { useNotificationScheduler } from "../hooks/useNotificationScheduler";
 import { useTimerState } from "../hooks/useTimerState";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
 import { useAppState, type FavoriteLocation } from "../state/appState";
@@ -177,7 +178,13 @@ function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
     };
   }, [state.activeEclipseId]);
 
-  const timerState = useTimerState(activeEclipse, state.notificationSettings);
+  const timerState = useTimerState(
+    activeEclipse,
+    state.notificationSettings,
+    state.notificationEntries,
+    actions.upsertNotificationEntry,
+    actions.removeNotificationEntry,
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -243,7 +250,9 @@ function NotificationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
     <NotificationSettingsScreen
       onOpenMenu={onOpenMenu}
       settings={state.notificationSettings}
+      notificationEntries={state.notificationEntries}
       onSetSetting={actions.setNotificationSetting}
+      onRemoveNotificationEntry={actions.removeNotificationEntry}
     />
   );
 }
@@ -262,10 +271,13 @@ function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
 }
 
 export default function RootNavigator() {
+  const { state: appState } = useAppState();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const [catalog, setCatalog] = useState<EclipseRecord[] | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
+
+  useNotificationScheduler(appState.notificationSettings, appState.notificationEntries);
 
   const closeMenu = useCallback(() => {
     setIsMenuOpen(false);

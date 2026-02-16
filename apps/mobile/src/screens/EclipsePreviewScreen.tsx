@@ -25,6 +25,13 @@ type TimelineEvent = {
   t: number;
 };
 
+type TimelineMarker = TimelineEvent & {
+  progress: number;
+  color: string;
+  labelProgress: number;
+  labelRow: number;
+};
+
 export type PreviewPayload = {
   eclipseId: string;
   eclipseDateYmd: string;
@@ -48,6 +55,10 @@ const MIN_WINDOW_MS = 5 * 60 * 1000;
 const PLAYBACK_SPEED = 480;
 const SIM_STAGE_SIZE = 300;
 const SUN_RADIUS = 72;
+const MARKER_LABEL_HALF_WIDTH_PX = 18;
+const MARKER_LABEL_MIN_GAP_PX = 34;
+const MARKER_LABEL_ROW_LIMIT = 2;
+const MARKER_LABEL_ROW_HEIGHT_PX = 12;
 
 function parseUtcMs(iso?: string): number | undefined {
   if (!iso) return undefined;
@@ -207,15 +218,43 @@ export default function EclipsePreviewScreen({ payload, onBack, onOpenMenu }: Ec
     return () => clearInterval(intervalId);
   }, [isPlaying, timelineDurationMs]);
 
-  const eventMarkers = useMemo(
-    () =>
-      timelineEvents.map((event) => ({
-        ...event,
-        progress: clamp01((event.t - timelineBounds.startMs) / timelineDurationMs),
-        color: colorForContactKey(event.key),
-      })),
-    [timelineBounds.startMs, timelineDurationMs, timelineEvents],
-  );
+  const eventMarkers = useMemo<TimelineMarker[]>(() => {
+    const baseMarkers = timelineEvents.map((event) => ({
+      ...event,
+      progress: clamp01((event.t - timelineBounds.startMs) / timelineDurationMs),
+      color: colorForContactKey(event.key),
+    }));
+    if (!baseMarkers.length) return [];
+
+    const effectiveTrackWidth = progressTrackWidth > 0 ? progressTrackWidth : 240;
+    const minLabelProgress = clamp01(MARKER_LABEL_HALF_WIDTH_PX / effectiveTrackWidth);
+    const maxLabelProgress = clamp01(1 - minLabelProgress);
+
+    const positionedMarkers = baseMarkers
+      .map((marker) => ({
+        ...marker,
+        labelProgress: Math.max(minLabelProgress, Math.min(maxLabelProgress, marker.progress)),
+        labelRow: 0,
+      }))
+      .sort((a, b) => a.labelProgress - b.labelProgress);
+
+    const lastCenterPxByRow = Array<number>(MARKER_LABEL_ROW_LIMIT).fill(-Infinity);
+    for (const marker of positionedMarkers) {
+      const centerPx = marker.labelProgress * effectiveTrackWidth;
+      let row = 0;
+      while (
+        row < MARKER_LABEL_ROW_LIMIT &&
+        centerPx - (lastCenterPxByRow[row] ?? -Infinity) < MARKER_LABEL_MIN_GAP_PX
+      ) {
+        row += 1;
+      }
+      const assignedRow = row < MARKER_LABEL_ROW_LIMIT ? row : MARKER_LABEL_ROW_LIMIT - 1;
+      marker.labelRow = assignedRow;
+      lastCenterPxByRow[assignedRow] = centerPx;
+    }
+
+    return positionedMarkers;
+  }, [progressTrackWidth, timelineBounds.startMs, timelineDurationMs, timelineEvents]);
 
   const moonRadius = useMemo(
     () => determineMoonRadius(payload.kindAtLocation),
@@ -307,22 +346,45 @@ export default function EclipsePreviewScreen({ payload, onBack, onOpenMenu }: Ec
             <Text style={styles.playPauseBtnText}>{isPlaying ? "Pause" : "Play"}</Text>
           </Pressable>
 
-          <Pressable
-            style={styles.progressTrack}
-            onPress={onSeek}
-            onLayout={onProgressTrackLayout}
-            accessibilityRole="adjustable"
-            accessibilityLabel="Eclipse timeline progress"
-          >
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-            {eventMarkers.map((marker) => (
-              <View key={marker.key} style={[styles.progressMarker, { left: `${marker.progress * 100}%` }]}>
-                <View style={[styles.progressMarkerLine, { backgroundColor: marker.color }]} />
-                <Text style={[styles.progressMarkerText, { color: marker.color }]}>{marker.shortLabel}</Text>
-              </View>
-            ))}
-            <View style={[styles.progressThumb, { left: `${progress * 100}%` }]} />
-          </Pressable>
+          <View style={styles.progressTrackWrap}>
+            <View style={styles.progressLabelsLayer} pointerEvents="none">
+              {eventMarkers.map((marker) => (
+                <View
+                  key={`marker-label-${marker.key}`}
+                  style={[
+                    styles.progressMarkerLabelWrap,
+                    {
+                      left: `${marker.labelProgress * 100}%`,
+                      top: marker.labelRow * MARKER_LABEL_ROW_HEIGHT_PX,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.progressMarkerLabelText, { color: marker.color }]}>
+                    {marker.shortLabel}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <Pressable
+              style={styles.progressTrack}
+              onPress={onSeek}
+              onLayout={onProgressTrackLayout}
+              accessibilityRole="adjustable"
+              accessibilityLabel="Eclipse timeline progress"
+            >
+              <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+              {eventMarkers.map((marker) => (
+                <View
+                  key={marker.key}
+                  style={[styles.progressMarkerTick, { left: `${marker.progress * 100}%` }]}
+                >
+                  <View style={[styles.progressMarkerLine, { backgroundColor: marker.color }]} />
+                </View>
+              ))}
+              <View style={[styles.progressThumb, { left: `${progress * 100}%` }]} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.timelineLabels}>
@@ -467,7 +529,7 @@ const styles = StyleSheet.create({
   },
   progressRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 10,
   },
   playPauseBtn: {
@@ -483,9 +545,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
-  progressTrack: {
+  progressTrackWrap: {
     flex: 1,
-    height: 34,
+    gap: 4,
+  },
+  progressLabelsLayer: {
+    position: "relative",
+    height: MARKER_LABEL_ROW_HEIGHT_PX * MARKER_LABEL_ROW_LIMIT,
+  },
+  progressMarkerLabelWrap: {
+    position: "absolute",
+    marginLeft: -MARKER_LABEL_HALF_WIDTH_PX,
+    minWidth: MARKER_LABEL_HALF_WIDTH_PX * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  progressMarkerLabelText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  progressTrack: {
+    height: 30,
     borderRadius: 10,
     backgroundColor: "#181d2c",
     borderWidth: 1,
@@ -503,34 +584,28 @@ const styles = StyleSheet.create({
   },
   progressThumb: {
     position: "absolute",
-    top: 6,
+    top: 5,
     width: 4,
-    height: 20,
+    height: 18,
     marginLeft: -2,
     borderRadius: 2,
     backgroundColor: "white",
   },
-  progressMarker: {
+  progressMarkerTick: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    width: 26,
-    marginLeft: -13,
+    width: 2,
+    marginLeft: -1,
     alignItems: "center",
     justifyContent: "center",
     pointerEvents: "none",
   },
   progressMarkerLine: {
     width: 2,
-    height: 12,
+    height: 16,
     borderRadius: 2,
     backgroundColor: "rgba(220, 225, 255, 0.75)",
-  },
-  progressMarkerText: {
-    marginTop: 1,
-    color: "#d5dcff",
-    fontSize: 9,
-    fontWeight: "700",
   },
   contactLegendRow: {
     marginTop: 2,
