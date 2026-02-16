@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
 import type { LandingScrollState } from "../hooks/useLandingScroll";
+import { APP_LOGO } from "../assets/branding";
 import BurgerButton from "../components/BurgerButton";
 
 type LandingScreenProps = {
@@ -99,7 +100,10 @@ export default function LandingScreen({
       <View style={styles.landingWrap}>
         <View style={styles.headerRow}>
           <BurgerButton onPress={onOpenMenu} />
-          <Text style={styles.landingTitle}>Eclipse Timer</Text>
+          <View style={styles.brandRow}>
+            <Image source={APP_LOGO} style={styles.brandLogo} resizeMode="contain" />
+            <Text style={styles.landingTitle}>Eclipse Timer</Text>
+          </View>
         </View>
         <View style={styles.searchWrap}>
           <TextInput
@@ -203,6 +207,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  brandLogo: {
+    width: 30,
+    height: 30,
   },
   landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
   searchWrap: {

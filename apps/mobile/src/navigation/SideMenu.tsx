@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { APP_LOGO } from "../assets/branding";
 
 export type MenuRouteName = "Landing" | "Timer" | "NotificationSettings" | "LocationSettings";
 
@@ -57,7 +58,10 @@ export default function SideMenu({ visible, activeRoute, onClose, onNavigate }: 
       <Animated.View style={[styles.menuPanel, { transform: [{ translateX }] }]}>
         <SafeAreaView style={styles.menuSafe} edges={["top", "left", "bottom"]}>
           <View style={styles.menuHeader}>
-            <Text style={styles.menuTitle}>Menu</Text>
+            <View style={styles.menuBrandRow}>
+              <Image source={APP_LOGO} style={styles.menuLogo} resizeMode="contain" />
+              <Text style={styles.menuTitle}>Eclipse Timer</Text>
+            </View>
             <Text style={styles.menuSubtitle}>Navigate and manage settings</Text>
           </View>
 
@@ -112,6 +116,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingVertical: 6,
     gap: 4,
+  },
+  menuBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  menuLogo: {
+    width: 22,
+    height: 22,
   },
   menuTitle: {
     color: "white",

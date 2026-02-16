@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+
+  <!-- Outer disc -->
+  <circle cx="256" cy="256" r="240" fill="#0f1c2e"/>
+
+  <!-- Sun rays / ticks -->
+  <g transform="translate(256 256)">
+    <!-- one tick = rounded rect; duplicated via rotation -->
+    <g fill="#fff">
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(-190)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(-170)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(-150)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(-30)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(-10)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(10)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(30)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(50)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(70)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(90)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(110)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(130)"/>
+      <rect x="-7" y="-212" width="14" height="48" rx="7" transform="rotate(150)"/>
+    </g>
+  </g>
+
+  <!-- Eclipse discs -->
+  <g>
+    <!-- right disc -->
+    <circle cx="304" cy="256" r="92" fill="#fff" stroke="#fff" stroke-width="0"/>
+	
+    <!-- Left circle (Moon) -->
+    <circle cx="236" cy="256" r="92" fill="#c9ccd1" stroke="#111" stroke-width="0"/>
+	<!-- Moon craters -->
+    <circle cx="210" cy="235" r="14" fill="#b0b4bb"/>
+    <circle cx="250" cy="280" r="18" fill="#b0b4bb"/>
+    <circle cx="235" cy="210" r="10" fill="#b0b4bb"/>
+    <circle cx="270" cy="240" r="8" fill="#b0b4bb"/>
+    <circle cx="220" cy="285" r="9" fill="#b0b4bb"/>
+  </g>
+</svg>

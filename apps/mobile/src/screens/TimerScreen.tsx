@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -17,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 
 import type { TimerState } from "../hooks/useTimerState";
+import { APP_LOGO } from "../assets/branding";
 import BurgerButton from "../components/BurgerButton";
 import type { FavoriteLocation } from "../state/appState";
 import { colorForContactKey } from "../utils/contactTheme";
@@ -222,7 +224,10 @@ export default function TimerScreen({
       <View style={styles.header}>
         <BurgerButton onPress={onOpenMenu} />
         <View style={styles.headerMeta}>
-          <Text style={styles.title}>Eclipse Timer (MVP)</Text>
+          <View style={styles.headerBrandRow}>
+            <Image source={APP_LOGO} style={styles.headerLogo} resizeMode="contain" />
+            <Text style={styles.title}>Eclipse Timer (MVP)</Text>
+          </View>
           <Text style={styles.subtitle}>
             {isActiveEclipseLoading
               ? "Loading eclipse data..."
@@ -472,7 +477,6 @@ export default function TimerScreen({
       </Modal>
 
       <View style={styles.favoriteWrap}>
-        <Text style={styles.favoriteTitle}>Use Favorite Location</Text>
         {favoriteLocations.length ? (
           <ScrollView
             horizontal
@@ -523,7 +527,6 @@ export default function TimerScreen({
             },
           ]}
         >
-          <Text style={styles.cardTitle}>Results</Text>
           {isActiveEclipseLoading && !timer.result ? (
             <View style={styles.loadingCardState}>
               <ActivityIndicator />
@@ -628,9 +631,18 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  headerBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerLogo: {
+    width: 20,
+    height: 20,
+  },
   title: { color: "white", fontSize: 18, fontWeight: "700" },
   subtitle: { color: "#bdbdbd", fontSize: 12 },
-  mapWrap: { height: 280, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
+  mapWrap: { height: 300, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
   controls: {
     paddingHorizontal: 12,
@@ -641,12 +653,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
     gap: 6,
-  },
-  favoriteTitle: {
-    color: "#cfcfcf",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
   },
   favoriteList: {
     gap: 8,
@@ -858,7 +864,6 @@ const styles = StyleSheet.create({
   results: { flex: 1, paddingHorizontal: 12, paddingTop: 10 },
   resultsContent: { paddingBottom: 28 },
   card: { backgroundColor: "#121212", borderRadius: 12, padding: 12, marginBottom: 10 },
-  cardTitle: { color: "white", fontSize: 14, fontWeight: "700", marginBottom: 6 },
   timerHero: {
     backgroundColor: "#1a2056",
     borderRadius: 10,

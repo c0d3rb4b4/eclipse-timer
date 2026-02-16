@@ -10,7 +10,7 @@ import {
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import { enableScreens } from "react-native-screens";
-import { ActivityIndicator, BackHandler, InteractionManager, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, Image, InteractionManager, StyleSheet, Text, View } from "react-native";
 
 import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
@@ -26,6 +26,7 @@ import { useNotificationScheduler } from "../hooks/useNotificationScheduler";
 import { useTimerState } from "../hooks/useTimerState";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
 import { useAppState, type FavoriteLocation } from "../state/appState";
+import { APP_LOGO } from "../assets/branding";
 
 enableScreens();
 
@@ -85,6 +86,7 @@ function StartupLoadingScreen({ message }: { message: string }) {
   return (
     <View style={styles.startupSafe}>
       <View style={styles.startupCard}>
+        <Image source={APP_LOGO} style={styles.startupLogo} resizeMode="contain" />
         <ActivityIndicator />
         <Text style={styles.startupTitle}>Eclipse Timer</Text>
         <Text style={styles.startupSubtitle}>{message}</Text>
@@ -384,6 +386,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: "center",
     gap: 8,
+  },
+  startupLogo: {
+    width: 52,
+    height: 52,
   },
   startupTitle: {
     color: "white",
