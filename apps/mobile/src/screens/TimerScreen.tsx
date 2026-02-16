@@ -16,6 +16,7 @@ import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 
 import type { TimerState } from "../hooks/useTimerState";
 import BurgerButton from "../components/BurgerButton";
+import type { FavoriteLocation } from "../state/appState";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 
@@ -47,6 +48,8 @@ type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
   isActiveEclipseLoading: boolean;
   timer: TimerState;
+  favoriteLocations: FavoriteLocation[];
+  onUseFavoriteLocation: (location: FavoriteLocation) => void;
   onOpenMenu: () => void;
   onOpenPreview: (result: Circumstances) => void;
 };
@@ -55,6 +58,8 @@ export default function TimerScreen({
   activeEclipse,
   isActiveEclipseLoading,
   timer,
+  favoriteLocations,
+  onUseFavoriteLocation,
   onOpenMenu,
   onOpenPreview,
 }: TimerScreenProps) {
@@ -221,6 +226,31 @@ export default function TimerScreen({
         </Pressable>
       </View>
 
+      <View style={styles.favoriteWrap}>
+        <Text style={styles.favoriteTitle}>Use Favorite Location</Text>
+        {favoriteLocations.length ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.favoriteList}
+          >
+            {favoriteLocations.map((location) => (
+              <Pressable
+                key={location.id}
+                style={styles.favoriteChip}
+                onPress={() => onUseFavoriteLocation(location)}
+              >
+                <Text style={styles.favoriteChipText}>{location.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={styles.favoriteEmpty}>
+            No saved favorites yet. Add one from Menu {" > "} Location Settings.
+          </Text>
+        )}
+      </View>
+
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>{timer.status}</Text>
       </View>
@@ -350,6 +380,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     gap: 10,
+  },
+  favoriteWrap: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    gap: 6,
+  },
+  favoriteTitle: {
+    color: "#cfcfcf",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  favoriteList: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  favoriteChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#3a447d",
+    backgroundColor: "#1a2257",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  favoriteChipText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  favoriteEmpty: {
+    color: "#8f8f8f",
+    fontSize: 12,
   },
   btnRow: {
     flexDirection: "row",

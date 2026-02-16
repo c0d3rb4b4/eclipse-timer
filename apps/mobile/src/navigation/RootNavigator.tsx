@@ -24,7 +24,7 @@ import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
 import { useTimerState } from "../hooks/useTimerState";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
-import { useAppState } from "../state/appState";
+import { useAppState, type FavoriteLocation } from "../state/appState";
 
 enableScreens();
 
@@ -204,11 +204,21 @@ function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
     [activeEclipse?.dateYmd, activeEclipse?.id, navigation],
   );
 
+  const useFavoriteLocation = useCallback(
+    (location: FavoriteLocation) => {
+      timerState.jumpTo(location.lat, location.lon, 2);
+      timerState.setStatusMessage(`Pin set to ${location.name}`);
+    },
+    [timerState],
+  );
+
   return (
     <TimerScreen
       activeEclipse={activeEclipse}
       isActiveEclipseLoading={isActiveEclipseLoading}
       timer={timerState}
+      favoriteLocations={state.favoriteLocations}
+      onUseFavoriteLocation={useFavoriteLocation}
       onOpenMenu={onOpenMenu}
       onOpenPreview={openPreview}
     />
