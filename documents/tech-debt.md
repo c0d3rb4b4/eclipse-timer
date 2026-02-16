@@ -77,7 +77,7 @@
 | A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
 | A-10 | **Hardcoded elevation `elevM: 0`** | 🟡 Medium | Observer elevation is always 0. GPS APIs provide altitude — it should be wired through. |
-| A-11 | **No error boundary** | � High | An unhandled exception in compute or rendering crashes the entire app with no recovery UI. Required for production stability — store reviewers may reject apps that crash on edge cases. |
+| A-11 | **No error boundary** | 🟠 High | ✅ Resolved 2026-02-16: added `ErrorBoundary` class component wrapping `<RootNavigator />` with recovery UI ("Restart" button), integrated with Sentry for crash capture. |
 
 ---
 
@@ -188,7 +188,7 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| AC-01 | **Incomplete accessibility labels** | 🟠 High | Partial progress: some screens have `accessibilityLabel`/`accessibilityRole` but coverage is incomplete (e.g., `LandingScreen` and `NotificationSettingsScreen` are missing labels). App is not fully usable with screen readers. |
+| AC-01 | **Incomplete accessibility labels** | 🟠 High | ✅ Resolved 2026-02-16: added `accessibilityLabel`, `accessibilityRole`, and `accessibilityState` to all interactive elements in `LandingScreen` and `NotificationSettingsScreen` (search input, list items, buttons, switches, headers). |
 | AC-02 | **Color-only differentiation for overlay paths** | 🟡 Medium | Visible vs. central path is distinguished only by color. Needs pattern or label for color-blind users. |
 | AC-03 | **Small touch targets on some buttons** | 🟢 Low | Map type toggle and legend items may be below the 44×44pt minimum recommended by Apple HIG / Material guidelines. |
 | AC-04 | **No dynamic font size support** | 🟡 Medium | All font sizes are hardcoded. Should respect system accessibility font scaling (`allowFontScaling`). |
@@ -199,7 +199,7 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| SP-01 | **Location permission requested without prior explanation** | 🟡 Medium | Best practice is to show a custom rationale dialog before the OS permission prompt. Currently the app just calls `requestForegroundPermissionsAsync()` directly. |
+| SP-01 | **Location permission requested without prior explanation** | 🟡 Medium | ✅ Resolved 2026-02-16: added a custom `Alert.alert` rationale dialog explaining on-device-only location use before the OS permission prompt. |
 | SP-02 | **No privacy policy or data usage disclosure** | � High | App requests location and loads remote GIFs (NASA). Both App Store and Play Store **require** a privacy policy URL during submission. Blocks store listing. |
 | SP-03 | **External URL (NASA GIF) loaded without HTTPS validation** | 🟢 Low | The URL is constructed dynamically. A malformed date could produce a broken URL — no sanitization. |
 
@@ -209,18 +209,18 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | EAS project ID set (`a29a7662-96be-4509-a79e-fbe4b5dac1ff`) but no `eas.json` exists yet. Must create `eas.json` with `development`/`preview`/`production` build profiles. |
+| CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | ✅ Resolved 2026-02-16: created `eas.json` with `development`/`preview`/`production` build profiles (EAS project ID `a29a7662-96be-4509-a79e-fbe4b5dac1ff`). |
 | CI-01 | **No CI pipeline** | 🔴 Critical | No GitHub Actions, no GitLab CI, no any CI config. Nothing runs `typecheck`, `lint`, or `test` automatically on push/PR. |
 | CI-02 | **No automated mobile builds in CI** | 🟠 High | Even after EAS setup, there is no CI workflow that runs EAS builds to produce Android and iOS release artifacts automatically. |
 | CI-03 | **No app signing / keystore management** | 🟠 High | No `eas.json`, no code-signing config. Android `gradle.properties` still references debug keystore only. Required for store distribution. Severity upgraded — this blocks store submission. |
 | CI-04 | **No environment configuration** | 🟡 Medium | No `.env` / `.env.example`, no `expo-constants`, no staging vs. production config. API keys or feature flags have no mechanism. |
-| CI-05 | **No crash reporting / analytics** | 🟠 High | No Sentry, Bugsnag, or similar. Production crashes will be invisible. Severity upgraded — store-quality apps need crash visibility from day one. |
+| CI-05 | **No crash reporting / analytics** | 🟠 High | ✅ Resolved 2026-02-16: installed `@sentry/react-native`, configured `app.json` plugin, wrapped root with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder requires replacement before production. |
 | CI-06 | **No OTA update mechanism** | 🟡 Medium | `expo-updates` not installed or configured. Every JS-only fix requires a full store release cycle. |
 | CI-07 | **No app store metadata** | 🟡 Medium | No screenshots, store description, keyword list, or promotional assets. Required for both App Store Connect and Google Play Console submission. Severity upgraded — blocks submission. |
-| CI-08 | **iOS `bundleIdentifier` not set** | 🔴 Critical | `app.json` has no `expo.ios.bundleIdentifier`. Cannot build for iOS without it. |
-| CI-09 | **Android package name is a placeholder** | 🔴 Critical | `android.package` is `com.anonymous.eclipsetimer`. This is **immutable after first Play Store upload** — must be set to the final package name before the first production build. |
-| CI-10 | **No `expo-splash-screen` control** | 🟡 Medium | No `preventAutoHideAsync`/`hideAsync` calls in `App.tsx`. The splash screen cannot be held while the app bootstraps, causing a flash of empty content on cold start. |
-| CI-11 | **Version `0.0.1` — needs release versioning** | 🟡 Medium | Both `package.json` and `app.json` are at `0.0.1`. Must bump to `1.0.0` for initial store release and establish a versioning/build-number strategy. |
+| CI-08 | **iOS `bundleIdentifier` not set** | 🔴 Critical | ✅ Resolved 2026-02-16: set `expo.ios.bundleIdentifier` to `com.lallimaven.eclipse-timer` with `buildNumber: "1"`. |
+| CI-09 | **Android package name is a placeholder** | 🔴 Critical | ✅ Resolved 2026-02-16: set `android.package` to `com.lallimaven.eclipsetimer` with `versionCode: 1`. |
+| CI-10 | **No `expo-splash-screen` control** | 🟡 Medium | ✅ Resolved 2026-02-16: `SplashScreen.preventAutoHideAsync()` called at module level, `hideAsync()` after catalog loads. |
+| CI-11 | **Version `0.0.1` — needs release versioning** | 🟡 Medium | ✅ Resolved 2026-02-16: bumped to `1.0.0` in both `package.json` and `app.json`, set `ios.buildNumber: "1"` and `android.versionCode: 1`. |
 
 ---
 
@@ -247,10 +247,10 @@
 | T-03 | ✅ Resolved 2026-02-13: unit tests for math helpers |
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
 | C-01 | ✅ Resolved 2026-02-13: fix cross-package deep import in overlay build |
-| CI-00 | Create `eas.json` with build profiles (EAS project ID already set) |
+| CI-00 | ✅ Resolved 2026-02-16: created `eas.json` with development/preview/production build profiles |
 | CI-01 | Set up a CI pipeline |
-| CI-08 | Set iOS `bundleIdentifier` in `app.json` |
-| CI-09 | Replace placeholder Android package name `com.anonymous.eclipsetimer` |
+| CI-08 | ✅ Resolved 2026-02-16: set iOS `bundleIdentifier` to `com.lallimaven.eclipse-timer` |
+| CI-09 | ✅ Resolved 2026-02-16: set Android package to `com.lallimaven.eclipsetimer` |
 
 ### 🟠 High — Fix Soon
 | ID | Summary |
@@ -262,16 +262,16 @@
 | A-02 | ✅ Resolved 2026-02-12: introduce state management |
 | A-05 | ✅ Resolved 2026-02-13: defer compute with `InteractionManager.runAfterInteractions` |
 | A-06 / U-11 | ✅ Resolved 2026-02-13: make countdown timer tick in real time |
-| A-11 | Add error boundary (upgraded — crashes in production are unrecoverable) |
+| A-11 | ✅ Resolved 2026-02-16: added error boundary with recovery UI + Sentry crash reporting |
 | E-05 | ✅ Resolved 2026-02-13: fix oversimplified magnitude formula |
-| AC-01 | Complete accessibility labels across all screens |
+| AC-01 | ✅ Resolved 2026-02-16: completed accessibility labels on LandingScreen + NotificationSettingsScreen |
 | U-01 / F-09 | ✅ Resolved 2026-02-13: show local time for contacts |
 | F-01 | Multi-eclipse switching on timer |
 | F-02 | ✅ Resolved 2026-02-16: persist user preferences via AsyncStorage |
 | F-03 | ✅ Resolved 2026-02-16: implement real alarm scheduling |
 | CI-02 | Automate EAS Build jobs in CI for Android/iOS artifacts |
 | CI-03 | Configure app signing / keystore (blocks store submission) |
-| CI-05 | Add crash reporting (Sentry / Bugsnag) |
+| CI-05 | ✅ Resolved 2026-02-16: integrated @sentry/react-native with Sentry.wrap + ErrorBoundary |
 | SP-02 | Write & host privacy policy (required by both stores) |
 
 ### 🟡 Medium — Plan Next
@@ -307,12 +307,12 @@
 | P-05 | ✅ Resolved 2026-02-13: virtualize landing list with FlatList |
 | AC-02 | Add non-color overlay differentiation |
 | AC-04 | Support dynamic font sizing |
-| SP-01 | Show location rationale before permission |
+| SP-01 | ✅ Resolved 2026-02-16: added pre-permission rationale Alert dialog before location request |
 | CI-04 | Add env config support |
 | CI-06 | Configure `expo-updates` for OTA |
 | CI-07 | Prepare app store metadata (screenshots, descriptions, icons) |
-| CI-10 | Add `expo-splash-screen` control |
-| CI-11 | Bump version to `1.0.0` and establish versioning strategy |
+| CI-10 | ✅ Resolved 2026-02-16: added `expo-splash-screen` with preventAutoHideAsync/hideAsync |
+| CI-11 | ✅ Resolved 2026-02-16: bumped to `1.0.0` with `buildNumber: "1"` and `versionCode: 1` |
 | D-01 | Write CONTRIBUTING.md |
 | D-02 | Start a CHANGELOG |
 | D-06 | Document catalog data provenance |
@@ -346,21 +346,21 @@
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 1.1 | **Choose a final Android `applicationId`** (e.g., `com.lallimaven.eclipsetimer`). Set in `app.json` → `expo.android.package`. This is **immutable** after first Play Store upload. | CI-09 | ⬜ Not started |
-| 1.2 | **Set iOS `bundleIdentifier`** in `app.json` → `expo.ios.bundleIdentifier` (e.g., `com.lallimaven.eclipse-timer`). | CI-08 | ⬜ Not started |
-| 1.3 | **Create `eas.json`** with three build profiles: `development` (internal, simulator), `preview` (TestFlight / internal track APK), `production` (store release). | CI-00, CI-03 | ⬜ Not started |
+| 1.1 | **Choose a final Android `applicationId`** — set to `com.lallimaven.eclipsetimer` in `app.json` → `expo.android.package`. This is **immutable** after first Play Store upload. | CI-09 | ✅ Done 2026-02-16 |
+| 1.2 | **Set iOS `bundleIdentifier`** — set to `com.lallimaven.eclipse-timer` in `app.json` → `expo.ios.bundleIdentifier`. | CI-08 | ✅ Done 2026-02-16 |
+| 1.3 | **Create `eas.json`** with three build profiles: `development` (internal, simulator), `preview` (TestFlight / internal track APK), `production` (store release, autoIncrement). | CI-00, CI-03 | ✅ Done 2026-02-16 |
 | 1.4 | **Run `eas build --profile production --platform all`** once to verify builds complete and EAS manages signing credentials (keystore + provisioning profiles). | CI-03 | ⬜ Not started |
-| 1.5 | **Bump version to `1.0.0`** in both `apps/mobile/package.json` and `apps/mobile/app.json`. Set `expo.ios.buildNumber: "1"` and confirm `expo.android.versionCode: 1`. | CI-11 | ⬜ Not started |
+| 1.5 | **Bump version to `1.0.0`** in both `apps/mobile/package.json` and `apps/mobile/app.json`. Set `expo.ios.buildNumber: "1"` and `expo.android.versionCode: 1`. | CI-11 | ✅ Done 2026-02-16 |
 
 ### Phase 2 — Stability & Quality (required before store review)
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 2.1 | **Add a React error boundary** wrapping `<RootNavigator />` in `App.tsx`. Show a recovery UI with "Restart" button instead of a white-screen crash. | A-11 | ⬜ Not started |
-| 2.2 | **Integrate crash reporting** — install `sentry-expo` (or `@sentry/react-native`), configure DSN via `app.json` plugin, and wrap the root component. | CI-05 | ⬜ Not started |
-| 2.3 | **Complete accessibility labels** on `LandingScreen` and `NotificationSettingsScreen`. Ensure all interactive elements have `accessibilityLabel` + `accessibilityRole`. | AC-01 | ⬜ Not started |
-| 2.4 | **Add `expo-splash-screen` control** — call `SplashScreen.preventAutoHideAsync()` before render, `hideAsync()` after catalog is loaded, to prevent a flash of empty content. | CI-10 | ⬜ Not started |
-| 2.5 | **Show a pre-permission rationale** dialog before calling `requestForegroundPermissionsAsync()` explaining why the app needs location. | SP-01 | ⬜ Not started |
+| 2.1 | **Add a React error boundary** wrapping `<RootNavigator />` in `App.tsx`. Show a recovery UI with "Restart" button instead of a white-screen crash. | A-11 | ✅ Done 2026-02-16 |
+| 2.2 | **Integrate crash reporting** — installed `@sentry/react-native`, configured plugin in `app.json`, wrapped root component with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder set — replace with real DSN before production. | CI-05 | ✅ Done 2026-02-16 |
+| 2.3 | **Complete accessibility labels** on `LandingScreen` and `NotificationSettingsScreen`. All interactive elements have `accessibilityLabel` + `accessibilityRole`. | AC-01 | ✅ Done 2026-02-16 |
+| 2.4 | **Add `expo-splash-screen` control** — `preventAutoHideAsync()` called at module level in `App.tsx`, `hideAsync()` called after catalog loads in `RootNavigator`. | CI-10 | ✅ Done 2026-02-16 |
+| 2.5 | **Show a pre-permission rationale** dialog before calling `requestForegroundPermissionsAsync()` explaining why the app needs location. | SP-01 | ✅ Done 2026-02-16 |
 | 2.6 | **Test on physical devices** for both iOS and Android using `eas build --profile preview`. Validate notifications, location, map, and deep-link scheme. | — | ⬜ Not started |
 
 ### Phase 3 — Legal & Policy (required by both stores)

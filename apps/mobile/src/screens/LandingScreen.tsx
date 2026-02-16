@@ -76,6 +76,9 @@ export default function LandingScreen({
           selectedLanding?.id === item.id ? styles.landingListItemSelected : null,
         ]}
         onPress={() => onSelect(item.id)}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.dateYmd} ${item.kindLabel}, ${item.isPast ? "past" : "upcoming"}`}
+        accessibilityState={{ selected: selectedLanding?.id === item.id }}
       >
         <Text
           style={[
@@ -102,7 +105,7 @@ export default function LandingScreen({
           <BurgerButton onPress={onOpenMenu} />
           <View style={styles.brandRow}>
             <Image source={APP_LOGO} style={styles.brandLogo} resizeMode="contain" />
-            <Text style={styles.landingTitle}>Eclipse Timer</Text>
+            <Text style={styles.landingTitle} accessibilityRole="header">Eclipse Timer</Text>
           </View>
         </View>
         <View style={styles.searchWrap}>
@@ -115,6 +118,8 @@ export default function LandingScreen({
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"
+            accessibilityLabel="Search eclipses"
+            accessibilityRole="search"
           />
           <Text style={styles.searchMeta}>
             {filteredCount} of {totalCount}
@@ -129,6 +134,8 @@ export default function LandingScreen({
             style={styles.landingListScroll}
             contentContainerStyle={styles.landingListScrollContent}
             renderItem={renderItem}
+            accessibilityRole="list"
+            accessibilityLabel="Eclipse list"
             ItemSeparatorComponent={() => <View style={{ height: scroll.rowGap }} />}
             getItemLayout={(_, index) => ({
               length: scroll.rowSpan,
@@ -173,7 +180,10 @@ export default function LandingScreen({
               {previewState === "error" ? (
                 <View style={styles.previewOverlay}>
                   <Text style={styles.previewOverlayText}>Preview unavailable right now.</Text>
-                  <Pressable style={styles.previewRetryBtn} onPress={retryPreview}>
+                  <Pressable style={styles.previewRetryBtn} onPress={retryPreview}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry loading preview"
+                  >
                     <Text style={styles.previewRetryText}>Retry</Text>
                   </Pressable>
                 </View>
@@ -186,6 +196,9 @@ export default function LandingScreen({
           style={[styles.goBtn, !canGo ? styles.goBtnDisabled : null]}
           onPress={onGo}
           disabled={!canGo}
+          accessibilityRole="button"
+          accessibilityLabel="Go to eclipse timer"
+          accessibilityState={{ disabled: !canGo }}
         >
           <Text style={styles.goBtnText}>GO</Text>
         </Pressable>

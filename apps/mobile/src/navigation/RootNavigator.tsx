@@ -11,6 +11,7 @@ import {
 } from "@react-navigation/native-stack";
 import { enableScreens } from "react-native-screens";
 import { ActivityIndicator, BackHandler, Image, InteractionManager, StyleSheet, Text, View } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
 
 import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
@@ -325,6 +326,7 @@ export default function RootNavigator() {
       const loaded = loadCatalog();
       if (didCancel) return;
       setCatalog(loaded);
+      void SplashScreen.hideAsync();
     });
 
     return () => {

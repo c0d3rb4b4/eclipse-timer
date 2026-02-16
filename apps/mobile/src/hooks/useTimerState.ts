@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Animated, InteractionManager } from "react-native";
+import { Animated, Alert, InteractionManager } from "react-native";
 import type { Details, MapPressEvent, Region } from "react-native-maps";
 import type MapView from "react-native-maps";
 import * as Location from "expo-location";
@@ -280,6 +280,25 @@ export function useTimerState(
 
   const useGps = async () => {
     try {
+      const existing = await Location.getForegroundPermissionsAsync();
+      if (existing.status !== "granted" && existing.canAskAgain) {
+        const { isConfirmed } = await new Promise<{ isConfirmed: boolean }>((resolve) => {
+          Alert.alert(
+            "Location Access",
+            "Eclipse Timer uses your location to compute precise eclipse contact times for where you are. Your location data stays on-device and is never sent to a server.",
+            [
+              { text: "Not Now", style: "cancel", onPress: () => resolve({ isConfirmed: false }) },
+              { text: "Continue", onPress: () => resolve({ isConfirmed: true }) },
+            ],
+            { cancelable: true, onDismiss: () => resolve({ isConfirmed: false }) },
+          );
+        });
+        if (!isConfirmed) {
+          setStatus("Location permission declined");
+          return;
+        }
+      }
+
       setStatus("Requesting location permission...");
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status !== "granted") {

@@ -28,12 +28,22 @@ type SettingRowProps = {
 
 function SettingRow({ title, description, value, disabled = false, onValueChange }: SettingRowProps) {
   return (
-    <View style={[styles.rowCard, disabled ? styles.rowCardDisabled : null]}>
+    <View style={[styles.rowCard, disabled ? styles.rowCardDisabled : null]}
+      accessibilityRole="none"
+    >
       <View style={styles.rowMain}>
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        accessibilityRole="switch"
+        accessibilityLabel={title}
+        accessibilityHint={description}
+        accessibilityState={{ checked: value, disabled }}
+      />
     </View>
   );
 }
@@ -132,7 +142,7 @@ export default function NotificationSettingsScreen({
       <View style={styles.headerRow}>
         <BurgerButton onPress={onOpenMenu} />
         <View style={styles.headerMeta}>
-          <Text style={styles.title}>Notification Settings</Text>
+          <Text style={styles.title} accessibilityRole="header">Notification Settings</Text>
           <Text style={styles.subtitle}>Manage how eclipse alerts should behave.</Text>
         </View>
       </View>
