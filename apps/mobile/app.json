@@ -73,8 +73,18 @@
           "organization": "__YOUR_SENTRY_ORG__",
           "project": "__YOUR_SENTRY_PROJECT__"
         }
-      ]
+      ],
+      "expo-updates"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a29a7662-96be-4509-a79e-fbe4b5dac1ff",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
     "extra": {
       "eas": {
         "projectId": "a29a7662-96be-4509-a79e-fbe4b5dac1ff"

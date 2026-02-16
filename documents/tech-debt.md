@@ -210,12 +210,12 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | ✅ Resolved 2026-02-16: created `eas.json` with `development`/`preview`/`production` build profiles (EAS project ID `a29a7662-96be-4509-a79e-fbe4b5dac1ff`). |
-| CI-01 | **No CI pipeline** | 🔴 Critical | No GitHub Actions, no GitLab CI, no any CI config. Nothing runs `typecheck`, `lint`, or `test` automatically on push/PR. |
-| CI-02 | **No automated mobile builds in CI** | 🟠 High | Even after EAS setup, there is no CI workflow that runs EAS builds to produce Android and iOS release artifacts automatically. |
+| CI-01 | **No CI pipeline** | 🔴 Critical | ✅ Resolved 2026-02-16: created `.github/workflows/ci.yml` (GitHub Actions) running `pnpm typecheck`, `pnpm lint`, `pnpm test` on push/PR to `main`. |
+| CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI → EAS Build → EAS Submit pipeline. Triggered on `main` push or manual dispatch. Submit job gated behind `environment: production` approval. |
 | CI-03 | **No app signing / keystore management** | 🟠 High | No `eas.json`, no code-signing config. Android `gradle.properties` still references debug keystore only. Required for store distribution. Severity upgraded — this blocks store submission. |
 | CI-04 | **No environment configuration** | 🟡 Medium | No `.env` / `.env.example`, no `expo-constants`, no staging vs. production config. API keys or feature flags have no mechanism. |
 | CI-05 | **No crash reporting / analytics** | 🟠 High | ✅ Resolved 2026-02-16: installed `@sentry/react-native`, configured `app.json` plugin, wrapped root with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder requires replacement before production. |
-| CI-06 | **No OTA update mechanism** | 🟡 Medium | `expo-updates` not installed or configured. Every JS-only fix requires a full store release cycle. |
+| CI-06 | **No OTA update mechanism** | 🟡 Medium | ✅ Resolved 2026-02-16: installed `expo-updates`, configured `runtimeVersion` (appVersion policy) and `updates` URL pointing to EAS project in `app.json`. |
 | CI-07 | **No app store metadata** | 🟡 Medium | No screenshots, store description, keyword list, or promotional assets. Required for both App Store Connect and Google Play Console submission. Severity upgraded — blocks submission. |
 | CI-08 | **iOS `bundleIdentifier` not set** | 🔴 Critical | ✅ Resolved 2026-02-16: set `expo.ios.bundleIdentifier` to `com.lallimaven.eclipse-timer` with `buildNumber: "1"`. |
 | CI-09 | **Android package name is a placeholder** | 🔴 Critical | ✅ Resolved 2026-02-16: set `android.package` to `com.lallimaven.eclipsetimer` with `versionCode: 1`. |
@@ -248,7 +248,7 @@
 | A-01 | ✅ Resolved 2026-02-12: break up the 1 000-line `App.tsx` |
 | C-01 | ✅ Resolved 2026-02-13: fix cross-package deep import in overlay build |
 | CI-00 | ✅ Resolved 2026-02-16: created `eas.json` with development/preview/production build profiles |
-| CI-01 | Set up a CI pipeline |
+| CI-01 | ✅ Resolved 2026-02-16: created GitHub Actions CI workflow (`.github/workflows/ci.yml`) |
 | CI-08 | ✅ Resolved 2026-02-16: set iOS `bundleIdentifier` to `com.lallimaven.eclipse-timer` |
 | CI-09 | ✅ Resolved 2026-02-16: set Android package to `com.lallimaven.eclipsetimer` |
 
@@ -269,7 +269,7 @@
 | F-01 | Multi-eclipse switching on timer |
 | F-02 | ✅ Resolved 2026-02-16: persist user preferences via AsyncStorage |
 | F-03 | ✅ Resolved 2026-02-16: implement real alarm scheduling |
-| CI-02 | Automate EAS Build jobs in CI for Android/iOS artifacts |
+| CI-02 | ✅ Resolved 2026-02-16: created EAS Build + Submit workflow (`.github/workflows/eas-build.yml`) |
 | CI-03 | Configure app signing / keystore (blocks store submission) |
 | CI-05 | ✅ Resolved 2026-02-16: integrated @sentry/react-native with Sentry.wrap + ErrorBoundary |
 | SP-02 | ✅ Resolved 2026-02-16: privacy policy written, store privacy declarations documented, iOS privacy manifest added |
@@ -309,7 +309,7 @@
 | AC-04 | Support dynamic font sizing |
 | SP-01 | ✅ Resolved 2026-02-16: added pre-permission rationale Alert dialog before location request |
 | CI-04 | Add env config support |
-| CI-06 | Configure `expo-updates` for OTA |
+| CI-06 | ✅ Resolved 2026-02-16: installed + configured `expo-updates` with runtimeVersion and EAS update URL |
 | CI-07 | ✅ Partially resolved 2026-02-16: store descriptions, content rating answers, and icon fix completed. Screenshots and feature graphic still needed (manual). |
 | CI-10 | ✅ Resolved 2026-02-16: added `expo-splash-screen` with preventAutoHideAsync/hideAsync |
 | CI-11 | ✅ Resolved 2026-02-16: bumped to `1.0.0` with `buildNumber: "1"` and `versionCode: 1` |
@@ -386,10 +386,10 @@
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 5.1 | **Create a GitHub Actions CI workflow** (`.github/workflows/ci.yml`) that runs on push/PR: `pnpm install` → `pnpm typecheck` → `pnpm lint` → `pnpm test`. | CI-01 | ⬜ Not started |
-| 5.2 | **Add an EAS Build workflow** (`.github/workflows/eas-build.yml`) triggered on `main` push or manual dispatch: runs `eas build --profile production --platform all --non-interactive`. | CI-02 | ⬜ Not started |
-| 5.3 | **Add an EAS Submit step** — `eas submit --platform all` to automate upload to App Store Connect and Google Play Console. | CI-02 | ⬜ Not started |
-| 5.4 | **Set up `expo-updates`** for OTA JS bundle updates post-launch (avoids full store review for JS-only fixes). | CI-06 | ⬜ Not started |
+| 5.1 | **Create a GitHub Actions CI workflow** — `.github/workflows/ci.yml` runs on push/PR to `main`: checkout → pnpm install → typecheck → lint → test. Includes concurrency grouping to cancel stale runs. | CI-01 | ✅ Done 2026-02-16 |
+| 5.2 | **Add an EAS Build workflow** — `.github/workflows/eas-build.yml` triggers on `main` push (when `apps/mobile/`, `packages/`, or lockfile change) or manual dispatch. CI checks run first, then `eas build --profile production`. Platform selectable via `workflow_dispatch` input (default: `all`). Requires `EXPO_TOKEN` secret. | CI-02 | ✅ Done 2026-02-16 |
+| 5.3 | **Add an EAS Submit step** — included as a gated `submit` job in `eas-build.yml`. Only runs on manual dispatch with `submit: true`. Uses `environment: production` for manual approval before store upload. Runs `eas submit --platform all --latest`. | CI-02 | ✅ Done 2026-02-16 |
+| 5.4 | **Set up `expo-updates`** — installed `expo-updates`, added `runtimeVersion: { policy: "appVersion" }` and `updates` config (URL, checkAutomatically ON_LOAD, fallbackToCacheTimeout 0) to `app.json`, added `expo-updates` plugin. | CI-06 | ✅ Done 2026-02-16 |
 
 ### Phase 6 — Nice-to-have before v1.0.0
 
