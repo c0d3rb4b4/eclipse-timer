@@ -1,4 +1,4 @@
-package com.anonymous.eclipsetimer
+package com.lallimaven.eclipsetimer
 
 import android.os.Build
 import android.os.Bundle
