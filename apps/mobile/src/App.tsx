@@ -1,9 +1,9 @@
-import { useEffect } from "react";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import * as Speech from "expo-speech";
-import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { addNotificationReceivedListener } from "expo-notifications/build/NotificationsEmitter";
+import * as Speech from "expo-speech";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import RootNavigator from "./navigation/RootNavigator";
@@ -12,10 +12,16 @@ import { AppStateProvider } from "./state/appState";
 
 SplashScreen.preventAutoHideAsync();
 
-Sentry.init({
-  dsn: "__YOUR_SENTRY_DSN__",
-  enabled: !__DEV__,
-});
+const sentryDsn = "__YOUR_SENTRY_DSN__".trim();
+const isValidSentryDsn = /^https?:\/\/.+/.test(sentryDsn);
+const isSentryEnabled = !__DEV__ && isValidSentryDsn;
+
+if (isSentryEnabled) {
+  Sentry.init({
+    dsn: sentryDsn,
+    enabled: true,
+  });
+}
 
 function AppInner() {
   useEffect(() => {
@@ -51,10 +57,12 @@ function AppInner() {
   );
 }
 
-export default Sentry.wrap(function App() {
+function App() {
   return (
     <ErrorBoundary>
       <AppInner />
     </ErrorBoundary>
   );
-});
+}
+
+export default isSentryEnabled ? Sentry.wrap(App) : App;
