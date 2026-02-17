@@ -232,6 +232,47 @@ pnpm install
 
 If you already have the repo locally, running `pnpm install` at the root is enough.
 
+## Google Maps API Key Setup (Local + CI)
+
+Android uses `react-native-maps`, so a Google Maps Android API key is required.
+This repo now reads the key from `GOOGLE_MAPS_ANDROID_API_KEY` at build/config time.
+
+### Local development
+
+1. Copy the example env file:
+   ```bash
+   cp apps/mobile/.env.example apps/mobile/.env.local
+   ```
+   On Windows PowerShell:
+   ```powershell
+   Copy-Item apps/mobile/.env.example apps/mobile/.env.local
+   ```
+2. Edit `apps/mobile/.env.local` and set:
+   ```env
+   GOOGLE_MAPS_ANDROID_API_KEY=your_real_android_maps_key
+   ```
+3. Rebuild the Android app after changing the key:
+   ```bash
+   pnpm -C apps/mobile android
+   ```
+
+### GitHub Actions (EAS build workflow)
+
+1. In GitHub, add repository secret:
+   - Name: `GOOGLE_MAPS_ANDROID_API_KEY`
+   - Value: your Android Maps key
+2. The workflow `.github/workflows/eas-build.yml` injects this secret into the build job.
+3. Android/all builds fail early with a clear message if the secret is missing.
+
+### Security recommendations
+
+- Restrict the key in Google Cloud Console to:
+  - Application restriction: `Android apps`
+  - Package: `com.lallimaven.eclipsetimer`
+  - SHA-1: your debug/release certificate fingerprints
+- Restrict API usage to `Maps SDK for Android`.
+- If a key was ever committed, rotate it in Google Cloud and replace it in local/CI secrets.
+
 ## Getting Started (Quick Start)
 
 From the repo root:

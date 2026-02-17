@@ -63,6 +63,8 @@ jobs:
     name: EAS Build (${{ github.event.inputs.platform || 'all' }})
     needs: ci
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
 
     steps:
       - name: Checkout
@@ -87,6 +89,15 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Validate Google Maps Android key
+        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+        run: |
+          if [ -z "$GOOGLE_MAPS_ANDROID_API_KEY" ]; then
+            echo "Missing GOOGLE_MAPS_ANDROID_API_KEY GitHub secret."
+            echo "Add it in: Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
 
       - name: Build
         working-directory: apps/mobile

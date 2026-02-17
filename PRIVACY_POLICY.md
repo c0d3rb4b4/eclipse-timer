@@ -84,7 +84,7 @@ If we update this Privacy Policy, we will revise the "Last Updated" date at the 
 
 If you have questions about this Privacy Policy, you can reach us at:
 
-- **GitHub:** [https://github.com/lallimaven/eclipse-timer](https://github.com/lallimaven/eclipse-timer)
+- **GitHub:** [https://github.com/c0d3rb4b4/eclipse-timer](https://github.com/c0d3rb4b4/eclipse-timer)
 
 ---
 
