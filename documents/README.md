@@ -6,6 +6,7 @@ This folder contains the project documentation for the `eclipse-timer` monorepo.
 
 ### Planning
 - `documents/01-documentation-plan.md`
+- `documents/release-plan-eas.md`
 
 ### High-Level
 - `documents/high-level/system-overview.md`
