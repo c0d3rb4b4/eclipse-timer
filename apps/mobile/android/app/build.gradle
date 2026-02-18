@@ -80,6 +80,18 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def googleMapsAndroidApiKey = ((System.getenv("GOOGLE_MAPS_ANDROID_API_KEY")
+        ?: findProperty("GOOGLE_MAPS_ANDROID_API_KEY")
+        ?: "") as String).trim()
+def isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("release")
+}
+
+if (googleMapsAndroidApiKey.length() == 0 && isReleaseBuildRequested) {
+    throw new GradleException("[maps] Missing GOOGLE_MAPS_ANDROID_API_KEY for release build.")
+} else if (googleMapsAndroidApiKey.length() == 0) {
+    println("[maps] GOOGLE_MAPS_ANDROID_API_KEY is not set. Android debug MapView will fail until it is provided.")
+}
 
 def sentryOrg = (System.getenv("SENTRY_ORG") ?: "").trim()
 def sentryProject = (System.getenv("SENTRY_PROJECT") ?: "").trim()
@@ -111,6 +123,7 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        manifestPlaceholders += [GOOGLE_MAPS_ANDROID_API_KEY: googleMapsAndroidApiKey]
     }
     signingConfigs {
         debug {
