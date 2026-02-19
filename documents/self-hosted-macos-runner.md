@@ -51,7 +51,18 @@ Android toolchain:
 
 1. Install Android Studio.
 2. Install SDK Platform, Build-Tools, Command-line Tools, and Platform Tools.
-3. Export SDK vars (for the runner user):
+3. Ensure JDK 17 is available for Gradle:
+```bash
+brew install temurin@17
+/usr/libexec/java_home -V
+```
+4. Optional for shell profile (if Java is still not detected):
+```bash
+echo 'export JAVA_HOME=$(/usr/libexec/java_home -v 17)' >> ~/.zshrc
+echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+5. Export SDK vars (for the runner user):
 ```bash
 echo 'export ANDROID_HOME="$HOME/Library/Android/sdk"' >> ~/.zshrc
 echo 'export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"' >> ~/.zshrc
@@ -268,3 +279,6 @@ If this passes, GitHub workflow `eas-build.yml` should pass on the same runner h
    - Re-check keystore credentials in EAS credentials.
 6. Missing Maps key:
    - Ensure `GOOGLE_MAPS_ANDROID_API_KEY` is present in repository secrets.
+7. Android build fails with `Unable to locate a Java Runtime`:
+   - Install JDK 17 on the runner (`brew install temurin@17`).
+   - Or rely on workflow-managed Java setup (`actions/setup-java@v4`) and rerun.

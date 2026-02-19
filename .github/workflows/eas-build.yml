@@ -80,6 +80,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Java (Android builds)
+        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
       - name: Setup EAS CLI
         uses: expo/expo-github-action@v8
         with:
