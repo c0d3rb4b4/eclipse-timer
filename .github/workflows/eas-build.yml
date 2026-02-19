@@ -60,6 +60,9 @@ jobs:
     env:
       GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
       SENTRY_DISABLE_AUTO_UPLOAD: "true"
+      SENTRY_DISABLE_XCODE_DEBUG_UPLOAD: "true"
+      SENTRY_ALLOW_FAILURE: "true"
+      SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
 
     steps:
       - name: Checkout
@@ -97,6 +100,10 @@ jobs:
         working-directory: apps/mobile
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+          SENTRY_DISABLE_XCODE_DEBUG_UPLOAD: "true"
+          SENTRY_ALLOW_FAILURE: "true"
+          SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
         run: |
           set -euo pipefail
           platform="${{ github.event.inputs.platform || 'all' }}"

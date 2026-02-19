@@ -21,7 +21,13 @@
     },
     "production": {
       "environment": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "SENTRY_DISABLE_XCODE_DEBUG_UPLOAD": "true",
+        "SENTRY_ALLOW_FAILURE": "true",
+        "SENTRY_CLI_EXECUTABLE": "/usr/bin/true"
+      }
     }
   },
   "submit": {
