@@ -182,6 +182,27 @@ jobs:
           xcrun simctl boot "$udid" || true
           xcrun simctl bootstatus "$udid" -b
 
+          # Pre-approve custom URL scheme to avoid "Open in \"Eclipse Timer\"?" prompts.
+          # Preferred path: write approval inside simulated device user defaults.
+          # Fallback path: write directly to the simulator schemeapproval plist.
+          approve_scheme() {
+            local source_app="$1"
+            local scheme_key="$source_app-->eclipsetimer"
+            local reverse_key="$source_app-->$BUNDLE_ID"
+            local plist="$HOME/Library/Developer/CoreSimulator/Devices/$udid/data/Library/Preferences/com.apple.launchservices.schemeapproval.plist"
+
+            xcrun simctl spawn "$udid" defaults write com.apple.launchservices.schemeapproval "$scheme_key" -string "$BUNDLE_ID" || true
+            xcrun simctl spawn "$udid" defaults write com.apple.launchservices.schemeapproval "$reverse_key" -string "eclipsetimer://" || true
+
+            /usr/libexec/PlistBuddy -c "Add :$scheme_key string $BUNDLE_ID" "$plist" >/dev/null 2>&1 || \
+              /usr/libexec/PlistBuddy -c "Set :$scheme_key $BUNDLE_ID" "$plist" >/dev/null 2>&1 || true
+            /usr/libexec/PlistBuddy -c "Add :$reverse_key string eclipsetimer://" "$plist" >/dev/null 2>&1 || \
+              /usr/libexec/PlistBuddy -c "Set :$reverse_key eclipsetimer://" "$plist" >/dev/null 2>&1 || true
+          }
+
+          approve_scheme "com.apple.CoreSimulator.CoreSimulatorBridge"
+          approve_scheme "com.apple.mobilesafari"
+
           xcrun simctl uninstall "$udid" "$BUNDLE_ID" || true
           xcrun simctl install "$udid" "$APP_PATH"
           xcrun simctl launch "$udid" "$BUNDLE_ID"
