@@ -81,6 +81,7 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
 
       - name: Validate Google Maps Android key
         if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
@@ -170,6 +171,7 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
