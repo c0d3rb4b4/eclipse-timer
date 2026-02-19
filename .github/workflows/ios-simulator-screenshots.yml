@@ -161,6 +161,117 @@ jobs:
             exit 1
           fi
 
+          latest_ios_runtime_id() {
+            xcrun simctl list runtimes -j | node -e '
+              const fs = require("fs");
+              const raw = fs.readFileSync(0, "utf8");
+              const data = JSON.parse(raw);
+              const runtimes = Array.isArray(data.runtimes) ? data.runtimes : [];
+              const ios = runtimes
+                .filter((runtime) => {
+                  if (runtime && runtime.isAvailable === false) return false;
+                  const platform = String(runtime?.platform || "");
+                  const name = String(runtime?.name || "");
+                  return platform === "iOS" || /^iOS /.test(name);
+                })
+                .map((runtime) => {
+                  const rawVersion = String(runtime?.version || "")
+                    .replace(/[^0-9.]/g, "")
+                    .split(".")
+                    .filter(Boolean)
+                    .map((part) => Number(part));
+                  return {
+                    identifier: String(runtime?.identifier || ""),
+                    versionParts: [
+                      Number.isFinite(rawVersion[0]) ? rawVersion[0] : 0,
+                      Number.isFinite(rawVersion[1]) ? rawVersion[1] : 0,
+                      Number.isFinite(rawVersion[2]) ? rawVersion[2] : 0
+                    ]
+                  };
+                })
+                .filter((runtime) => runtime.identifier.length > 0)
+                .sort((left, right) => {
+                  return (
+                    right.versionParts[0] - left.versionParts[0] ||
+                    right.versionParts[1] - left.versionParts[1] ||
+                    right.versionParts[2] - left.versionParts[2]
+                  );
+                });
+
+              if (ios.length > 0) {
+                process.stdout.write(ios[0].identifier);
+              }
+            '
+          }
+
+          device_type_id_for_name() {
+            local requested_name="$1"
+            xcrun simctl list devicetypes -j | node -e '
+              const fs = require("fs");
+              const requested = process.argv[1];
+              const raw = fs.readFileSync(0, "utf8");
+              const data = JSON.parse(raw);
+              const deviceTypes = Array.isArray(data.devicetypes) ? data.devicetypes : [];
+              const match = deviceTypes.find((entry) => String(entry?.name || "") === requested);
+              if (match?.identifier) {
+                process.stdout.write(String(match.identifier));
+              }
+            ' "$requested_name"
+          }
+
+          ensure_requested_simulator() {
+            local requested_label="$1"
+            local requested_name="$2"
+
+            [ "$requested_name" = "auto" ] && return 0
+
+            local current_devices
+            current_devices="$(xcrun simctl list devices available)"
+            local requested_line
+            requested_line="$(printf '%s\n' "$current_devices" | grep -F " $requested_name (" | head -n 1 || true)"
+            [ -n "$requested_line" ] && return 0
+
+            echo "Requested simulator '$requested_label' is not currently available. Attempting to provision it."
+
+            local device_type_id
+            device_type_id="$(device_type_id_for_name "$requested_name")"
+            if [ -z "$device_type_id" ]; then
+              echo "Device type '$requested_name' is not available in the installed Xcode toolchain."
+              return 1
+            fi
+
+            local runtime_id
+            runtime_id="$(latest_ios_runtime_id)"
+            if [ -z "$runtime_id" ]; then
+              echo "No iOS simulator runtime installed. Downloading iOS platform components via xcodebuild..."
+              xcodebuild -downloadPlatform iOS
+              runtime_id="$(latest_ios_runtime_id)"
+            fi
+
+            if [ -z "$runtime_id" ]; then
+              echo "Unable to resolve an iOS simulator runtime after download attempt."
+              return 1
+            fi
+
+            echo "Creating simulator '$requested_name' with runtime '$runtime_id'."
+            local created_udid
+            created_udid="$(xcrun simctl create "$requested_name" "$device_type_id" "$runtime_id" || true)"
+            if [ -z "$created_udid" ]; then
+              echo "Failed to create simulator '$requested_name' using runtime '$runtime_id'."
+              return 1
+            fi
+
+            echo "Created simulator '$requested_name' ($created_udid)."
+            return 0
+          }
+
+          if ! ensure_requested_simulator "$DEVICE_LABEL" "$DEVICE_NAME"; then
+            echo "Could not provision requested simulator '$DEVICE_LABEL'."
+            echo "Available iPhone simulators:"
+            xcrun simctl list devices available | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' || true
+            exit 1
+          fi
+
           available_devices="$(xcrun simctl list devices available)"
           device_line=""
           udid=""
@@ -172,7 +283,10 @@ jobs:
 
           if [ -z "$udid" ]; then
             if [ "$DEVICE_LABEL" != "auto" ]; then
-              echo "::warning::Requested simulator '$DEVICE_LABEL' is unavailable. Falling back to first available iPhone."
+              echo "Requested simulator '$DEVICE_LABEL' is unavailable after provisioning."
+              echo "Available iPhone simulators:"
+              printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' || true
+              exit 1
             fi
             device_line="$(printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' | head -n 1 || true)"
             udid="$(printf '%s' "$device_line" | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"
