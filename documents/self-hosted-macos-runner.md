@@ -70,6 +70,8 @@ echo 'export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-to
 source ~/.zshrc
 ```
 
+Keep `apps/mobile/android/local.properties` out of git (machine-specific path). The workflow writes it dynamically for Android builds.
+
 Node and pnpm:
 
 ```bash

@@ -8,3 +8,4 @@ coverage
 *.log
 apps/mobile/.env
 apps/mobile/.env.local
+apps/mobile/android/local.properties
