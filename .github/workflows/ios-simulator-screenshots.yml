@@ -4,15 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: "Simulator device to boot"
+        description: "Simulator device name (use auto to pick first available iPhone)"
         required: true
-        default: "iPhone 15 Pro"
+        default: "auto"
         type: choice
         options:
-          - iPhone 15 Pro
+          - auto
+          - iPhone 17 Pro
+          - iPhone 17 Pro Max
+          - iPhone Air
+          - iPhone 17
+          - iPhone 16e
           - iPhone 16 Pro
-          - iPhone 15
           - iPhone 16
+          - iPhone 15 Pro
+          - iPhone 15
       startup_wait_seconds:
         description: "Seconds to wait after first app launch"
         required: true
@@ -24,14 +30,10 @@ on:
         default: "3"
         type: string
       deep_links:
-        description: "One deep link per line"
+        description: "Deep links separated by comma or newline"
         required: false
         type: string
-        default: |
-          eclipsetimer://landing
-          eclipsetimer://timer
-          eclipsetimer://notifications
-          eclipsetimer://locations
+        default: "eclipsetimer://landing,eclipsetimer://timer,eclipsetimer://notifications,eclipsetimer://locations"
 
 concurrency:
   group: ios-screenshots-${{ github.ref }}
@@ -142,13 +144,32 @@ jobs:
             exit 1
           fi
 
-          udid="$(xcrun simctl list devices available | grep -F " $DEVICE_NAME (" | head -n 1 | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"
+          available_devices="$(xcrun simctl list devices available)"
+          device_line=""
+          udid=""
+
+          if [ "$DEVICE_NAME" != "auto" ]; then
+            device_line="$(printf '%s\n' "$available_devices" | grep -F " $DEVICE_NAME (" | head -n 1 || true)"
+            udid="$(printf '%s' "$device_line" | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"
+          fi
+
           if [ -z "$udid" ]; then
-            echo "No available simulator found for '$DEVICE_NAME'."
+            if [ "$DEVICE_NAME" != "auto" ]; then
+              echo "::warning::Requested simulator '$DEVICE_NAME' is unavailable. Falling back to first available iPhone."
+            fi
+            device_line="$(printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' | head -n 1 || true)"
+            udid="$(printf '%s' "$device_line" | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"
+          fi
+
+          if [ -z "$udid" ]; then
+            echo "No available iPhone simulator found."
             echo "Available devices:"
-            xcrun simctl list devices available
+            printf '%s\n' "$available_devices"
             exit 1
           fi
+
+          resolved_name="$(printf '%s' "$device_line" | sed -E 's/^[[:space:]]*([^()]+) \([0-9A-F-]+\).*/\1/' | sed -E 's/[[:space:]]+$//')"
+          echo "Using simulator: $resolved_name ($udid)"
 
           {
             echo "udid=$udid"
@@ -173,7 +194,14 @@ jobs:
           ${{ github.event.inputs.deep_links }}
           EOF
           )"
-          deep_links="$(printf '%s\n' "$DEEP_LINKS_INPUT" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | sed '/^[[:space:]]*$/d')"
+          deep_links="$(
+            printf '%s\n' "$DEEP_LINKS_INPUT" \
+              | tr -d '\r' \
+              | tr ',' '\n' \
+              | sed -E 's#([A-Za-z][A-Za-z0-9+.-]*://)#\n\1#g' \
+              | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+              | sed '/^[[:space:]]*$/d'
+          )"
 
           if [ -n "$deep_links" ]; then
             index=1
