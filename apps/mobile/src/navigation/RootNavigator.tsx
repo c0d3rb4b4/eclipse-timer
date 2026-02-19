@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
+import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 import {
+  type LinkingOptions,
   NavigationContainer,
   useFocusEffect,
   useIsFocused,
@@ -9,25 +11,30 @@ import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
-import { enableScreens } from "react-native-screens";
-import { ActivityIndicator, BackHandler, Image, InteractionManager, StyleSheet, Text, View } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
-
-import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
-import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
-
-import LandingScreen from "../screens/LandingScreen";
-import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePreviewScreen";
-import LocationSettingsScreen from "../screens/LocationSettingsScreen";
-import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
-import TimerScreen from "../screens/TimerScreen";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Image,
+  InteractionManager,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { enableScreens } from "react-native-screens";
+import { APP_LOGO } from "../assets/branding";
 import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
 import { useNotificationScheduler } from "../hooks/useNotificationScheduler";
 import { useTimerState } from "../hooks/useTimerState";
+import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePreviewScreen";
+import LandingScreen from "../screens/LandingScreen";
+import LocationSettingsScreen from "../screens/LocationSettingsScreen";
+import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
+import TimerScreen from "../screens/TimerScreen";
+import { type FavoriteLocation, useAppState } from "../state/appState";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
-import { useAppState, type FavoriteLocation } from "../state/appState";
-import { APP_LOGO } from "../assets/branding";
 
 enableScreens();
 
@@ -37,6 +44,18 @@ type RootStackParamList = {
   Preview: { payload: PreviewPayload };
   NotificationSettings: undefined;
   LocationSettings: undefined;
+};
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ["eclipsetimer://"],
+  config: {
+    screens: {
+      Landing: "landing",
+      Timer: "timer",
+      NotificationSettings: "notifications",
+      LocationSettings: "locations",
+    },
+  },
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -340,7 +359,12 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} onReady={updateRouteName} onStateChange={updateRouteName}>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={linking}
+      onReady={updateRouteName}
+      onStateChange={updateRouteName}
+    >
       <View style={styles.navigationRoot}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Landing">

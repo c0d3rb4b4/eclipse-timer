@@ -1,0 +1,214 @@
+name: iOS Simulator Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "Simulator device to boot"
+        required: true
+        default: "iPhone 15 Pro"
+        type: choice
+        options:
+          - iPhone 15 Pro
+          - iPhone 16 Pro
+          - iPhone 15
+          - iPhone 16
+      startup_wait_seconds:
+        description: "Seconds to wait after first app launch"
+        required: true
+        default: "8"
+        type: string
+      per_page_wait_seconds:
+        description: "Seconds to wait after each deep link"
+        required: true
+        default: "3"
+        type: string
+      deep_links:
+        description: "One deep link per line"
+        required: false
+        type: string
+        default: |
+          eclipsetimer://landing
+          eclipsetimer://timer
+          eclipsetimer://notifications
+          eclipsetimer://locations
+
+concurrency:
+  group: ios-screenshots-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  screenshots:
+    name: Capture iOS Simulator Screenshots
+    runs-on: [self-hosted, macOS, eclipse-timer]
+    timeout-minutes: 90
+    env:
+      BUNDLE_ID: com.lallimaven.eclipse-timer
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
+      SENTRY_DISABLE_XCODE_DEBUG_UPLOAD: "true"
+      SENTRY_ALLOW_FAILURE: "true"
+      SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Build iOS simulator app
+        working-directory: apps/mobile
+        env:
+          EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
+        run: |
+          set -euo pipefail
+          pnpm exec eas build --platform ios --profile screenshots --local --non-interactive
+
+      - name: Resolve simulator app artifact
+        id: resolve_app
+        run: |
+          set -euo pipefail
+          artifacts_dir="$GITHUB_WORKSPACE/artifacts/raw"
+          extracted_dir="$GITHUB_WORKSPACE/artifacts/simulator-app"
+
+          mkdir -p "$extracted_dir"
+
+          app_path="$(find "$artifacts_dir" -type d -name '*.app' | head -n 1 || true)"
+          if [ -z "$app_path" ]; then
+            archive_path="$(find "$artifacts_dir" -type f \( -name '*.tar.gz' -o -name '*.zip' \) | head -n 1 || true)"
+            if [ -z "$archive_path" ]; then
+              echo "Could not find simulator .app or archive in $artifacts_dir."
+              find "$artifacts_dir" -maxdepth 2 -print || true
+              exit 1
+            fi
+
+            case "$archive_path" in
+              *.tar.gz) tar -xzf "$archive_path" -C "$extracted_dir" ;;
+              *.zip) ditto -xk "$archive_path" "$extracted_dir" ;;
+              *)
+                echo "Unsupported archive format: $archive_path"
+                exit 1
+                ;;
+            esac
+
+            app_path="$(find "$extracted_dir" -type d -name '*.app' | head -n 1 || true)"
+          fi
+
+          if [ -z "$app_path" ]; then
+            echo "Simulator .app bundle not found after extraction."
+            find "$extracted_dir" -maxdepth 4 -print || true
+            exit 1
+          fi
+
+          echo "Using app bundle: $app_path"
+          {
+            echo "app_path<<EOF"
+            echo "$app_path"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Boot simulator and capture screenshots
+        id: capture
+        env:
+          DEVICE_NAME: ${{ github.event.inputs.device }}
+          STARTUP_WAIT_SECONDS: ${{ github.event.inputs.startup_wait_seconds }}
+          PER_PAGE_WAIT_SECONDS: ${{ github.event.inputs.per_page_wait_seconds }}
+          APP_PATH: ${{ steps.resolve_app.outputs.app_path }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$STARTUP_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+            echo "startup_wait_seconds must be an integer."
+            exit 1
+          fi
+          if [[ ! "$PER_PAGE_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+            echo "per_page_wait_seconds must be an integer."
+            exit 1
+          fi
+
+          udid="$(xcrun simctl list devices available | grep -F " $DEVICE_NAME (" | head -n 1 | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"
+          if [ -z "$udid" ]; then
+            echo "No available simulator found for '$DEVICE_NAME'."
+            echo "Available devices:"
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          {
+            echo "udid=$udid"
+          } >> "$GITHUB_OUTPUT"
+
+          shots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
+          mkdir -p "$shots_dir"
+          printf "index,url,file\n" > "$shots_dir/manifest.csv"
+
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+
+          xcrun simctl uninstall "$udid" "$BUNDLE_ID" || true
+          xcrun simctl install "$udid" "$APP_PATH"
+          xcrun simctl launch "$udid" "$BUNDLE_ID"
+
+          sleep "$STARTUP_WAIT_SECONDS"
+          xcrun simctl io "$udid" screenshot "$shots_dir/00-launch.png"
+          printf "00,launch,00-launch.png\n" >> "$shots_dir/manifest.csv"
+
+          DEEP_LINKS_INPUT="$(cat <<'EOF'
+          ${{ github.event.inputs.deep_links }}
+          EOF
+          )"
+          deep_links="$(printf '%s\n' "$DEEP_LINKS_INPUT" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | sed '/^[[:space:]]*$/d')"
+
+          if [ -n "$deep_links" ]; then
+            index=1
+            while IFS= read -r url; do
+              [ -z "$url" ] && continue
+              slug="$(printf '%s' "$url" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#[^A-Za-z0-9._-]+#-#g; s#-+#-#g; s#^-##; s#-$##')"
+              if [ -z "$slug" ]; then
+                slug="screen-$index"
+              fi
+              filename="$(printf '%02d' "$index")-$slug.png"
+
+              if xcrun simctl openurl "$udid" "$url"; then
+                sleep "$PER_PAGE_WAIT_SECONDS"
+                xcrun simctl io "$udid" screenshot "$shots_dir/$filename"
+                printf "%02d,%s,%s\n" "$index" "$url" "$filename" >> "$shots_dir/manifest.csv"
+              else
+                echo "::warning::Failed to open deep link: $url"
+              fi
+
+              index=$((index + 1))
+            done <<< "$deep_links"
+          fi
+
+      - name: Shutdown simulator
+        if: always()
+        run: |
+          set -euo pipefail
+          udid="${{ steps.capture.outputs.udid }}"
+          if [ -n "$udid" ]; then
+            xcrun simctl shutdown "$udid" || true
+          fi
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-screenshots-${{ github.run_id }}
+          path: artifacts/screenshots
+          if-no-files-found: error
