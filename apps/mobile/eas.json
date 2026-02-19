@@ -39,6 +39,16 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "lalit.nv@gmail.com",
+        "ascAppId": "6759380856",
+        "appleTeamId": "2R7B423ZQV"
+      },
+      "android": {
+        "applicationId": "com.lallimaven.eclipsetimer",
+        "track": "internal"
+      }
+    }
   }
 }
