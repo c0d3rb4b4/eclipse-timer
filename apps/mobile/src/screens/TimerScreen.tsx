@@ -1,7 +1,9 @@
+import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  FlatList,
   Image,
   Modal,
   Pressable,
@@ -14,12 +16,9 @@ import {
 } from "react-native";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
-import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
-
-import type { TimerState } from "../hooks/useTimerState";
 import { APP_LOGO } from "../assets/branding";
 import BurgerButton from "../components/BurgerButton";
+import type { TimerState } from "../hooks/useTimerState";
 import type { FavoriteLocation } from "../state/appState";
 import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
@@ -52,7 +51,11 @@ function formatDuration(seconds?: number) {
   return `${mm}m ${String(ss).padStart(2, "0")}s`;
 }
 
-function formatCardinalCoord(value: number, positiveHemisphere: string, negativeHemisphere: string) {
+function formatCardinalCoord(
+  value: number,
+  positiveHemisphere: string,
+  negativeHemisphere: string,
+) {
   const hemisphere = value >= 0 ? positiveHemisphere : negativeHemisphere;
   return `${Math.abs(value).toFixed(4)}${hemisphere}`;
 }
@@ -72,7 +75,10 @@ function buildDefaultFavoriteName(lat: number, lon: number, favoriteLocations: F
 }
 
 function isSameFavoriteLocation(aLat: number, aLon: number, bLat: number, bLon: number) {
-  return Math.abs(aLat - bLat) <= FAVORITE_COORD_EPSILON && Math.abs(aLon - bLon) <= FAVORITE_COORD_EPSILON;
+  return (
+    Math.abs(aLat - bLat) <= FAVORITE_COORD_EPSILON &&
+    Math.abs(aLon - bLon) <= FAVORITE_COORD_EPSILON
+  );
 }
 
 function clamp(value: number, lo: number, hi: number) {
@@ -98,8 +104,7 @@ function destinationPoint(
   const sinD = Math.sin(angularDistance);
   const cosD = Math.cos(angularDistance);
   const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * Math.cos(brng));
-  const lon2 =
-    lon1 + Math.atan2(Math.sin(brng) * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
+  const lon2 = lon1 + Math.atan2(Math.sin(brng) * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
 
   return {
     latitude: clamp(lat2 * RAD2DEG, -89.9, 89.9),
@@ -115,12 +120,22 @@ type ContactDirectionOverlay = {
   endpoint: { latitude: number; longitude: number };
 };
 
+export type TimerEclipseOption = {
+  id: string;
+  dateYmd: string;
+  kindLabel: string;
+  isPast: boolean;
+};
+
 type TimerScreenProps = {
   activeEclipse: EclipseRecord | null;
+  activeEclipseId: string | null;
   isActiveEclipseLoading: boolean;
+  eclipseOptions: TimerEclipseOption[];
   timer: TimerState;
   favoriteLocations: FavoriteLocation[];
   onAddFavoriteLocation: (location: Omit<FavoriteLocation, "id">) => void;
+  onSelectEclipse: (eclipseId: string) => void;
   onUseFavoriteLocation: (location: FavoriteLocation) => void;
   onOpenMenu: () => void;
   onOpenPreview: (result: Circumstances) => void;
@@ -128,19 +143,29 @@ type TimerScreenProps = {
 
 export default function TimerScreen({
   activeEclipse,
+  activeEclipseId,
   isActiveEclipseLoading,
+  eclipseOptions,
   timer,
   favoriteLocations,
   onAddFavoriteLocation,
+  onSelectEclipse,
   onUseFavoriteLocation,
   onOpenMenu,
   onOpenPreview,
 }: TimerScreenProps) {
   const insets = useSafeAreaInsets();
+  const [isEclipsePickerOpen, setIsEclipsePickerOpen] = useState(false);
   const [isAddFavoriteModalOpen, setIsAddFavoriteModalOpen] = useState(false);
   const [favoriteModalName, setFavoriteModalName] = useState("");
   const [favoriteModalDefaultName, setFavoriteModalDefaultName] = useState("");
-  const [favoriteModalPin, setFavoriteModalPin] = useState<{ lat: number; lon: number } | null>(null);
+  const [favoriteModalPin, setFavoriteModalPin] = useState<{ lat: number; lon: number } | null>(
+    null,
+  );
+  const activeEclipseOption = useMemo(
+    () => eclipseOptions.find((option) => option.id === activeEclipseId) ?? null,
+    [activeEclipseId, eclipseOptions],
+  );
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
     () => (activeEclipse ? kindCodeForRecord(activeEclipse) : "P"),
@@ -166,10 +191,30 @@ export default function TimerScreen({
 
     const arrowDistanceDeg = clamp(timer.region.latitudeDelta * 0.28, 0.18, 2.2);
     const entries = [
-      { key: "c1", label: "C1", bearingDeg: timer.result.c1BearingDeg, color: colorForContactKey("c1") },
-      { key: "c2", label: "C2", bearingDeg: timer.result.c2BearingDeg, color: colorForContactKey("c2") },
-      { key: "c3", label: "C3", bearingDeg: timer.result.c3BearingDeg, color: colorForContactKey("c3") },
-      { key: "c4", label: "C4", bearingDeg: timer.result.c4BearingDeg, color: colorForContactKey("c4") },
+      {
+        key: "c1",
+        label: "C1",
+        bearingDeg: timer.result.c1BearingDeg,
+        color: colorForContactKey("c1"),
+      },
+      {
+        key: "c2",
+        label: "C2",
+        bearingDeg: timer.result.c2BearingDeg,
+        color: colorForContactKey("c2"),
+      },
+      {
+        key: "c3",
+        label: "C3",
+        bearingDeg: timer.result.c3BearingDeg,
+        color: colorForContactKey("c3"),
+      },
+      {
+        key: "c4",
+        label: "C4",
+        bearingDeg: timer.result.c4BearingDeg,
+        color: colorForContactKey("c4"),
+      },
     ] as const;
 
     const overlays: ContactDirectionOverlay[] = [];
@@ -185,7 +230,13 @@ export default function TimerScreen({
       });
     }
     return overlays;
-  }, [timer.isResultCurrentForPin, timer.pin.lat, timer.pin.lon, timer.region.latitudeDelta, timer.result]);
+  }, [
+    timer.isResultCurrentForPin,
+    timer.pin.lat,
+    timer.pin.lon,
+    timer.region.latitudeDelta,
+    timer.result,
+  ]);
   const hasDirectionsData = contactDirectionOverlays.length > 0;
 
   const closeAddFavoriteModal = () => {
@@ -194,12 +245,19 @@ export default function TimerScreen({
     setFavoriteModalDefaultName("");
     setFavoriteModalPin(null);
   };
+  const closeEclipsePicker = () => {
+    setIsEclipsePickerOpen(false);
+  };
 
   const openAddFavoriteModal = () => {
     if (!canAddCurrentPinToFavorites) return;
 
     const nextPin = { lat: timer.pin.lat, lon: timer.pin.lon };
-    const compiledDefaultName = buildDefaultFavoriteName(nextPin.lat, nextPin.lon, favoriteLocations);
+    const compiledDefaultName = buildDefaultFavoriteName(
+      nextPin.lat,
+      nextPin.lon,
+      favoriteLocations,
+    );
     setFavoriteModalPin(nextPin);
     setFavoriteModalDefaultName(compiledDefaultName);
     setFavoriteModalName(compiledDefaultName);
@@ -217,6 +275,16 @@ export default function TimerScreen({
     });
     timer.setStatusMessage(`Saved ${name} to favorites`);
     closeAddFavoriteModal();
+  };
+  const openEclipsePicker = () => {
+    if (!eclipseOptions.length) return;
+    setIsEclipsePickerOpen(true);
+  };
+  const selectEclipseFromPicker = (eclipseId: string) => {
+    const normalizedId = eclipseId.trim();
+    if (!normalizedId) return;
+    closeEclipsePicker();
+    onSelectEclipse(normalizedId);
   };
 
   return (
@@ -236,6 +304,35 @@ export default function TimerScreen({
                 : "No eclipse loaded"}
           </Text>
         </View>
+      </View>
+
+      <View style={styles.eclipseSwitcherWrap}>
+        <Pressable
+          style={[
+            styles.eclipseSwitcherBtn,
+            isActiveEclipseLoading ? styles.eclipseSwitcherBtnDisabled : null,
+          ]}
+          onPress={openEclipsePicker}
+          disabled={!eclipseOptions.length || isActiveEclipseLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Switch active eclipse"
+          accessibilityState={{ disabled: !eclipseOptions.length || isActiveEclipseLoading }}
+        >
+          <View style={styles.eclipseSwitcherTopRow}>
+            <Text style={styles.eclipseSwitcherLabel}>Active Eclipse</Text>
+            <Text style={styles.eclipseSwitcherHint}>Switch</Text>
+          </View>
+          <Text style={styles.eclipseSwitcherValue}>
+            {activeEclipseOption
+              ? `${activeEclipseOption.dateYmd} - ${activeEclipseOption.kindLabel}`
+              : "No eclipse selected"}
+          </Text>
+          <Text style={styles.eclipseSwitcherMeta}>
+            {activeEclipseOption
+              ? `${activeEclipseOption.id} - ${activeEclipseOption.isPast ? "Past" : "Upcoming"}`
+              : "Pick an eclipse to compute on this screen"}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.mapWrap}>
@@ -304,7 +401,10 @@ export default function TimerScreen({
                     <Text
                       style={[
                         styles.contactDirectionArrow,
-                        { color: direction.color, transform: [{ rotate: `${direction.bearingDeg}deg` }] },
+                        {
+                          color: direction.color,
+                          transform: [{ rotate: `${direction.bearingDeg}deg` }],
+                        },
                       ]}
                     >
                       ▲
@@ -353,7 +453,11 @@ export default function TimerScreen({
             onPress={timer.toggleVisibleOverlay}
             disabled={!timer.hasVisibleOverlayData}
             accessibilityRole="button"
-            accessibilityLabel={timer.showVisibleOverlay ? "Hide eclipse visible overlay" : "Show eclipse visible overlay"}
+            accessibilityLabel={
+              timer.showVisibleOverlay
+                ? "Hide eclipse visible overlay"
+                : "Show eclipse visible overlay"
+            }
           >
             <View style={styles.mapLegendRow}>
               <View style={[styles.mapLegendSwatch, { backgroundColor: VISIBLE_PATH_COLOR }]} />
@@ -371,7 +475,9 @@ export default function TimerScreen({
             onPress={timer.toggleCentralOverlay}
             disabled={!timer.hasCentralOverlayData}
             accessibilityRole="button"
-            accessibilityLabel={timer.showCentralOverlay ? "Hide central path overlay" : "Show central path overlay"}
+            accessibilityLabel={
+              timer.showCentralOverlay ? "Hide central path overlay" : "Show central path overlay"
+            }
           >
             <View style={styles.mapLegendRow}>
               <View style={[styles.mapLegendSwatch, { backgroundColor: centralOverlayColor }]} />
@@ -397,11 +503,15 @@ export default function TimerScreen({
           >
             <View style={styles.mapDirectionLegendHeader}>
               <Text style={styles.mapDirectionLegendTitle}>Directions</Text>
-              <Text style={styles.mapLegendState}>{timer.showDirectionsOverlay ? "On" : "Off"}</Text>
+              <Text style={styles.mapLegendState}>
+                {timer.showDirectionsOverlay ? "On" : "Off"}
+              </Text>
             </View>
             {contactDirectionOverlays.map((direction) => (
               <View key={`direction-legend-${direction.key}`} style={styles.mapDirectionLegendRow}>
-                <View style={[styles.mapDirectionLegendLine, { borderTopColor: direction.color }]} />
+                <View
+                  style={[styles.mapDirectionLegendLine, { borderTopColor: direction.color }]}
+                />
                 <Text style={[styles.mapDirectionLegendText, { color: direction.color }]}>
                   {direction.label}
                 </Text>
@@ -438,6 +548,63 @@ export default function TimerScreen({
           </Pressable>
         </View>
       </View>
+
+      <Modal
+        visible={isEclipsePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeEclipsePicker}
+      >
+        <View style={styles.eclipsePickerBackdrop}>
+          <View style={styles.eclipsePickerCard}>
+            <Text style={styles.eclipsePickerTitle}>Select Eclipse</Text>
+            <Text style={styles.eclipsePickerSubtitle}>
+              Switch eclipses without leaving the timer screen.
+            </Text>
+            <FlatList
+              data={eclipseOptions}
+              keyExtractor={(item) => item.id}
+              style={styles.eclipsePickerList}
+              contentContainerStyle={styles.eclipsePickerListContent}
+              renderItem={({ item }) => {
+                const isSelected = item.id === activeEclipseId;
+                return (
+                  <Pressable
+                    style={[
+                      styles.eclipsePickerItem,
+                      isSelected ? styles.eclipsePickerItemSelected : null,
+                    ]}
+                    onPress={() => selectEclipseFromPicker(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.dateYmd} ${item.kindLabel}, ${item.isPast ? "past" : "upcoming"}`}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text
+                      style={[
+                        styles.eclipsePickerItemTitle,
+                        isSelected ? styles.eclipsePickerItemTitleSelected : null,
+                      ]}
+                    >
+                      {item.dateYmd} {item.kindLabel}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.eclipsePickerItemMeta,
+                        isSelected ? styles.eclipsePickerItemMetaSelected : null,
+                      ]}
+                    >
+                      {item.id} - {item.isPast ? "Past" : "Upcoming"}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+            <Pressable style={styles.eclipsePickerCloseBtn} onPress={closeEclipsePicker}>
+              <Text style={styles.eclipsePickerCloseText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={isAddFavoriteModalOpen}
@@ -506,7 +673,10 @@ export default function TimerScreen({
 
       <ScrollView
         style={styles.results}
-        contentContainerStyle={[styles.resultsContent, { paddingBottom: Math.max(28, insets.bottom + 18) }]}
+        contentContainerStyle={[
+          styles.resultsContent,
+          { paddingBottom: Math.max(28, insets.bottom + 18) },
+        ]}
       >
         <Animated.View
           style={[
@@ -548,7 +718,9 @@ export default function TimerScreen({
               <View style={styles.metricRow}>
                 <View style={styles.metricTile}>
                   <Text style={styles.metricLabel}>Type</Text>
-                  <Text style={styles.metricValue}>{localKindLabel(timer.result.kindAtLocation)}</Text>
+                  <Text style={styles.metricValue}>
+                    {localKindLabel(timer.result.kindAtLocation)}
+                  </Text>
                 </View>
                 <View style={styles.metricTile}>
                   <Text style={styles.metricLabel}>Magnitude</Text>
@@ -556,7 +728,9 @@ export default function TimerScreen({
                 </View>
                 <View style={styles.metricTile}>
                   <Text style={styles.metricLabel}>Central Duration</Text>
-                  <Text style={styles.metricValue}>{formatDuration(timer.result.durationSeconds)}</Text>
+                  <Text style={styles.metricValue}>
+                    {formatDuration(timer.result.durationSeconds)}
+                  </Text>
                 </View>
               </View>
 
@@ -575,17 +749,27 @@ export default function TimerScreen({
                       <View
                         style={[
                           styles.contactKeyBadge,
-                          { borderColor: colorForContactKey(item.key), backgroundColor: "rgba(255,255,255,0.04)" },
+                          {
+                            borderColor: colorForContactKey(item.key),
+                            backgroundColor: "rgba(255,255,255,0.04)",
+                          },
                         ]}
                       >
-                        <Text style={[styles.contactKeyBadgeText, { color: colorForContactKey(item.key) }]}>
+                        <Text
+                          style={[
+                            styles.contactKeyBadgeText,
+                            { color: colorForContactKey(item.key) },
+                          ]}
+                        >
                           {item.key === "max" ? "MAX" : item.key.toUpperCase()}
                         </Text>
                       </View>
                       <Text style={styles.contactLabel}>{item.label}</Text>
                     </View>
                     <Text style={styles.contactTime}>UTC: {fmtUtcHuman(item.iso)}</Text>
-                    <Text style={[styles.contactTimeLocal, { color: colorForContactKey(item.key) }]}>
+                    <Text
+                      style={[styles.contactTimeLocal, { color: colorForContactKey(item.key) }]}
+                    >
                       Local: {fmtLocalHuman(item.iso)}
                     </Text>
                   </View>
@@ -642,6 +826,48 @@ const styles = StyleSheet.create({
   },
   title: { color: "white", fontSize: 18, fontWeight: "700" },
   subtitle: { color: "#bdbdbd", fontSize: 12 },
+  eclipseSwitcherWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
+  eclipseSwitcherBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2e3566",
+    backgroundColor: "#151a43",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  eclipseSwitcherBtnDisabled: {
+    opacity: 0.68,
+  },
+  eclipseSwitcherTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  eclipseSwitcherLabel: {
+    color: "#b7beff",
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  eclipseSwitcherHint: {
+    color: "#d9dcff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  eclipseSwitcherValue: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  eclipseSwitcherMeta: {
+    color: "#bcc2f4",
+    fontSize: 11,
+  },
   mapWrap: { height: 300, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
   controls: {
@@ -955,6 +1181,82 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  eclipsePickerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.58)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  eclipsePickerCard: {
+    width: "100%",
+    maxHeight: "82%",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2f2f2f",
+    backgroundColor: "#121212",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  eclipsePickerTitle: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  eclipsePickerSubtitle: {
+    color: "#bdbdbd",
+    fontSize: 12,
+  },
+  eclipsePickerList: {
+    maxHeight: 360,
+  },
+  eclipsePickerListContent: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  eclipsePickerItem: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2b2b2b",
+    backgroundColor: "#1b1b1b",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  eclipsePickerItemSelected: {
+    borderColor: "#2c3cff",
+    backgroundColor: "#1a2056",
+  },
+  eclipsePickerItemTitle: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  eclipsePickerItemTitleSelected: {
+    color: "#e8ebff",
+  },
+  eclipsePickerItemMeta: {
+    marginTop: 4,
+    color: "#bdbdbd",
+    fontSize: 11,
+  },
+  eclipsePickerItemMetaSelected: {
+    color: "#c6ceff",
+  },
+  eclipsePickerCloseBtn: {
+    alignSelf: "flex-end",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    backgroundColor: "#1f1f1f",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  eclipsePickerCloseText: {
+    color: "#d5d5d5",
+    fontSize: 13,
+    fontWeight: "700",
   },
   favoriteModalBackdrop: {
     flex: 1,

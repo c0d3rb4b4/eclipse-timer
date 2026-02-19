@@ -4,21 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      platform:
-        description: "Platform to build"
-        required: true
-        default: "all"
-        type: choice
-        options:
-          - all
-          - ios
-          - android
-      submit:
-        description: "Submit to stores after build"
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: self-hosted-mobile-${{ github.ref }}
@@ -54,7 +39,7 @@ jobs:
         run: pnpm test
 
   build:
-    name: Local Build (${{ github.event.inputs.platform || 'all' }})
+    name: Local Build (ios + android)
     needs: ci
     runs-on: [self-hosted, macOS, eclipse-timer]
     env:
@@ -80,20 +65,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup Java (Android builds)
-        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
-      - name: Setup Android SDK tools (Android builds)
-        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+      - name: Setup Android SDK tools
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages (Android builds)
-        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+      - name: Install Android SDK packages
         run: |
           set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
@@ -111,7 +93,6 @@ jobs:
           packager: pnpm
 
       - name: Validate Google Maps Android key
-        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
         run: |
           if [ -z "$GOOGLE_MAPS_ANDROID_API_KEY" ]; then
             echo "Missing GOOGLE_MAPS_ANDROID_API_KEY GitHub secret."
@@ -119,7 +100,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build
+      - name: Build iOS and Android
         working-directory: apps/mobile
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
@@ -129,66 +110,55 @@ jobs:
           SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
         run: |
           set -euo pipefail
-          platform="${{ github.event.inputs.platform || 'all' }}"
+          pnpm exec eas build --profile production --platform ios --local --non-interactive
 
-          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
-            pnpm exec eas build --profile production --platform ios --local --non-interactive
-          fi
-
-          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
-            sdk_root=""
-            for candidate in \
-              "${ANDROID_SDK_ROOT:-}" \
-              "${ANDROID_HOME:-}" \
-              "$HOME/Library/Android/sdk" \
-              "$HOME/Android/Sdk" \
-              "/usr/local/share/android-sdk" \
-              "/opt/homebrew/share/android-sdk"
-            do
-              if [ -n "$candidate" ] && [ -d "$candidate" ]; then
-                sdk_root="$candidate"
-                break
-              fi
-            done
-
-            if [ ! -d "$sdk_root" ]; then
-              echo "Android SDK directory not found."
-              echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
-              exit 1
+          sdk_root=""
+          for candidate in \
+            "${ANDROID_SDK_ROOT:-}" \
+            "${ANDROID_HOME:-}" \
+            "$HOME/Library/Android/sdk" \
+            "$HOME/Android/Sdk" \
+            "/usr/local/share/android-sdk" \
+            "/opt/homebrew/share/android-sdk"
+          do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              sdk_root="$candidate"
+              break
             fi
+          done
 
-            export ANDROID_SDK_ROOT="$sdk_root"
-            export ANDROID_HOME="$sdk_root"
-            escaped_sdk_root="${sdk_root// /\\ }"
-            printf 'sdk.dir=%s\n' "$escaped_sdk_root" > android/local.properties
-            echo "Using Android SDK at $sdk_root"
-
-            pnpm exec eas build --profile production --platform android --local --non-interactive
+          if [ ! -d "$sdk_root" ]; then
+            echo "Android SDK directory not found."
+            echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
+            exit 1
           fi
+
+          export ANDROID_SDK_ROOT="$sdk_root"
+          export ANDROID_HOME="$sdk_root"
+          escaped_sdk_root="${sdk_root// /\\ }"
+          printf 'sdk.dir=%s\n' "$escaped_sdk_root" > android/local.properties
+          echo "Using Android SDK at $sdk_root"
+
+          pnpm exec eas build --profile production --platform android --local --non-interactive
 
       - name: Collect build artifacts
         run: |
           set -euo pipefail
           mkdir -p artifacts/submission
-          platform="${{ github.event.inputs.platform || 'all' }}"
 
-          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
-            ios_artifact="$(find artifacts/raw -type f -name '*.ipa' | head -n 1 || true)"
-            if [ -z "$ios_artifact" ]; then
-              echo "Missing iOS artifact (.ipa) in artifacts/raw."
-              exit 1
-            fi
-            cp "$ios_artifact" artifacts/submission/ios.ipa
+          ios_artifact="$(find artifacts/raw -type f -name '*.ipa' | head -n 1 || true)"
+          if [ -z "$ios_artifact" ]; then
+            echo "Missing iOS artifact (.ipa) in artifacts/raw."
+            exit 1
           fi
+          cp "$ios_artifact" artifacts/submission/ios.ipa
 
-          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
-            android_artifact="$(find artifacts/raw -type f -name '*.aab' | head -n 1 || true)"
-            if [ -z "$android_artifact" ]; then
-              echo "Missing Android artifact (.aab) in artifacts/raw."
-              exit 1
-            fi
-            cp "$android_artifact" artifacts/submission/android.aab
+          android_artifact="$(find artifacts/raw -type f -name '*.aab' | head -n 1 || true)"
+          if [ -z "$android_artifact" ]; then
+            echo "Missing Android artifact (.aab) in artifacts/raw."
+            exit 1
           fi
+          cp "$android_artifact" artifacts/submission/android.aab
 
           ls -lah artifacts/submission
 
@@ -199,16 +169,62 @@ jobs:
           path: artifacts/submission
           if-no-files-found: error
 
+  release_gate:
+    name: Check mobile version change
+    needs: build
+    runs-on: [self-hosted, macOS, eclipse-timer]
+    outputs:
+      should_submit: ${{ steps.gate.outputs.should_submit }}
+      current_version: ${{ steps.gate.outputs.current_version }}
+      previous_version: ${{ steps.gate.outputs.previous_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine submit eligibility
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_version="$(node -p "JSON.parse(require('fs').readFileSync('apps/mobile/package.json', 'utf8')).version")"
+          previous_version=""
+
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            if git cat-file -e HEAD^:apps/mobile/package.json 2>/dev/null; then
+              previous_version="$(git show HEAD^:apps/mobile/package.json | node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync(0, 'utf8')); process.stdout.write(String(pkg.version ?? ''));")"
+            fi
+          fi
+
+          should_submit="false"
+          if [ -n "$previous_version" ] && [ "$current_version" != "$previous_version" ]; then
+            should_submit="true"
+          fi
+
+          echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
+          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+          echo "should_submit=$should_submit" >> "$GITHUB_OUTPUT"
+
+          if [ "$should_submit" = "true" ]; then
+            echo "Detected mobile version change: $previous_version -> $current_version"
+            echo "Submit job will run for both iOS and Android."
+          elif [ -n "$previous_version" ]; then
+            echo "Mobile version unchanged: $current_version"
+            echo "Submit job will be skipped."
+          else
+            echo "Previous mobile version could not be determined."
+            echo "Submit job will be skipped."
+          fi
+
   submit:
     name: Submit to stores
-    needs: build
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.submit == 'true'
+    needs: [build, release_gate]
+    if: ${{ needs.release_gate.outputs.should_submit == 'true' }}
     runs-on: [self-hosted, macOS, eclipse-timer]
     permissions:
       contents: write
-    environment: production # Requires manual approval in GitHub settings
 
     steps:
       - name: Checkout
@@ -231,8 +247,6 @@ jobs:
           const latestTag = process.env.LATEST_TAG || '';
 
           const packageVersion = pkg.version;
-          const expoVersion = app?.expo?.version;
-          const runtimeVersion = app?.expo?.runtimeVersion;
           const semver = /^\d+\.\d+\.\d+$/;
 
           const fail = (message) => {
@@ -244,21 +258,15 @@ jobs:
             fail(`apps/mobile/package.json version must be x.y.z. Found: ${packageVersion}`);
           }
 
-          if (typeof expoVersion !== 'string' || !semver.test(expoVersion)) {
-            fail(`apps/mobile/app.json expo.version must be x.y.z. Found: ${expoVersion}`);
-          }
-
-          if (typeof runtimeVersion !== 'string' || !semver.test(runtimeVersion)) {
+          if (app?.expo?.version !== undefined) {
             fail(
-              `apps/mobile/app.json expo.runtimeVersion must be x.y.z. Found: ${JSON.stringify(
-                runtimeVersion
-              )}`
+              `apps/mobile/app.json expo.version must be omitted. Version is sourced from apps/mobile/package.json via apps/mobile/app.config.ts.`
             );
           }
 
-          if (packageVersion !== expoVersion || packageVersion !== runtimeVersion) {
+          if (app?.expo?.runtimeVersion !== undefined) {
             fail(
-              `Version mismatch detected. package.json=${packageVersion}, app.json.expo.version=${expoVersion}, app.json.expo.runtimeVersion=${runtimeVersion}`
+              `apps/mobile/app.json expo.runtimeVersion must be omitted. Runtime version is derived from appVersion in apps/mobile/app.config.ts.`
             );
           }
 
@@ -301,21 +309,16 @@ jobs:
       - name: Validate submission artifacts
         run: |
           set -euo pipefail
-          platform="${{ github.event.inputs.platform || 'all' }}"
           artifact_root="${{ github.workspace }}/artifacts/submission"
 
-          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
-            if [ ! -f "$artifact_root/ios.ipa" ]; then
-              echo "Missing iOS artifact at $artifact_root/ios.ipa."
-              exit 1
-            fi
+          if [ ! -f "$artifact_root/ios.ipa" ]; then
+            echo "Missing iOS artifact at $artifact_root/ios.ipa."
+            exit 1
           fi
 
-          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
-            if [ ! -f "$artifact_root/android.aab" ]; then
-              echo "Missing Android artifact at $artifact_root/android.aab."
-              exit 1
-            fi
+          if [ ! -f "$artifact_root/android.aab" ]; then
+            echo "Missing Android artifact at $artifact_root/android.aab."
+            exit 1
           fi
 
       - name: Prepare GitHub release assets
@@ -323,25 +326,107 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          platform="${{ github.event.inputs.platform || 'all' }}"
-          files=()
-
-          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
-            files+=("artifacts/submission/ios.ipa")
-          fi
-
-          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
-            files+=("artifacts/submission/android.aab")
-          fi
 
           {
             echo "files<<EOF"
-            printf '%s\n' "${files[@]}"
+            echo "artifacts/submission/ios.ipa"
+            echo "artifacts/submission/android.aab"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Prepare store release notes from changelog (optional)
+        id: store_notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.release_meta.outputs.version }}"
+          notes="$(
+            VERSION="$version" node - <<'NODE'
+            const fs = require("fs");
+
+            const version = process.env.VERSION ?? "";
+            if (!version) {
+              process.exit(0);
+            }
+
+            let changelog = "";
+            try {
+              changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+            } catch {
+              process.exit(0);
+            }
+
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const sectionPattern = new RegExp(
+              `^## \\[${escapeRegExp(version)}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|\\Z)`,
+              "m",
+            );
+            const match = changelog.match(sectionPattern);
+            if (!match) {
+              process.exit(0);
+            }
+
+            const normalized = match[1]
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .filter((line) => !/^###\s+/i.test(line))
+              .map((line) => line.replace(/^[-*]\s+/, ""))
+              .map((line) => line.replace(/\*\*/g, ""))
+              .map((line) => line.replace(/`/g, ""))
+              .map((line) => line.trim())
+              .filter(Boolean);
+
+            if (!normalized.length) {
+              process.exit(0);
+            }
+
+            process.stdout.write(normalized.join("\n"));
+            NODE
+          )"
+
+          if [ -z "${notes//[[:space:]]/}" ]; then
+            echo "::notice::No matching CHANGELOG.md notes for version $version. Continuing without store release notes."
+            echo "has_store_notes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          compact_notes="$(printf '%s' "$notes" | tr '\n' ' ' | tr -s '[:space:]' ' ' | sed -e 's/^ //' -e 's/ $//')"
+          testflight_notes="$notes"
+          testflight_max_chars=4000
+          if [ "${#testflight_notes}" -gt "$testflight_max_chars" ]; then
+            testflight_notes="${testflight_notes:0:$((testflight_max_chars - 1))}…"
+          fi
+
+          play_notes="$compact_notes"
+          play_max_chars=500
+          if [ "${#play_notes}" -gt "$play_max_chars" ]; then
+            play_notes="${play_notes:0:$((play_max_chars - 1))}…"
+          fi
+
+          mkdir -p artifacts/submission/whatsnew
+          printf '%s\n' "$play_notes" > artifacts/submission/whatsnew/whatsnew-en-US
+
+          {
+            echo "testflight_release_notes<<EOF"
+            printf '%s\n' "$testflight_notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "has_store_notes=true" >> "$GITHUB_OUTPUT"
+          echo "play_whatsnew_dir=artifacts/submission/whatsnew" >> "$GITHUB_OUTPUT"
+
+      - name: Upload iOS artifact to App Store Connect (with notes)
+        if: ${{ steps.store_notes.outputs.has_store_notes == 'true' }}
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: artifacts/submission/ios.ipa
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          release-notes: ${{ steps.store_notes.outputs.testflight_release_notes }}
+
       - name: Upload iOS artifact to App Store Connect
-        if: ${{ (github.event.inputs.platform || 'all') == 'all' || (github.event.inputs.platform || 'all') == 'ios' }}
+        if: ${{ steps.store_notes.outputs.has_store_notes != 'true' }}
         uses: apple-actions/upload-testflight-build@v3
         with:
           app-path: artifacts/submission/ios.ipa
@@ -349,8 +434,18 @@ jobs:
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
 
+      - name: Upload Android artifact to Google Play (with notes)
+        if: ${{ steps.store_notes.outputs.has_store_notes == 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.lallimaven.eclipsetimer
+          releaseFiles: artifacts/submission/android.aab
+          track: internal
+          whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
+
       - name: Upload Android artifact to Google Play
-        if: ${{ (github.event.inputs.platform || 'all') == 'all' || (github.event.inputs.platform || 'all') == 'android' }}
+        if: ${{ steps.store_notes.outputs.has_store_notes != 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}

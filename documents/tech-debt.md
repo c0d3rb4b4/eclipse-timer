@@ -1,6 +1,6 @@
 # Tech Debt & Improvement Plan
 
-> Generated: 2026-02-12 · Updated: 2026-02-16
+> Generated: 2026-02-12 · Updated: 2026-02-19
 > Scope: Full codebase analysis — UI/UX, architecture, code quality, testing, productionization, missing features.
 
 ---
@@ -159,7 +159,7 @@
 
 | ID | Item | Priority | Details |
 |----|------|----------|---------|
-| F-01 | **Multi-eclipse selection on timer screen** | 🟠 High | Once on the timer screen, the user cannot switch eclipses without going back. A dropdown or swipe-to-switch would improve flow. |
+| F-01 | **Multi-eclipse selection on timer screen** | 🟠 High | ✅ Resolved 2026-02-19: added an in-screen eclipse picker modal on Timer so users can switch eclipses directly without returning to Landing. |
 | F-02 | **Persisted user preferences** | 🟠 High | ✅ Resolved 2026-02-16: AsyncStorage persistence wired up via `APP_PREFERENCES_STORAGE_KEY`; user preferences survive app restart. |
 | F-03 | **Real alarm/notification scheduling** | 🟠 High | ✅ Resolved 2026-02-16 via A-07: computed eclipse contacts now schedule local notifications with configurable reminder lead times. |
 | F-04 | **Offline support** | 🟡 Medium | Catalog JSON is bundled, but GIF previews require network. The app has no offline-first UX or cached assets. |
@@ -266,7 +266,7 @@
 | E-05 | ✅ Resolved 2026-02-13: fix oversimplified magnitude formula |
 | AC-01 | ✅ Resolved 2026-02-16: completed accessibility labels on LandingScreen + NotificationSettingsScreen |
 | U-01 / F-09 | ✅ Resolved 2026-02-13: show local time for contacts |
-| F-01 | Multi-eclipse switching on timer |
+| F-01 | ✅ Resolved 2026-02-19: multi-eclipse switching on timer |
 | F-02 | ✅ Resolved 2026-02-16: persist user preferences via AsyncStorage |
 | F-03 | ✅ Resolved 2026-02-16: implement real alarm scheduling |
 | CI-02 | ✅ Resolved 2026-02-16: created local EAS Build + direct store upload workflow (`.github/workflows/eas-build.yml`) |

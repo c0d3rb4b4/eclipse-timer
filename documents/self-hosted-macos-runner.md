@@ -222,7 +222,7 @@ Notes:
     - iOS via `apple-actions/upload-testflight-build@v3`
     - Android via `r0adkll/upload-google-play@v1`
   - Submit job also:
-    - Enforces release version bump (`apps/mobile/package.json` version, `apps/mobile/app.json` `expo.version`, and `expo.runtimeVersion` must match and be greater than latest `vX.Y.Z` tag)
+    - Enforces release version bump (`apps/mobile/package.json` `version` must be greater than latest `vX.Y.Z` tag)
     - Creates a GitHub Release and attaches uploaded artifacts (`ios.ipa`/`android.aab`)
 
 Trigger conditions:
@@ -348,7 +348,4 @@ If this passes, GitHub workflow `eas-build.yml` should pass on the same runner h
 9. Submit job fails on Google Play permissions:
    - Ensure the service account in `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` has access to app `com.lallimaven.eclipsetimer` and the target track.
 10. Submit job fails version enforcement:
-   - Bump all three fields to a higher semver than latest tag:
-     - `apps/mobile/package.json` -> `version`
-     - `apps/mobile/app.json` -> `expo.version`
-     - `apps/mobile/app.json` -> `expo.runtimeVersion`
+   - Bump `apps/mobile/package.json` -> `version` to a higher semver than latest tag.

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-02-19
+
+### Added
+- Timer screen now supports in-screen multi-eclipse switching via an eclipse picker modal.
+
+### Changed
+- `eas-build.yml` now always builds both iOS and Android in a single run.
+- Store submit is now automatic only when `apps/mobile/package.json` version changes.
+- Store release notes are now sourced from `CHANGELOG.md` for the matching app version and attached to submissions where supported.
+
 ## [1.0.0] — 2026-02-16
 
 ### Added

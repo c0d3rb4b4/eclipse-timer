@@ -45,7 +45,8 @@ import LocationSettingsScreen from "../screens/LocationSettingsScreen";
 import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
 import { type FavoriteLocation, useAppState } from "../state/appState";
-import { kindCodeForRecord } from "../utils/eclipse";
+import { localYmdNow } from "../utils/date";
+import { kindCodeForRecord, kindLabelFromCode } from "../utils/eclipse";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
 
 enableScreens();
@@ -78,6 +79,7 @@ type LandingRouteProps = NativeStackScreenProps<RootStackParamList, "Landing"> &
 };
 
 type TimerRouteProps = NativeStackScreenProps<RootStackParamList, "Timer"> & {
+  catalog: EclipseRecord[];
   onOpenMenu: () => void;
 };
 
@@ -262,10 +264,23 @@ function LandingRoute({ navigation, catalog, onOpenMenu }: LandingRouteProps) {
   );
 }
 
-function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
+function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
   const { state, actions } = useAppState();
   const [activeEclipse, setActiveEclipse] = useState<EclipseRecord | null>(null);
   const [isActiveEclipseLoading, setIsActiveEclipseLoading] = useState(false);
+  const todayYmd = useMemo(() => localYmdNow(), []);
+  const eclipseOptions = useMemo(
+    () =>
+      [...catalog]
+        .sort((a, b) => a.dateYmd.localeCompare(b.dateYmd))
+        .map((record) => ({
+          id: record.id,
+          dateYmd: record.dateYmd,
+          kindLabel: kindLabelFromCode(kindCodeForRecord(record)),
+          isPast: record.dateYmd < todayYmd,
+        })),
+    [catalog, todayYmd],
+  );
 
   useEffect(() => {
     const eclipseId = state.activeEclipseId;
@@ -277,6 +292,7 @@ function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
 
     let didCancel = false;
     setIsActiveEclipseLoading(true);
+    setActiveEclipse((prev) => (prev?.id === eclipseId ? prev : null));
 
     const task = InteractionManager.runAfterInteractions(() => {
       if (didCancel) return;
@@ -332,15 +348,27 @@ function TimerRoute({ navigation, onOpenMenu }: TimerRouteProps) {
     },
     [timerState],
   );
+  const selectEclipse = useCallback(
+    (eclipseId: string) => {
+      const normalizedId = eclipseId.trim();
+      if (!normalizedId || normalizedId === state.activeEclipseId) return;
+      actions.selectLanding(normalizedId);
+      actions.activateSelected();
+    },
+    [actions, state.activeEclipseId],
+  );
 
   return (
     <TimerScreen
       activeEclipse={activeEclipse}
+      activeEclipseId={state.activeEclipseId}
       isActiveEclipseLoading={isActiveEclipseLoading}
+      eclipseOptions={eclipseOptions}
       timer={timerState}
       favoriteLocations={state.favoriteLocations}
       onAddFavoriteLocation={actions.addFavoriteLocation}
       onUseFavoriteLocation={useFavoriteLocation}
+      onSelectEclipse={selectEclipse}
       onOpenMenu={onOpenMenu}
       onOpenPreview={openPreview}
     />
@@ -541,7 +569,7 @@ export default function RootNavigator() {
             {(props) => <LandingRoute {...props} catalog={catalog} onOpenMenu={openMenu} />}
           </Stack.Screen>
           <Stack.Screen name="Timer">
-            {(props) => <TimerRoute {...props} onOpenMenu={openMenu} />}
+            {(props) => <TimerRoute {...props} catalog={catalog} onOpenMenu={openMenu} />}
           </Stack.Screen>
           <Stack.Screen name="Preview">
             {(props) => <PreviewRoute {...props} onOpenMenu={openMenu} />}

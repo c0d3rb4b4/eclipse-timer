@@ -3,7 +3,6 @@
     "name": "Eclipse Timer",
     "slug": "eclipse-timer",
     "scheme": "eclipsetimer",
-    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "platforms": ["ios", "android"],
@@ -98,7 +97,6 @@
       ],
       "expo-updates"
     ],
-    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/a29a7662-96be-4509-a79e-fbe4b5dac1ff",
       "enabled": true,
