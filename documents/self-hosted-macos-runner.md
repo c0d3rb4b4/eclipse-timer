@@ -51,18 +51,19 @@ Android toolchain:
 
 1. Install Android Studio.
 2. Install SDK Platform, Build-Tools, Command-line Tools, and Platform Tools.
-3. Ensure JDK 17 is available for Gradle:
+3. Workflow fallback: `.github/workflows/eas-build.yml` also runs `android-actions/setup-android@v3` and installs `platforms;android-36`, `build-tools;36.0.0`, and `ndk;27.1.12297006` automatically for Android builds.
+4. Ensure JDK 17 is available for Gradle:
 ```bash
 brew install temurin@17
 /usr/libexec/java_home -V
 ```
-4. Optional for shell profile (if Java is still not detected):
+5. Optional for shell profile (if Java is still not detected):
 ```bash
 echo 'export JAVA_HOME=$(/usr/libexec/java_home -v 17)' >> ~/.zshrc
 echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
-5. Export SDK vars (for the runner user):
+6. Export SDK vars (for the runner user):
 ```bash
 echo 'export ANDROID_HOME="$HOME/Library/Android/sdk"' >> ~/.zshrc
 echo 'export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"' >> ~/.zshrc

@@ -88,6 +88,21 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Setup Android SDK tools (Android builds)
+        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages (Android builds)
+        if: ${{ (github.event.inputs.platform || 'all') != 'ios' }}
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006"
+
       - name: Setup EAS CLI
         uses: expo/expo-github-action@v8
         with:
@@ -121,9 +136,23 @@ jobs:
           fi
 
           if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
-            sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
+            sdk_root=""
+            for candidate in \
+              "${ANDROID_SDK_ROOT:-}" \
+              "${ANDROID_HOME:-}" \
+              "$HOME/Library/Android/sdk" \
+              "$HOME/Android/Sdk" \
+              "/usr/local/share/android-sdk" \
+              "/opt/homebrew/share/android-sdk"
+            do
+              if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+                sdk_root="$candidate"
+                break
+              fi
+            done
+
             if [ ! -d "$sdk_root" ]; then
-              echo "Android SDK directory not found at '$sdk_root'."
+              echo "Android SDK directory not found."
               echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
               exit 1
             fi
