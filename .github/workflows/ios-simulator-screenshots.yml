@@ -33,7 +33,7 @@ on:
         description: "Deep links separated by comma or newline"
         required: false
         type: string
-        default: "eclipsetimer://landing,eclipsetimer://timer,eclipsetimer://notifications,eclipsetimer://locations"
+        default: "eclipsetimer://landing,eclipsetimer://timer,eclipsetimer://notifications,eclipsetimer://locations,eclipsetimer://eclipse/2026-total,eclipsetimer://eclipse/2026-total/preview,eclipsetimer://eclipse/2027-total,eclipsetimer://eclipse/2027-total/preview"
 
 concurrency:
   group: ios-screenshots-${{ github.ref }}

@@ -1,5 +1,15 @@
-import { loadCatalog, loadCatalogEntryWithOverlays } from "@eclipse-timer/catalog";
-import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
+import {
+  loadCatalog,
+  loadCatalogEntry,
+  loadCatalogEntryWithOverlays,
+} from "@eclipse-timer/catalog";
+import { computeCircumstances } from "@eclipse-timer/engine";
+import type {
+  Circumstances,
+  EclipseKindAtLocation,
+  EclipseRecord,
+  Observer,
+} from "@eclipse-timer/shared";
 import {
   type LinkingOptions,
   NavigationContainer,
@@ -12,12 +22,13 @@ import {
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import * as SplashScreen from "expo-splash-screen";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
   Image,
   InteractionManager,
+  Linking,
   StyleSheet,
   Text,
   View,
@@ -34,6 +45,7 @@ import LocationSettingsScreen from "../screens/LocationSettingsScreen";
 import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
 import { type FavoriteLocation, useAppState } from "../state/appState";
+import { kindCodeForRecord } from "../utils/eclipse";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
 
 enableScreens();
@@ -119,6 +131,86 @@ function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null 
   if (route === "Landing" || route === "Timer") return route;
   if (route === "NotificationSettings" || route === "LocationSettings") return route;
   return null;
+}
+
+type FeaturedEclipseDeepLinkAction =
+  | { type: "open_timer"; eclipseId: string }
+  | { type: "open_preview"; eclipseId: string };
+
+const FEATURED_ECLIPSE_BY_SLUG: Record<string, string> = {
+  "2026-total": "2026-08-12T",
+  "2027-total": "2027-08-02T",
+  "2026-08-12": "2026-08-12T",
+  "2027-08-02": "2027-08-02T",
+};
+
+function normalizeDeepLinkPath(url: string): string {
+  const withoutScheme = url.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "");
+  const pathOnly = withoutScheme.split(/[?#]/, 1)[0] ?? "";
+  return pathOnly.replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+}
+
+function parseFeaturedEclipseDeepLink(url: string): FeaturedEclipseDeepLinkAction | null {
+  const path = normalizeDeepLinkPath(url);
+  if (!path.startsWith("eclipse/")) return null;
+
+  const [, slug = "", action = ""] = path.split("/");
+  const eclipseId = FEATURED_ECLIPSE_BY_SLUG[slug];
+  if (!eclipseId) return null;
+
+  if (!action) {
+    return { type: "open_timer", eclipseId };
+  }
+
+  if (action === "preview") {
+    return { type: "open_preview", eclipseId };
+  }
+
+  return null;
+}
+
+function fallbackKindAtLocationForRecord(record: EclipseRecord): EclipseKindAtLocation {
+  const code = kindCodeForRecord(record);
+  if (code === "T" || code === "H") return "total";
+  if (code === "A") return "annular";
+  return "partial";
+}
+
+function buildPreviewPayloadForFeaturedDeepLink(eclipseId: string): PreviewPayload | null {
+  const record = loadCatalogEntry(eclipseId);
+  if (!record) return null;
+
+  const lat =
+    typeof record.greatestEclipseLatDeg === "number" &&
+    Number.isFinite(record.greatestEclipseLatDeg)
+      ? record.greatestEclipseLatDeg
+      : 0;
+  const lon =
+    typeof record.greatestEclipseLonDeg === "number" &&
+    Number.isFinite(record.greatestEclipseLonDeg)
+      ? record.greatestEclipseLonDeg
+      : 0;
+
+  const observer: Observer = { latDeg: lat, lonDeg: lon, elevM: 0 };
+
+  let circumstances: Circumstances | null = null;
+  try {
+    circumstances = computeCircumstances(record, observer);
+  } catch {
+    circumstances = null;
+  }
+
+  return {
+    eclipseId: record.id,
+    eclipseDateYmd: record.dateYmd,
+    kindAtLocation: circumstances?.kindAtLocation ?? fallbackKindAtLocationForRecord(record),
+    magnitude: circumstances?.magnitude,
+    c1Utc: circumstances?.c1Utc,
+    c2Utc: circumstances?.c2Utc,
+    maxUtc: circumstances?.maxUtc ?? record.greatestEclipseUtc,
+    c3Utc: circumstances?.c3Utc,
+    c4Utc: circumstances?.c4Utc,
+  };
 }
 
 function LandingRoute({ navigation, catalog, onOpenMenu }: LandingRouteProps) {
@@ -293,8 +385,9 @@ function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
 }
 
 export default function RootNavigator() {
-  const { state: appState } = useAppState();
+  const { state: appState, actions } = useAppState();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const pendingFeaturedDeepLinkActionRef = useRef<FeaturedEclipseDeepLinkAction | null>(null);
   const [catalog, setCatalog] = useState<EclipseRecord[] | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
@@ -314,6 +407,64 @@ export default function RootNavigator() {
     if (!routeName) return;
     setCurrentRouteName(routeName);
   }, [navigationRef]);
+
+  const activateEclipseById = useCallback(
+    (eclipseId: string) => {
+      actions.selectLanding(eclipseId);
+      actions.activateSelected();
+    },
+    [actions],
+  );
+
+  const runFeaturedDeepLinkAction = useCallback(
+    (action: FeaturedEclipseDeepLinkAction) => {
+      activateEclipseById(action.eclipseId);
+      closeMenu();
+
+      if (!navigationRef.isReady()) {
+        pendingFeaturedDeepLinkActionRef.current = action;
+        return;
+      }
+
+      if (action.type === "open_timer") {
+        navigationRef.navigate("Timer");
+        return;
+      }
+
+      const payload = buildPreviewPayloadForFeaturedDeepLink(action.eclipseId);
+      if (!payload) {
+        navigationRef.navigate("Timer");
+        return;
+      }
+
+      navigationRef.navigate("Preview", { payload });
+    },
+    [activateEclipseById, closeMenu, navigationRef],
+  );
+
+  const handleIncomingUrl = useCallback(
+    (url: string) => {
+      const action = parseFeaturedEclipseDeepLink(url);
+      if (!action) return false;
+
+      if (!navigationRef.isReady()) {
+        pendingFeaturedDeepLinkActionRef.current = action;
+        return true;
+      }
+
+      runFeaturedDeepLinkAction(action);
+      return true;
+    },
+    [navigationRef, runFeaturedDeepLinkAction],
+  );
+
+  const onNavigationReady = useCallback(() => {
+    updateRouteName();
+    const pendingAction = pendingFeaturedDeepLinkActionRef.current;
+    if (!pendingAction) return;
+    pendingFeaturedDeepLinkActionRef.current = null;
+    runFeaturedDeepLinkAction(pendingAction);
+  }, [runFeaturedDeepLinkAction, updateRouteName]);
 
   const onNavigateFromMenu = useCallback(
     (route: MenuRouteName) => {
@@ -354,6 +505,25 @@ export default function RootNavigator() {
     };
   }, []);
 
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      handleIncomingUrl(url);
+    });
+
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (!url) return;
+        handleIncomingUrl(url);
+      })
+      .catch(() => {
+        // Ignore URL parsing failures and allow default linking behavior.
+      });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [handleIncomingUrl]);
+
   if (!catalog) {
     return <StartupLoadingScreen message="Loading eclipse catalog..." />;
   }
@@ -362,7 +532,7 @@ export default function RootNavigator() {
     <NavigationContainer
       ref={navigationRef}
       linking={linking}
-      onReady={updateRouteName}
+      onReady={onNavigationReady}
       onStateChange={updateRouteName}
     >
       <View style={styles.navigationRoot}>
