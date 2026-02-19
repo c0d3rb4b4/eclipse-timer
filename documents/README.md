@@ -7,6 +7,7 @@ This folder contains the project documentation for the `eclipse-timer` monorepo.
 ### Planning
 - `documents/01-documentation-plan.md`
 - `documents/release-plan-eas.md`
+- `documents/self-hosted-macos-runner.md`
 
 ### High-Level
 - `documents/high-level/system-overview.md`

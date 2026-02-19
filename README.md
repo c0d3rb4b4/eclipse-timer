@@ -263,6 +263,8 @@ This repo now reads the key from `GOOGLE_MAPS_ANDROID_API_KEY` at build/config t
    - Value: your Android Maps key
 2. The workflow `.github/workflows/eas-build.yml` injects this secret into the build job.
 3. Android/all builds fail early with a clear message if the secret is missing.
+4. Builds run on a self-hosted macOS runner with label `eclipse-timer`.
+   Runner setup instructions: `documents/self-hosted-macos-runner.md`.
 
 ### Security recommendations
 

@@ -1,4 +1,4 @@
-name: EAS Build & Submit
+name: Self-Hosted Mobile Build & Submit
 
 on:
   push:
@@ -25,13 +25,13 @@ on:
         type: boolean
 
 concurrency:
-  group: eas-${{ github.ref }}
+  group: self-hosted-mobile-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   ci:
     name: CI checks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, eclipse-timer]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,9 +58,9 @@ jobs:
         run: pnpm test
 
   build:
-    name: EAS Build (${{ github.event.inputs.platform || 'all' }})
+    name: Local Build (${{ github.event.inputs.platform || 'all' }})
     needs: ci
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, eclipse-timer]
     env:
       GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
 
@@ -97,7 +97,52 @@ jobs:
 
       - name: Build
         working-directory: apps/mobile
-        run: eas build --profile production --platform ${{ github.event.inputs.platform || 'all' }} --non-interactive
+        env:
+          EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
+        run: |
+          set -euo pipefail
+          platform="${{ github.event.inputs.platform || 'all' }}"
+
+          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
+            pnpm exec eas build --profile production --platform ios --local --non-interactive
+          fi
+
+          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
+            pnpm exec eas build --profile production --platform android --local --non-interactive
+          fi
+
+      - name: Collect build artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/submission
+          platform="${{ github.event.inputs.platform || 'all' }}"
+
+          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
+            ios_artifact="$(find artifacts/raw -type f -name '*.ipa' | head -n 1 || true)"
+            if [ -z "$ios_artifact" ]; then
+              echo "Missing iOS artifact (.ipa) in artifacts/raw."
+              exit 1
+            fi
+            cp "$ios_artifact" artifacts/submission/ios.ipa
+          fi
+
+          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
+            android_artifact="$(find artifacts/raw -type f -name '*.aab' | head -n 1 || true)"
+            if [ -z "$android_artifact" ]; then
+              echo "Missing Android artifact (.aab) in artifacts/raw."
+              exit 1
+            fi
+            cp "$android_artifact" artifacts/submission/android.aab
+          fi
+
+          ls -lah artifacts/submission
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-mobile-builds-${{ github.run_id }}
+          path: artifacts/submission
+          if-no-files-found: error
 
   submit:
     name: Submit to stores
@@ -105,7 +150,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.submit == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, eclipse-timer]
     environment: production # Requires manual approval in GitHub settings
 
     steps:
@@ -130,6 +175,31 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Submit to App Store Connect & Google Play
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: local-mobile-builds-${{ github.run_id }}
+          path: artifacts/submission
+
+      - name: Submit local artifacts to App Store Connect & Google Play
         working-directory: apps/mobile
-        run: eas submit --platform ${{ github.event.inputs.platform || 'all' }} --non-interactive --latest
+        run: |
+          set -euo pipefail
+          platform="${{ github.event.inputs.platform || 'all' }}"
+          artifact_root="${{ github.workspace }}/artifacts/submission"
+
+          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
+            if [ ! -f "$artifact_root/ios.ipa" ]; then
+              echo "Missing iOS artifact at $artifact_root/ios.ipa."
+              exit 1
+            fi
+            pnpm exec eas submit --platform ios --path "$artifact_root/ios.ipa" --non-interactive
+          fi
+
+          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
+            if [ ! -f "$artifact_root/android.aab" ]; then
+              echo "Missing Android artifact at $artifact_root/android.aab."
+              exit 1
+            fi
+            pnpm exec eas submit --platform android --path "$artifact_root/android.aab" --non-interactive
+          fi
