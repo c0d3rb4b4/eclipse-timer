@@ -167,7 +167,80 @@ Trigger conditions:
    - every push to `main`
    - manual `workflow_dispatch`
 
-## 7. First validation run
+## 7. iOS certificate + local build setup (headless)
+
+Use this when iOS local build fails in credential/setup phases.
+
+### A. Create/sync iOS credentials in EAS
+
+From the repo:
+
+```bash
+cd apps/mobile
+npx -y eas-cli@latest credentials -p ios
+```
+
+Recommended menu path:
+
+1. Select profile: `production`.
+2. `Build Credentials: Manage everything needed to build your project`.
+3. `All: Set up all the required credentials to build your project`.
+4. Reuse existing cert only if known good; otherwise remove and recreate cert + provisioning profile.
+
+Optional (for local verification):
+
+1. In credentials menu, download credentials to `credentials.json`.
+2. Keep `credentials.json` out of git.
+
+### B. Verify cert import in headless keychain
+
+If `jq` is missing, install it (`brew install jq`) or copy cert path/password manually from `credentials.json`.
+
+```bash
+cd apps/mobile
+
+P12_PATH="$(jq -r '.ios.distributionCertificate.path' credentials.json)"
+P12_PASS="$(jq -r '.ios.distributionCertificate.password' credentials.json)"
+KEYCHAIN="$HOME/eas-debug.keychain-db"
+KEYCHAIN_PASS='TempKeychainPass123!'
+
+security delete-keychain "$KEYCHAIN" 2>/dev/null || true
+security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
+security set-keychain-settings -lut 21600 "$KEYCHAIN"
+security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
+security import "$P12_PATH" -k "$KEYCHAIN" -P "$P12_PASS" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN"
+security find-identity -v -p codesigning "$KEYCHAIN"
+```
+
+Expected output:
+
+- `1 valid identities found` (or more)
+
+If you see `0 valid identities found`, regenerate iOS credentials in EAS and retry.
+
+### C. Ensure Xcode iOS platform is installed
+
+If build logs show `iOS 26.2 is not installed`, run:
+
+```bash
+sudo xcode-select -s /Applications/Xcode-26.2.0.app/Contents/Developer
+sudo xcodebuild -license accept
+sudo xcodebuild -runFirstLaunch
+sudo xcodebuild -downloadPlatform iOS
+xcodebuild -showsdks | grep -E 'iphoneos|iphonesimulator'
+```
+
+### D. Run a manual local iOS build test
+
+```bash
+cd apps/mobile
+EXPO_NO_KEYCHAIN=1 EXPO_DEBUG=1 EAS_LOCAL_BUILD_SKIP_CLEANUP=1 npx -y eas-cli@latest build --profile production --platform ios --local
+```
+
+If this passes, GitHub workflow `eas-build.yml` should pass on the same runner host.
+
+## 8. First validation run
 
 1. In GitHub Actions, run `Self-Hosted Mobile Build & Submit`.
 2. Inputs:
@@ -176,7 +249,7 @@ Trigger conditions:
 3. Confirm build artifacts are attached to the run.
 4. Then run once with `submit: true` when store credentials are confirmed.
 
-## 8. Common issues
+## 9. Common issues
 
 1. Runner never picked:
    - Check runner is online.
@@ -185,7 +258,13 @@ Trigger conditions:
    - If `svc.sh` mode fails on headless macOS, run with `nohup ./run.sh ...`.
 2. iOS signing failures:
    - Re-check distribution cert/profile setup in your EAS credentials.
-3. Android signing failures:
+   - If cert import succeeds but `find-identity` returns `0 valid identities found`, recreate cert/profile and retest manual keychain import.
+3. iOS archive fails with `Unable to find a destination ... iOS <version> is not installed`:
+   - Install iOS platform components for the selected Xcode (`xcodebuild -downloadPlatform iOS`).
+4. `expo doctor` failed checks during local build:
+   - Usually advisory unless followed by a hard build error.
+   - Fix app config mismatches (`app.json` vs `app.config.ts`) once signing/build blockers are resolved.
+5. Android signing failures:
    - Re-check keystore credentials in EAS credentials.
-4. Missing Maps key:
+6. Missing Maps key:
    - Ensure `GOOGLE_MAPS_ANDROID_API_KEY` is present in repository secrets.
