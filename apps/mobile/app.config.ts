@@ -13,7 +13,7 @@ if (typeof packageVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(packageVersion
 }
 
 expo.version = packageVersion;
-expo.runtimeVersion = { policy: "appVersion" };
+expo.runtimeVersion = packageVersion;
 
 if (!googleMapsAndroidApiKey) {
   console.warn(

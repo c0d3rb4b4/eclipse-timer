@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `eas-build.yml` now always builds both iOS and Android in a single run.
-- Store submit is now automatic only when `apps/mobile/package.json` version changes.
-- Store release notes are now sourced from `CHANGELOG.md` for the matching app version and attached to submissions where supported.
+- Store submit now compares `apps/mobile/package.json` version to the latest Git release tag and runs only when incremented, so retries after failed builds can reuse the same version.
+- Store release notes are now sourced from `CHANGELOG.md` for all versions between the last successful release tag and the current version, then attached to submissions where supported.
 
 ## [1.0.0] — 2026-02-16
 

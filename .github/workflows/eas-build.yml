@@ -190,16 +190,54 @@ jobs:
           set -euo pipefail
 
           current_version="$(node -p "JSON.parse(require('fs').readFileSync('apps/mobile/package.json', 'utf8')).version")"
+          git fetch --tags --force
+          latest_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
           previous_version=""
 
-          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-            if git cat-file -e HEAD^:apps/mobile/package.json 2>/dev/null; then
-              previous_version="$(git show HEAD^:apps/mobile/package.json | node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync(0, 'utf8')); process.stdout.write(String(pkg.version ?? ''));")"
-            fi
+          if [ -n "$latest_tag" ]; then
+            previous_version="${latest_tag#v}"
           fi
 
+          comparison_result="$(
+            CURRENT_VERSION="$current_version" PREVIOUS_VERSION="$previous_version" node - <<'NODE'
+            const semver = /^\d+\.\d+\.\d+$/;
+            const currentVersion = process.env.CURRENT_VERSION || "";
+            const previousVersion = process.env.PREVIOUS_VERSION || "";
+
+            const fail = (message) => {
+              console.error(message);
+              process.exit(1);
+            };
+
+            if (!semver.test(currentVersion)) {
+              fail(`apps/mobile/package.json version must be x.y.z. Found: ${currentVersion}`);
+            }
+
+            if (!previousVersion) {
+              process.stdout.write("first_release");
+              process.exit(0);
+            }
+
+            if (!semver.test(previousVersion)) {
+              fail(`Latest release tag must use format vX.Y.Z. Found: v${previousVersion}`);
+            }
+
+            const parse = (value) => value.split(".").map((part) => Number(part));
+            const compare = (left, right) => left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+            const versionComparison = compare(parse(currentVersion), parse(previousVersion));
+
+            if (versionComparison > 0) {
+              process.stdout.write("incremented");
+            } else if (versionComparison === 0) {
+              process.stdout.write("unchanged");
+            } else {
+              process.stdout.write("decremented");
+            }
+            NODE
+          )"
+
           should_submit="false"
-          if [ -n "$previous_version" ] && [ "$current_version" != "$previous_version" ]; then
+          if [ "$comparison_result" = "first_release" ] || [ "$comparison_result" = "incremented" ]; then
             should_submit="true"
           fi
 
@@ -208,13 +246,21 @@ jobs:
           echo "should_submit=$should_submit" >> "$GITHUB_OUTPUT"
 
           if [ "$should_submit" = "true" ]; then
-            echo "Detected mobile version change: $previous_version -> $current_version"
-            echo "Submit job will run for both iOS and Android."
-          elif [ -n "$previous_version" ]; then
-            echo "Mobile version unchanged: $current_version"
+            if [ "$comparison_result" = "first_release" ]; then
+              echo "No previous mobile release tag found."
+              echo "Submit job will run for both iOS and Android."
+            else
+              echo "Detected mobile version increment: $previous_version -> $current_version"
+              echo "Submit job will run for both iOS and Android."
+            fi
+          elif [ "$comparison_result" = "unchanged" ]; then
+            echo "Mobile version unchanged from latest release tag: $current_version"
+            echo "Submit job will be skipped."
+          elif [ "$comparison_result" = "decremented" ]; then
+            echo "Mobile version $current_version is lower than latest release tag $previous_version."
             echo "Submit job will be skipped."
           else
-            echo "Previous mobile version could not be determined."
+            echo "Unable to determine mobile release eligibility."
             echo "Submit job will be skipped."
           fi
 
@@ -266,7 +312,7 @@ jobs:
 
           if (app?.expo?.runtimeVersion !== undefined) {
             fail(
-              `apps/mobile/app.json expo.runtimeVersion must be omitted. Runtime version is derived from appVersion in apps/mobile/app.config.ts.`
+              `apps/mobile/app.json expo.runtimeVersion must be omitted. Runtime version is derived from apps/mobile/package.json via apps/mobile/app.config.ts.`
             );
           }
 
@@ -293,6 +339,7 @@ jobs:
           }
 
           fs.appendFileSync(outputPath, `version=${currentVersion}\n`);
+          fs.appendFileSync(outputPath, `previous_version=${latestVersion}\n`);
           fs.appendFileSync(outputPath, `tag_name=v${currentVersion}\n`);
           fs.appendFileSync(outputPath, `release_name=Eclipse Timer v${currentVersion}\n`);
 
@@ -339,13 +386,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${{ steps.release_meta.outputs.version }}"
+          current_version="${{ steps.release_meta.outputs.version }}"
+          previous_version="${{ steps.release_meta.outputs.previous_version }}"
           notes="$(
-            VERSION="$version" node - <<'NODE'
+            CURRENT_VERSION="$current_version" PREVIOUS_VERSION="$previous_version" node - <<'NODE'
             const fs = require("fs");
 
-            const version = process.env.VERSION ?? "";
-            if (!version) {
+            const currentVersion = process.env.CURRENT_VERSION ?? "";
+            const previousVersion = process.env.PREVIOUS_VERSION ?? "";
+            const semver = /^\d+\.\d+\.\d+$/;
+            if (!semver.test(currentVersion)) {
               process.exit(0);
             }
 
@@ -356,37 +406,89 @@ jobs:
               process.exit(0);
             }
 
-            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            const sectionPattern = new RegExp(
-              `^## \\[${escapeRegExp(version)}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|\\Z)`,
-              "m",
-            );
-            const match = changelog.match(sectionPattern);
-            if (!match) {
+            if (previousVersion && !semver.test(previousVersion)) {
               process.exit(0);
             }
 
-            const normalized = match[1]
-              .split(/\r?\n/)
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .filter((line) => !/^###\s+/i.test(line))
-              .map((line) => line.replace(/^[-*]\s+/, ""))
-              .map((line) => line.replace(/\*\*/g, ""))
-              .map((line) => line.replace(/`/g, ""))
-              .map((line) => line.trim())
-              .filter(Boolean);
+            const parse = (value) => value.split(".").map((part) => Number(part));
+            const compare = (left, right) => left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+            const entries = [];
+            const lines = changelog.split(/\r?\n/);
+            let activeVersion = "";
+            let activeBody = [];
 
-            if (!normalized.length) {
+            for (const line of lines) {
+              const headingMatch = line.match(/^## \[(\d+\.\d+\.\d+)\][^\n]*$/);
+              if (headingMatch) {
+                if (activeVersion) {
+                  entries.push({ version: activeVersion, body: activeBody.join("\n") });
+                }
+                activeVersion = headingMatch[1];
+                activeBody = [];
+                continue;
+              }
+
+              if (activeVersion) {
+                activeBody.push(line);
+              }
+            }
+
+            if (activeVersion) {
+              entries.push({ version: activeVersion, body: activeBody.join("\n") });
+            }
+
+            const currentParsed = parse(currentVersion);
+            const previousParsed = previousVersion ? parse(previousVersion) : null;
+
+            const selectedEntries = entries.filter(({ version }) => {
+              const versionParsed = parse(version);
+              if (compare(versionParsed, currentParsed) > 0) {
+                return false;
+              }
+
+              if (!previousParsed) {
+                return version === currentVersion;
+              }
+
+              return compare(versionParsed, previousParsed) > 0;
+            });
+
+            const normalizeBody = (body) =>
+              body
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .filter((line) => !/^###\s+/i.test(line))
+                .map((line) => line.replace(/^[-*]\s+/, ""))
+                .map((line) => line.replace(/\*\*/g, ""))
+                .map((line) => line.replace(/`/g, ""))
+                .map((line) => line.trim())
+                .filter(Boolean);
+
+            const rendered = [];
+            for (const entry of selectedEntries) {
+              const normalizedLines = normalizeBody(entry.body);
+              if (!normalizedLines.length) {
+                continue;
+              }
+
+              rendered.push(`v${entry.version}`);
+              for (const line of normalizedLines) {
+                rendered.push(`- ${line}`);
+              }
+              rendered.push("");
+            }
+
+            if (!rendered.length) {
               process.exit(0);
             }
 
-            process.stdout.write(normalized.join("\n"));
+            process.stdout.write(rendered.join("\n").trim());
             NODE
           )"
 
           if [ -z "${notes//[[:space:]]/}" ]; then
-            echo "::notice::No matching CHANGELOG.md notes for version $version. Continuing without store release notes."
+            echo "::notice::No matching CHANGELOG.md notes for version range ${previous_version:-<none>}..$current_version. Continuing without store release notes."
             echo "has_store_notes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
