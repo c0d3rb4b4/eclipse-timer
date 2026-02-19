@@ -453,6 +453,7 @@ jobs:
               return compare(versionParsed, previousParsed) > 0;
             });
 
+            const backtickChar = String.fromCharCode(96);
             const normalizeBody = (body) =>
               body
                 .split(/\r?\n/)
@@ -461,7 +462,7 @@ jobs:
                 .filter((line) => !/^###\s+/i.test(line))
                 .map((line) => line.replace(/^[-*]\s+/, ""))
                 .map((line) => line.replace(/\*\*/g, ""))
-                .map((line) => line.replace(/`/g, ""))
+                .map((line) => line.split(backtickChar).join(""))
                 .map((line) => line.trim())
                 .filter(Boolean);
 
