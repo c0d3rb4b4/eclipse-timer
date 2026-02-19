@@ -211,7 +211,7 @@
 |----|------|----------|---------|
 | CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | ✅ Resolved 2026-02-16: created `eas.json` with `development`/`preview`/`production` build profiles (EAS project ID `a29a7662-96be-4509-a79e-fbe4b5dac1ff`). |
 | CI-01 | **No CI pipeline** | 🔴 Critical | ✅ Resolved 2026-02-16: created `.github/workflows/ci.yml` (GitHub Actions) running `pnpm typecheck`, `pnpm lint`, `pnpm test` on push/PR to `main`. |
-| CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI → EAS Build → EAS Submit pipeline. Triggered on `main` push or manual dispatch. Submit job gated behind `environment: production` approval. |
+| CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI → local EAS Build → direct store upload pipeline. Triggered on `main` push or manual dispatch. Submit job gated behind `environment: production` approval. |
 | CI-03 | **No app signing / keystore management** | 🟠 High | No `eas.json`, no code-signing config. Android `gradle.properties` still references debug keystore only. Required for store distribution. Severity upgraded — this blocks store submission. |
 | CI-04 | **No environment configuration** | 🟡 Medium | ✅ Resolved 2026-02-16: created `apps/mobile/.env.example` with Sentry and EAS placeholders. |
 | CI-05 | **No crash reporting / analytics** | 🟠 High | ✅ Resolved 2026-02-16: installed `@sentry/react-native`, configured `app.json` plugin, wrapped root with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder requires replacement before production. |
@@ -269,7 +269,7 @@
 | F-01 | Multi-eclipse switching on timer |
 | F-02 | ✅ Resolved 2026-02-16: persist user preferences via AsyncStorage |
 | F-03 | ✅ Resolved 2026-02-16: implement real alarm scheduling |
-| CI-02 | ✅ Resolved 2026-02-16: created EAS Build + Submit workflow (`.github/workflows/eas-build.yml`) |
+| CI-02 | ✅ Resolved 2026-02-16: created local EAS Build + direct store upload workflow (`.github/workflows/eas-build.yml`) |
 | CI-03 | Configure app signing / keystore (blocks store submission) |
 | CI-05 | ✅ Resolved 2026-02-16: integrated @sentry/react-native with Sentry.wrap + ErrorBoundary |
 | SP-02 | ✅ Resolved 2026-02-16: privacy policy written, store privacy declarations documented, iOS privacy manifest added |
@@ -387,8 +387,8 @@
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
 | 5.1 | **Create a GitHub Actions CI workflow** — `.github/workflows/ci.yml` runs on push/PR to `main`: checkout → pnpm install → typecheck → lint → test. Includes concurrency grouping to cancel stale runs. | CI-01 | ✅ Done 2026-02-16 |
-| 5.2 | **Add an EAS Build workflow** — `.github/workflows/eas-build.yml` triggers on `main` push (when `apps/mobile/`, `packages/`, or lockfile change) or manual dispatch. CI checks run first, then `eas build --profile production`. Platform selectable via `workflow_dispatch` input (default: `all`). Requires `EXPO_TOKEN` secret. | CI-02 | ✅ Done 2026-02-16 |
-| 5.3 | **Add an EAS Submit step** — included as a gated `submit` job in `eas-build.yml`. Only runs on manual dispatch with `submit: true`. Uses `environment: production` for manual approval before store upload. Runs `eas submit --platform all --latest`. | CI-02 | ✅ Done 2026-02-16 |
+| 5.2 | **Add an EAS Build workflow** — `.github/workflows/eas-build.yml` triggers on `main` push or manual dispatch. CI checks run first, then `eas build --profile production --local`. Platform selectable via `workflow_dispatch` input (default: `all`). Requires `EXPO_TOKEN` secret. | CI-02 | ✅ Done 2026-02-16 |
+| 5.3 | **Add a store upload step** — included as a gated `submit` job in `eas-build.yml`. Only runs on manual dispatch with `submit: true`. Uses `environment: production` for manual approval before store upload. Uploads iOS via `apple-actions/upload-testflight-build` and Android via `r0adkll/upload-google-play`. | CI-02 | ✅ Done 2026-02-16 |
 | 5.4 | **Set up `expo-updates`** — installed `expo-updates`, added `runtimeVersion: { policy: "appVersion" }` and `updates` config (URL, checkAutomatically ON_LOAD, fallbackToCacheTimeout 0) to `app.json`, added `expo-updates` plugin. | CI-06 | ✅ Done 2026-02-16 |
 
 ### Phase 6 — Nice-to-have before v1.0.0
@@ -434,7 +434,7 @@ All automatable work across Phases 1–6 is complete. The items below require ma
 |---|--------|-------|
 | — | Replace `__YOUR_SENTRY_DSN__` with a real Sentry DSN. | `apps/mobile/src/App.tsx` line 16 |
 | — | Replace `__YOUR_SENTRY_ORG__` and `__YOUR_SENTRY_PROJECT__` with real Sentry values. | `apps/mobile/app.json` → plugins → `@sentry/react-native/expo` |
-| — | Fill `eas.json` submit credentials: `appleId`, `ascAppId`, `appleTeamId` (iOS) and `serviceAccountKeyPath` (Android). | `apps/mobile/eas.json` → submit → production |
+| — | Ensure iOS submit identity is set in `apps/mobile/eas.json` (`appleId`, `ascAppId`, `appleTeamId`). | `apps/mobile/eas.json` → submit → production |
 | — | Host `PRIVACY_POLICY.md` at a public URL (e.g., GitHub Pages) and link it in both store listings. | GitHub repo settings or hosting provider |
 | 2.6 | Test on physical devices (iOS + Android) using `eas build --profile preview`. Validate notifications, location, map, and deep-link scheme. | Physical devices |
 | 4.2 | Capture screenshots for all required device classes (see `documents/store-metadata.md` for sizes and recommended screens). | Simulator / physical devices |
@@ -445,5 +445,7 @@ All automatable work across Phases 1–6 is complete. The items below require ma
 #### Before CI/CD workflows work (Phase 5)
 | # | Action | Where |
 |---|--------|-------|
-| — | Add `EXPO_TOKEN` secret to GitHub repo. Generate at [expo.dev account settings](https://expo.dev/accounts/lallimaven/settings/access-tokens). | GitHub → Settings → Secrets → Actions |
-| — | Create a `production` environment in GitHub for the EAS Submit approval gate. | GitHub → Settings → Environments |
+| — | Add `EXPO_TOKEN` secret to GitHub repo (used by local EAS build in CI). Generate at [expo.dev account settings](https://expo.dev/accounts/lallimaven/settings/access-tokens). | GitHub → Settings → Secrets → Actions |
+| — | Add App Store upload secrets: `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_PRIVATE_KEY`. | GitHub → Settings → Secrets → Actions |
+| — | Add Google Play upload secret: `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. | GitHub → Settings → Secrets → Actions |
+| — | Create a `production` environment in GitHub for manual approval before store upload. | GitHub → Settings → Environments |

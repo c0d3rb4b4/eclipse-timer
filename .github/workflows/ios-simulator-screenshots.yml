@@ -4,21 +4,36 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: "Simulator device name (use auto to pick first available iPhone)"
+        description: "Simulator device target (includes screen size + target resolution; use auto to pick first available iPhone)"
         required: true
         default: "auto"
         type: choice
         options:
           - auto
-          - iPhone 17 Pro
-          - iPhone 17 Pro Max
-          - iPhone Air
-          - iPhone 17
-          - iPhone 16e
-          - iPhone 16 Pro
-          - iPhone 16
-          - iPhone 15 Pro
-          - iPhone 15
+          - iPhone 11 (6.1-inch, 828x1792)
+          - iPhone 11 Pro (5.8-inch, 1125x2436)
+          - iPhone 11 Pro Max (6.5-inch, 1242x2688)
+          - iPhone 12 mini (5.4-inch, 1080x2340)
+          - iPhone 12 (6.1-inch, 1170x2532)
+          - iPhone 12 Pro (6.1-inch, 1170x2532)
+          - iPhone 12 Pro Max (6.7-inch, 1284x2778)
+          - iPhone 13 mini (5.4-inch, 1080x2340)
+          - iPhone 13 (6.1-inch, 1170x2532)
+          - iPhone 13 Pro (6.1-inch, 1170x2532)
+          - iPhone 13 Pro Max (6.7-inch, 1284x2778)
+          - iPhone 14 (6.1-inch, 1170x2532)
+          - iPhone 14 Plus (6.7-inch, 1284x2778)
+          - iPhone 14 Pro (6.1-inch, 1179x2556)
+          - iPhone 14 Pro Max (6.7-inch, 1290x2796)
+          - iPhone 15 (6.1-inch, 1179x2556)
+          - iPhone 15 Plus (6.7-inch, 1290x2796)
+          - iPhone 15 Pro (6.1-inch, 1179x2556)
+          - iPhone 15 Pro Max (6.7-inch, 1290x2796)
+          - iPhone 16e (6.1-inch, 1170x2532)
+          - iPhone 16 (6.1-inch, 1179x2556)
+          - iPhone 16 Plus (6.7-inch, 1290x2796)
+          - iPhone 16 Pro (6.3-inch, 1206x2622)
+          - iPhone 16 Pro Max (6.9-inch, 1320x2868)
       startup_wait_seconds:
         description: "Seconds to wait after first app launch"
         required: true
@@ -128,12 +143,14 @@ jobs:
       - name: Boot simulator and capture screenshots
         id: capture
         env:
-          DEVICE_NAME: ${{ github.event.inputs.device }}
+          DEVICE_LABEL: ${{ github.event.inputs.device }}
           STARTUP_WAIT_SECONDS: ${{ github.event.inputs.startup_wait_seconds }}
           PER_PAGE_WAIT_SECONDS: ${{ github.event.inputs.per_page_wait_seconds }}
           APP_PATH: ${{ steps.resolve_app.outputs.app_path }}
         run: |
           set -euo pipefail
+
+          DEVICE_NAME="$(printf '%s' "$DEVICE_LABEL" | sed -E 's/[[:space:]]+\([^()]+\)$//')"
 
           if [[ ! "$STARTUP_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
             echo "startup_wait_seconds must be an integer."
@@ -154,8 +171,8 @@ jobs:
           fi
 
           if [ -z "$udid" ]; then
-            if [ "$DEVICE_NAME" != "auto" ]; then
-              echo "::warning::Requested simulator '$DEVICE_NAME' is unavailable. Falling back to first available iPhone."
+            if [ "$DEVICE_LABEL" != "auto" ]; then
+              echo "::warning::Requested simulator '$DEVICE_LABEL' is unavailable. Falling back to first available iPhone."
             fi
             device_line="$(printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' | head -n 1 || true)"
             udid="$(printf '%s' "$device_line" | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"

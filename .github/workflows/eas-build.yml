@@ -206,30 +206,91 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.submit == 'true'
     runs-on: [self-hosted, macOS, eclipse-timer]
+    permissions:
+      contents: write
     environment: production # Requires manual approval in GitHub settings
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
+          fetch-depth: 0
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Validate release version bump
+        id: release_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          latest_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
+          LATEST_TAG="$latest_tag" node - <<'NODE'
+          const fs = require('fs');
 
-      - name: Setup EAS CLI
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: pnpm
+          const app = JSON.parse(fs.readFileSync('apps/mobile/app.json', 'utf8'));
+          const pkg = JSON.parse(fs.readFileSync('apps/mobile/package.json', 'utf8'));
+          const latestTag = process.env.LATEST_TAG || '';
+
+          const packageVersion = pkg.version;
+          const expoVersion = app?.expo?.version;
+          const runtimeVersion = app?.expo?.runtimeVersion;
+          const semver = /^\d+\.\d+\.\d+$/;
+
+          const fail = (message) => {
+            console.error(message);
+            process.exit(1);
+          };
+
+          if (typeof packageVersion !== 'string' || !semver.test(packageVersion)) {
+            fail(`apps/mobile/package.json version must be x.y.z. Found: ${packageVersion}`);
+          }
+
+          if (typeof expoVersion !== 'string' || !semver.test(expoVersion)) {
+            fail(`apps/mobile/app.json expo.version must be x.y.z. Found: ${expoVersion}`);
+          }
+
+          if (typeof runtimeVersion !== 'string' || !semver.test(runtimeVersion)) {
+            fail(
+              `apps/mobile/app.json expo.runtimeVersion must be x.y.z. Found: ${JSON.stringify(
+                runtimeVersion
+              )}`
+            );
+          }
+
+          if (packageVersion !== expoVersion || packageVersion !== runtimeVersion) {
+            fail(
+              `Version mismatch detected. package.json=${packageVersion}, app.json.expo.version=${expoVersion}, app.json.expo.runtimeVersion=${runtimeVersion}`
+            );
+          }
+
+          const parse = (value) => value.split('.').map((part) => Number(part));
+          const compare = (left, right) => left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+          const currentVersion = packageVersion;
+          const latestVersion = latestTag.replace(/^v/, '');
+
+          if (latestTag) {
+            if (!semver.test(latestVersion)) {
+              fail(`Latest release tag must use format vX.Y.Z. Found: ${latestTag}`);
+            }
+
+            if (compare(parse(currentVersion), parse(latestVersion)) <= 0) {
+              fail(
+                `Release version must be incremented. Current version ${currentVersion} must be greater than latest tag ${latestTag}.`
+              );
+            }
+          }
+
+          const outputPath = process.env.GITHUB_OUTPUT;
+          if (!outputPath) {
+            fail('GITHUB_OUTPUT is not set.');
+          }
+
+          fs.appendFileSync(outputPath, `version=${currentVersion}\n`);
+          fs.appendFileSync(outputPath, `tag_name=v${currentVersion}\n`);
+          fs.appendFileSync(outputPath, `release_name=Eclipse Timer v${currentVersion}\n`);
+
+          const comparisonInfo = latestTag ? ` > ${latestTag}` : ' (no prior release tag found)';
+          console.log(`Release version validated: v${currentVersion}${comparisonInfo}`);
+          NODE
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -237,8 +298,7 @@ jobs:
           name: local-mobile-builds-${{ github.run_id }}
           path: artifacts/submission
 
-      - name: Submit local artifacts to App Store Connect & Google Play
-        working-directory: apps/mobile
+      - name: Validate submission artifacts
         run: |
           set -euo pipefail
           platform="${{ github.event.inputs.platform || 'all' }}"
@@ -249,7 +309,6 @@ jobs:
               echo "Missing iOS artifact at $artifact_root/ios.ipa."
               exit 1
             fi
-            pnpm exec eas submit --platform ios --path "$artifact_root/ios.ipa" --non-interactive
           fi
 
           if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
@@ -257,5 +316,52 @@ jobs:
               echo "Missing Android artifact at $artifact_root/android.aab."
               exit 1
             fi
-            pnpm exec eas submit --platform android --path "$artifact_root/android.aab" --non-interactive
           fi
+
+      - name: Prepare GitHub release assets
+        id: release_assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          platform="${{ github.event.inputs.platform || 'all' }}"
+          files=()
+
+          if [ "$platform" = "all" ] || [ "$platform" = "ios" ]; then
+            files+=("artifacts/submission/ios.ipa")
+          fi
+
+          if [ "$platform" = "all" ] || [ "$platform" = "android" ]; then
+            files+=("artifacts/submission/android.aab")
+          fi
+
+          {
+            echo "files<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload iOS artifact to App Store Connect
+        if: ${{ (github.event.inputs.platform || 'all') == 'all' || (github.event.inputs.platform || 'all') == 'ios' }}
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: artifacts/submission/ios.ipa
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+
+      - name: Upload Android artifact to Google Play
+        if: ${{ (github.event.inputs.platform || 'all') == 'all' || (github.event.inputs.platform || 'all') == 'android' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.lallimaven.eclipsetimer
+          releaseFiles: artifacts/submission/android.aab
+          track: internal
+
+      - name: Create GitHub release with mobile artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: ${{ steps.release_meta.outputs.release_name }}
+          generate_release_notes: true
+          files: ${{ steps.release_assets.outputs.files }}

@@ -156,11 +156,58 @@ Set these in `Settings -> Secrets and variables -> Actions`:
 
 1. `EXPO_TOKEN`
 2. `GOOGLE_MAPS_ANDROID_API_KEY`
+3. `APPSTORE_ISSUER_ID`
+4. `APPSTORE_API_KEY_ID`
+5. `APPSTORE_API_PRIVATE_KEY` (full `.p8` content)
+6. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (full JSON content)
 
-If you use automated submit:
+### How to get each secret
 
-1. Make sure EAS submit credentials are already configured for Apple and Google Play.
-2. Keep `submit` job gated by the `production` environment approval in GitHub.
+1. `EXPO_TOKEN`
+   - Open Expo account settings: `https://expo.dev/accounts/<your-account>/settings/access-tokens`
+   - Create a new access token.
+   - Save token value as GitHub secret `EXPO_TOKEN`.
+   - Verify token locally: `pnpm -C apps/mobile exec eas whoami`.
+
+2. `GOOGLE_MAPS_ANDROID_API_KEY`
+   - In Google Cloud Console, select the project used by the app.
+   - Ensure billing is enabled and `Maps SDK for Android` is enabled in `APIs & Services`.
+   - Go to `APIs & Services -> Credentials -> Create credentials -> API key`.
+   - Restrict the key:
+     - Application restriction: `Android apps`
+     - Package: `com.lallimaven.eclipsetimer`
+     - Certificate fingerprint: your signing SHA-1
+     - API restriction: `Maps SDK for Android`
+   - Save key value as GitHub secret `GOOGLE_MAPS_ANDROID_API_KEY`.
+
+3. `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_PRIVATE_KEY`
+   - Open App Store Connect: `Users and Access -> Integrations -> App Store Connect API`.
+   - Create a Team API key (role with release permissions, typically `Admin` or `App Manager`).
+   - Copy:
+     - `Issuer ID` -> GitHub secret `APPSTORE_ISSUER_ID`
+     - `Key ID` -> GitHub secret `APPSTORE_API_KEY_ID`
+   - Download the `.p8` key file (download is one-time).
+   - Paste the full file content into GitHub secret `APPSTORE_API_PRIVATE_KEY`, including:
+     - `-----BEGIN PRIVATE KEY-----`
+     - `-----END PRIVATE KEY-----`
+
+4. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+   - In Google Play Console: `Setup -> API access`.
+   - Link the Play Console to a Google Cloud project.
+   - Create/select a service account and grant app permissions for `com.lallimaven.eclipsetimer` (track/release permissions needed for your workflow target).
+   - In Google Cloud Console: `IAM & Admin -> Service Accounts -> <service account> -> Keys -> Add key -> Create new key -> JSON`.
+   - Copy the full JSON content into GitHub secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`.
+
+Notes:
+
+1. `EXPO_TOKEN` is required for local `eas build --local` in CI.
+2. Store upload credentials are injected via GitHub secrets; no credential files need to live on the runner filesystem for pipeline submit.
+3. Keep `submit` job gated by the `production` environment approval in GitHub.
+4. GitHub Release creation uses `GITHUB_TOKEN` with `contents: write` permission (set in `.github/workflows/eas-build.yml`).
+   - You do not add `GITHUB_TOKEN` as a repo secret; GitHub provides it automatically per workflow run.
+   - It is available as `${{ secrets.GITHUB_TOKEN }}` (or `github.token` context).
+   - If release creation fails due to permissions, check `Settings -> Actions -> General -> Workflow permissions`.
+   - Use a PAT secret only if org/repo policy disallows write access for `GITHUB_TOKEN`.
 
 ## 6. Workflow behavior after this change
 
@@ -171,7 +218,12 @@ If you use automated submit:
     - `eas build --local --platform ios`
     - `eas build --local --platform android`
   - Uploads local artifacts (`ios.ipa`, `android.aab`) to the workflow run.
-  - Optional submit job sends those artifacts using `eas submit --path ...`.
+  - Optional submit job uploads:
+    - iOS via `apple-actions/upload-testflight-build@v3`
+    - Android via `r0adkll/upload-google-play@v1`
+  - Submit job also:
+    - Enforces release version bump (`apps/mobile/package.json` version, `apps/mobile/app.json` `expo.version`, and `expo.runtimeVersion` must match and be greater than latest `vX.Y.Z` tag)
+    - Creates a GitHub Release and attaches uploaded artifacts (`ios.ipa`/`android.aab`)
 
 Trigger conditions:
 
@@ -261,7 +313,12 @@ If this passes, GitHub workflow `eas-build.yml` should pass on the same runner h
    - `platform: ios` first, then `android`.
    - `submit: false`.
 3. Confirm build artifacts are attached to the run.
-4. Then run once with `submit: true` when store credentials are confirmed.
+4. Then run once with `submit: true` after all four store-upload secrets are set:
+   - `APPSTORE_ISSUER_ID`
+   - `APPSTORE_API_KEY_ID`
+   - `APPSTORE_API_PRIVATE_KEY`
+   - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+5. Verify a GitHub Release was created with attached mobile artifacts.
 
 ## 9. Common issues
 
@@ -285,3 +342,13 @@ If this passes, GitHub workflow `eas-build.yml` should pass on the same runner h
 7. Android build fails with `Unable to locate a Java Runtime`:
    - Install JDK 17 on the runner (`brew install temurin@17`).
    - Or rely on workflow-managed Java setup (`actions/setup-java@v4`) and rerun.
+8. Submit job fails with missing secret:
+   - Verify required secrets exist and are available to the selected environment (`production`).
+   - For iOS, ensure `APPSTORE_API_PRIVATE_KEY` is the raw `.p8` key content, not a file path.
+9. Submit job fails on Google Play permissions:
+   - Ensure the service account in `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` has access to app `com.lallimaven.eclipsetimer` and the target track.
+10. Submit job fails version enforcement:
+   - Bump all three fields to a higher semver than latest tag:
+     - `apps/mobile/package.json` -> `version`
+     - `apps/mobile/app.json` -> `expo.version`
+     - `apps/mobile/app.json` -> `expo.runtimeVersion`
