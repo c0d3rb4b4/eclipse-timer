@@ -233,7 +233,7 @@ jobs:
             } else {
               process.stdout.write("decremented");
             }
-            NODE
+          NODE
           )"
 
           should_submit="false"
@@ -484,7 +484,7 @@ jobs:
             }
 
             process.stdout.write(rendered.join("\n").trim());
-            NODE
+          NODE
           )"
 
           if [ -z "${notes//[[:space:]]/}" ]; then
