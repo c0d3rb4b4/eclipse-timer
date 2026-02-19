@@ -162,7 +162,6 @@ If you use automated submit:
 Trigger conditions:
 
 1. `ci.yml` runs only on:
-   - push to `main`
    - pull request targeting `main`
 2. `eas-build.yml` runs on:
    - every push to `main`
