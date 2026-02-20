@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] — 2026-02-20
+
+### Added
+- Added Android APK output (`android.apk`) to the existing release pipeline artifacts while keeping `ios.ipa` and `android.aab`.
+- Added a dedicated `production-apk` EAS build profile for local Android APK generation in CI.
+
+### Changed
+- GitHub Releases now use the current version section from `CHANGELOG.md` as the release body instead of empty/auto-generated notes.
+
 ## [1.0.3] — 2026-02-20
 
 ### Added

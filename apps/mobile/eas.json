@@ -36,6 +36,13 @@
         "SENTRY_ALLOW_FAILURE": "true",
         "SENTRY_CLI_EXECUTABLE": "/usr/bin/true"
       }
+    },
+    "production-apk": {
+      "extends": "production",
+      "autoIncrement": false,
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

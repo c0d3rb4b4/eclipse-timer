@@ -114,7 +114,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build iOS and Android
+      - name: Build iOS and Android (AAB + APK)
         working-directory: apps/mobile
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
@@ -154,6 +154,7 @@ jobs:
           echo "Using Android SDK at $sdk_root"
 
           pnpm exec eas build --profile production --platform android --local --non-interactive
+          pnpm exec eas build --profile production-apk --platform android --local --non-interactive
 
       - name: Collect build artifacts
         run: |
@@ -173,6 +174,13 @@ jobs:
             exit 1
           fi
           cp "$android_artifact" artifacts/submission/android.aab
+
+          android_apk_artifact="$(find artifacts/raw -type f -name '*.apk' | head -n 1 || true)"
+          if [ -z "$android_apk_artifact" ]; then
+            echo "Missing Android artifact (.apk) in artifacts/raw."
+            exit 1
+          fi
+          cp "$android_apk_artifact" artifacts/submission/android.apk
 
           ls -lah artifacts/submission
 
@@ -381,6 +389,11 @@ jobs:
             exit 1
           fi
 
+          if [ ! -f "$artifact_root/android.apk" ]; then
+            echo "Missing Android artifact at $artifact_root/android.apk."
+            exit 1
+          fi
+
       - name: Prepare GitHub release assets
         id: release_assets
         shell: bash
@@ -391,8 +404,67 @@ jobs:
             echo "files<<EOF"
             echo "artifacts/submission/ios.ipa"
             echo "artifacts/submission/android.aab"
+            echo "artifacts/submission/android.apk"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare GitHub release notes from changelog
+        id: github_release_notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_version="${{ steps.release_meta.outputs.version }}"
+          notes_file="artifacts/submission/github-release-notes.md"
+
+          CURRENT_VERSION="$current_version" NOTES_FILE="$notes_file" node - <<'NODE'
+          const fs = require("fs");
+
+          const currentVersion = process.env.CURRENT_VERSION ?? "";
+          const notesFile = process.env.NOTES_FILE ?? "";
+          const semver = /^\d+\.\d+\.\d+$/;
+          if (!semver.test(currentVersion)) {
+            console.error(`Invalid release version: ${currentVersion}`);
+            process.exit(1);
+          }
+
+          if (!notesFile) {
+            console.error("Release notes output path is missing.");
+            process.exit(1);
+          }
+
+          let changelog = "";
+          try {
+            changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+          } catch {
+            console.error("CHANGELOG.md not found.");
+            process.exit(1);
+          }
+
+          const escapedVersion = currentVersion.replace(/\./g, "\\.");
+          const headingRegex = new RegExp(`^## \\[${escapedVersion}\\].*$`, "m");
+          const headingMatch = changelog.match(headingRegex);
+          if (!headingMatch || headingMatch.index === undefined) {
+            console.error(`No CHANGELOG entry found for version ${currentVersion}.`);
+            process.exit(1);
+          }
+
+          const fromHeading = changelog.slice(headingMatch.index);
+          const nextHeadingIndex = fromHeading.slice(headingMatch[0].length).search(/\n## \[/);
+          const notes =
+            nextHeadingIndex === -1
+              ? fromHeading.trim()
+              : fromHeading.slice(0, headingMatch[0].length + nextHeadingIndex).trim();
+
+          if (!notes) {
+            console.error(`CHANGELOG entry for version ${currentVersion} is empty.`);
+            process.exit(1);
+          }
+
+          fs.mkdirSync("artifacts/submission", { recursive: true });
+          fs.writeFileSync(notesFile, `${notes}\n`);
+          NODE
+
+          echo "body_path=$notes_file" >> "$GITHUB_OUTPUT"
 
       - name: Prepare store release notes from changelog (optional)
         id: store_notes
@@ -563,5 +635,6 @@ jobs:
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           name: ${{ steps.release_meta.outputs.release_name }}
-          generate_release_notes: true
+          body_path: ${{ steps.github_release_notes.outputs.body_path }}
+          generate_release_notes: false
           files: ${{ steps.release_assets.outputs.files }}
