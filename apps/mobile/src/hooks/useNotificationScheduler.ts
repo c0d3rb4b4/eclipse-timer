@@ -12,7 +12,6 @@ function toSchedulingSettings(settings: NotificationSettings): NotificationSched
   return {
     vibrationEnabled: settings.vibrationEnabled,
     soundEnabled: settings.soundEnabled,
-    useTtsVoice: settings.useTtsVoice,
     remindOneHourBefore: settings.remindOneHourBefore,
     remindTenMinutesBefore: settings.remindTenMinutesBefore,
   };

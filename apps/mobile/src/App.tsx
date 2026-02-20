@@ -1,6 +1,4 @@
 import * as Sentry from "@sentry/react-native";
-import { addNotificationReceivedListener } from "expo-notifications/build/NotificationsEmitter";
-import * as Speech from "expo-speech";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -26,26 +24,6 @@ if (isSentryEnabled) {
 function AppInner() {
   useEffect(() => {
     configureNotificationPresentationHandler();
-  }, []);
-
-  useEffect(() => {
-    const subscription = addNotificationReceivedListener((notification) => {
-      const rawData = notification.request.content.data;
-      if (typeof rawData !== "object" || !rawData || !("audioMode" in rawData)) return;
-
-      const audioMode = rawData.audioMode;
-      if (audioMode !== "tts") return;
-
-      const ttsText = typeof rawData.ttsText === "string" ? rawData.ttsText.trim() : "";
-      if (!ttsText) return;
-
-      void Speech.stop();
-      void Speech.speak(ttsText);
-    });
-
-    return () => {
-      subscription.remove();
-    };
   }, []);
 
   return (

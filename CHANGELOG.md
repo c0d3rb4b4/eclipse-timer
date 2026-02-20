@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] — 2026-02-20
+
+### Changed
+- Reworked notification/alarm settings so eclipse-level `T-1h` and `T-10m` reminders always use system notifications.
+- Replaced `Test Notification` with `Play Test TTS Alarm` for foreground in-app voice alarm testing.
+- Removed enabled in-app event alarm maintenance from Notification/Alarm Settings; per-event alarm toggles remain managed on the Timer screen.
+
+### Removed
+- Removed the `Voice (TTS)` toggle from Notification/Alarm Settings.
+- Removed notification-delivery TTS playback for background reminders.
+
 ## [1.1.1] — 2026-02-20
 
 ### Changed

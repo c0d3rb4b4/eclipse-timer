@@ -4,7 +4,6 @@ import { buildReminderScheduleRequests } from "../src/services/reminderSchedule"
 const baseSettings = {
   vibrationEnabled: true,
   soundEnabled: true,
-  useTtsVoice: false,
   remindOneHourBefore: true,
   remindTenMinutesBefore: true,
 };

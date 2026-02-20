@@ -14,7 +14,6 @@ export type NotificationSettings = {
   countdownAlerts: boolean;
   vibrationEnabled: boolean;
   soundEnabled: boolean;
-  useTtsVoice: boolean;
   remindOneHourBefore: boolean;
   remindTenMinutesBefore: boolean;
   alarmLeadSecondsA1: number;
@@ -26,7 +25,6 @@ export type NotificationSettingToggleKey =
   | "countdownAlerts"
   | "vibrationEnabled"
   | "soundEnabled"
-  | "useTtsVoice"
   | "remindOneHourBefore"
   | "remindTenMinutesBefore";
 
@@ -142,7 +140,6 @@ const initialState: AppState = {
     countdownAlerts: true,
     vibrationEnabled: true,
     soundEnabled: true,
-    useTtsVoice: false,
     remindOneHourBefore: true,
     remindTenMinutesBefore: true,
     alarmLeadSecondsA1: 10,
@@ -215,14 +212,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseNotificationSettings(raw: unknown): NotificationSettings {
   if (!isRecord(raw)) return initialState.notificationSettings;
 
-  const soundEnabled =
-    typeof raw.soundEnabled === "boolean"
-      ? raw.soundEnabled
-      : initialState.notificationSettings.soundEnabled;
-  const useTtsVoice =
-    typeof raw.useTtsVoice === "boolean"
-      ? raw.useTtsVoice
-      : initialState.notificationSettings.useTtsVoice;
   const rawA1 =
     typeof raw.alarmLeadSecondsA1 === "number"
       ? raw.alarmLeadSecondsA1
@@ -246,8 +235,10 @@ function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof raw.vibrationEnabled === "boolean"
         ? raw.vibrationEnabled
         : initialState.notificationSettings.vibrationEnabled,
-    soundEnabled: useTtsVoice ? false : soundEnabled,
-    useTtsVoice,
+    soundEnabled:
+      typeof raw.soundEnabled === "boolean"
+        ? raw.soundEnabled
+        : initialState.notificationSettings.soundEnabled,
     remindOneHourBefore:
       typeof raw.remindOneHourBefore === "boolean"
         ? raw.remindOneHourBefore
@@ -457,13 +448,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state.notificationSettings,
         [action.key]: action.value,
       };
-
-      if (action.key === "useTtsVoice" && action.value) {
-        nextSettings.soundEnabled = false;
-      }
-      if (action.key === "soundEnabled" && action.value) {
-        nextSettings.useTtsVoice = false;
-      }
 
       return {
         ...state,

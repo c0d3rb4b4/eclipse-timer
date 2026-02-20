@@ -31,7 +31,6 @@ let hasConfiguredHandler = false;
 export type NotificationSchedulingSettings = {
   vibrationEnabled: boolean;
   soundEnabled: boolean;
-  useTtsVoice: boolean;
   remindOneHourBefore: boolean;
   remindTenMinutesBefore: boolean;
 };
@@ -56,16 +55,6 @@ export type RescheduleNotificationsResult = {
 };
 
 export type ManagedReminderScheduleRequest = ReminderScheduleRequest<ManagedEclipseReminderEntry>;
-
-export type TestNotificationResult =
-  | {
-      ok: true;
-      fireDate: Date;
-    }
-  | {
-      ok: false;
-      reason: "permission_denied" | "schedule_failed";
-    };
 
 function managedNotificationData(extra: Record<string, unknown>) {
   return {
@@ -93,15 +82,11 @@ function createNotificationContent(
   settings: NotificationSchedulingSettings,
   data: Record<string, unknown>,
 ): NotificationContentInput {
-  const audioMode = settings.useTtsVoice ? "tts" : "system";
   const content: NotificationContentInput = {
     title,
     body,
-    data: managedNotificationData({
-      ...data,
-      audioMode,
-    }),
-    sound: settings.useTtsVoice ? false : settings.soundEnabled ? "default" : false,
+    data: managedNotificationData(data),
+    sound: settings.soundEnabled ? "default" : false,
   };
 
   if (Platform.OS === "android") {
@@ -123,7 +108,7 @@ async function configureAndroidChannel(settings: NotificationSchedulingSettings)
     importance: AndroidImportance.HIGH,
     enableVibrate: settings.vibrationEnabled,
     vibrationPattern: settings.vibrationEnabled ? [0, 250, 120, 250] : [],
-    sound: settings.useTtsVoice ? null : settings.soundEnabled ? "default" : null,
+    sound: settings.soundEnabled ? "default" : null,
   });
 }
 
@@ -209,7 +194,6 @@ export async function rescheduleManagedEclipseReminderEntriesAsync(
       eclipseId: request.entry.eclipseId,
       leadMinutes: request.leadMinutes,
       entryId: request.entry.id,
-      ttsText: `${request.entry.eclipseLabel} eclipse in ${reminderLeadLabel(request.leadMinutes)}.`,
     });
 
     try {
@@ -227,47 +211,5 @@ export async function rescheduleManagedEclipseReminderEntriesAsync(
     permissionGranted: true,
     scheduledCount,
     skippedPastCount,
-  };
-}
-
-export async function scheduleTestNotificationAsync(
-  settings: NotificationSchedulingSettings,
-): Promise<TestNotificationResult> {
-  const permissionGranted = await ensureNotificationPermissionAsync();
-  if (!permissionGranted) {
-    return {
-      ok: false,
-      reason: "permission_denied",
-    };
-  }
-
-  await configureAndroidChannel(settings);
-
-  const fireDate = new Date(Date.now() + 2500);
-  const content = createNotificationContent(
-    "Eclipse Timer Test Alert",
-    "Local reminder notifications are enabled.",
-    settings,
-    {
-      category: "test",
-      ttsText: "This is a test eclipse reminder notification.",
-    },
-  );
-
-  try {
-    await scheduleNotificationAsync({
-      content,
-      trigger: buildDateTrigger(fireDate),
-    });
-  } catch {
-    return {
-      ok: false,
-      reason: "schedule_failed",
-    };
-  }
-
-  return {
-    ok: true,
-    fireDate,
   };
 }

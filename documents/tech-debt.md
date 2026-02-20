@@ -1,6 +1,6 @@
 # Tech Debt & Improvement Plan
 
-> Generated: 2026-02-12 · Updated: 2026-02-19
+> Generated: 2026-02-12 · Updated: 2026-02-20
 > Scope: Full codebase analysis — UI/UX, architecture, code quality, testing, productionization, missing features.
 
 ---
@@ -35,14 +35,13 @@
 | T-04 | **Zero unit tests for geo/coords** | 🟠 High | ✅ Resolved 2026-02-13: added dedicated geo regression/invariant tests for `observerToFundamental` (reference vectors, periodicity checks, elevation sensitivity, and polar finiteness). |
 | T-05 | **Zero unit tests for time utilities** | 🟠 High | ✅ Resolved 2026-02-13: added tests for `t0TtDate`, `ttAtTHours`, `ttToUtcUsingDeltaT`, and `toIsoUtc` covering fractional-hour conversion, boundary rounding, positive/negative ΔT, and invalid-date behavior. |
 | T-06 | **No integration/snapshot tests for catalog scripts** | 🟡 Medium | ✅ Resolved 2026-02-13: added catalog integration/snapshot tests validating `filter_csv_1900_2100` year-range output, `build_catalog_json` field mapping against CSV columns, `build_overlays_json` output shape/coordinate sanity, and artifact hash snapshots for generated files. |
-| T-07 | **No mobile component/screen tests** | 🟡 Medium | No React Native Testing Library or Detox setup. All UI behavior is manually verified. |
+| T-07 | **No mobile component/screen tests** | 🟡 Medium | No React Native Testing Library or Detox setup. Logic-level mobile tests now exist for alarms/reminders, but UI component/screen behavior is still manually verified. |
 | T-08 | **No end-to-end regression suite** | 🟡 Medium | No known-answer tests validating the full pipeline (catalog → engine → formatted output) against NASA reference data. |
 
 ### Recommended actions
-- Install Vitest (shared config at workspace root) for `engine`, `catalog`, `shared`.
-- Write golden-file / snapshot tests for `computeCircumstances` against NASA reference coordinates.
-- Add property-based tests for `evalPoly` (Horner's identity), `findBrackets` (sign-change guarantee), `bisectRoot` (convergence).
-- Add React Native Testing Library for `apps/mobile`.
+- Add React Native Testing Library for `apps/mobile` component/screen behavior.
+- Add an end-to-end regression suite that validates catalog → engine → UI outputs against trusted reference vectors.
+- Add CI coverage reporting/thresholds to keep test depth from regressing.
 
 ---
 
@@ -57,9 +56,9 @@
 | L-05 | **No `.nvmrc` / `.node-version`** | 🟢 Low | ✅ Resolved 2026-02-16: created `.nvmrc` pinning Node 20 at repo root. |
 
 ### Recommended actions
-- Add ESLint 9 flat config (or Biome) with TypeScript + React Native rules.
-- Add Prettier with a shared config.
-- Install Husky + lint-staged for pre-commit formatting + type-check.
+- Add `.editorconfig` for cross-editor whitespace consistency.
+- Keep Biome as the single lint/format source of truth (avoid overlapping ESLint/Prettier stacks unless a concrete gap appears).
+- Consider adding a pre-push hook for `pnpm typecheck` + `pnpm test` on touched workspaces.
 
 ---
 
@@ -74,10 +73,12 @@
 | A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | ✅ Resolved 2026-02-13: compute now runs via `InteractionManager.runAfterInteractions` with cancellation guards for reset/unmount paths. |
 | A-06 | **Countdown timer never re-renders** | 🟠 High | ✅ Resolved 2026-02-13: timer state now owns a 1-second interval and feeds a live `nextEventCountdownText` string to the UI. |
 | A-07 | **Alarm system is a UI stub** | 🟡 Medium | ✅ Updated 2026-02-20: implemented hybrid model with per-eclipse master toggle, fixed `T-1h`/`T-10m` local reminders, and foreground in-app per-event `a1/a2` voice alarms. |
-| A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
+| A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | ✅ Resolved 2026-02-20: catalog bootstrapping now runs in `useEffect` via `InteractionManager.runAfterInteractions`, with a startup loading screen while data hydrates. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
 | A-10 | **Hardcoded elevation `elevM: 0`** | 🟡 Medium | ✅ Resolved 2026-02-16: GPS altitude now captured from `coords.altitude` and threaded through `Pin.elevM` to `Observer.elevM`. Map taps default to 0. |
 | A-11 | **No error boundary** | 🟠 High | ✅ Resolved 2026-02-16: added `ErrorBoundary` class component wrapping `<RootNavigator />` with recovery UI ("Restart" button), integrated with Sentry for crash capture. |
+| A-12 | **Large modules replaced the old `App.tsx` god component** | 🟡 Medium | Responsibility concentration moved into `TimerScreen.tsx` (~1 389 lines), `appState.tsx` (~803 lines), and `RootNavigator.tsx` (~672 lines). Splitting by feature/domain would reduce regression risk and review cost. |
+| A-13 | **Uses Expo internal `build/*` notification imports** | 🟡 Medium | `App.tsx` and `services/notifications.ts` import from `expo-notifications/build/*` private paths. These internals can break on SDK upgrades; prefer public `expo-notifications` exports. |
 
 ---
 
@@ -109,10 +110,10 @@
 | E-03 | **Redundant evaluation in `fPenumbra` / `fUmbraAbs`** | 🟡 Medium | ✅ Resolved 2026-02-13: introduced `evaluateShadowMetricsAtT` and shared per-`t` metric caching inside contact solving so penumbral/umbral scans reuse one `evaluateAtT` result. |
 | E-04 | **Magic numbers in `solveContacts`** | 🟡 Medium | `tMin = -3`, `tMax = +3`, `stepBracket = 1/60`, `stepFine = 1/600`, `tol = 1e-7` are inlined constants with no configuration or documentation of units beyond comments. |
 | E-05 | **Magnitude formula is oversimplified** | 🟠 High | ✅ Resolved 2026-02-13: replaced central-event hardcode with geometric magnitude `(L1obs - delta) / (L1obs + L2obs)` (with kind-aware bounds), allowing total magnitudes >1 and annular magnitudes <1. |
-| E-06 | **No input validation** | 🟡 Medium | `computeCircumstances` trusts that `EclipseRecord` has valid polynomial arrays and numeric fields. A malformed record causes silent NaN propagation. |
+| E-06 | **No input validation** | 🟡 Medium | `computeCircumstances` still accepts unvalidated runtime payloads. Robustness tests now cover malformed records, but there is no explicit schema validation or typed input error contract at the boundary. |
 | E-07 | **`evalPoly` JSDoc says "minutes" but input is hours** | 🟢 Low | The comment `t is a number (we'll use minutes)` is incorrect — the engine passes hours from t0. |
 | E-08 | **No structured error type** | 🟡 Medium | Errors from the engine are thrown as generic `Error`. A typed result (`{ ok: true, data } | { ok: false, error }`) would be safer for the UI layer. |
-| E-09 | **`_debug` payload typed as `any`** | 🟢 Low | The debug field on `Circumstances` is `any`. Should have a proper type for discoverability and serialization safety. |
+| E-09 | **`_debug` payload typed as `any`** | 🟢 Low | ✅ Resolved 2026-02-20: `Circumstances._debug` is now `Record<string, unknown>` in shared types. |
 | E-10 | **`scanMin` does linear scan, not golden-section** | 🟢 Low | The fine scan for maximum eclipse uses a 6-second linear sweep. A golden-section or Brent minimization would converge faster for high-accuracy needs. |
 
 ---
@@ -136,7 +137,7 @@
 
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
-| S-01 | **`Circumstances._debug` typed as `any`** | 🟡 Medium | Loses type safety across the boundary. Should be a dedicated `DebugPayload` type or at least `Record<string, unknown>`. |
+| S-01 | **`Circumstances._debug` typed as `any`** | 🟡 Medium | ✅ Resolved 2026-02-20: replaced with `Record<string, unknown>`. Future improvement: introduce a dedicated `DebugPayload` type. |
 | S-02 | **No runtime validation (Zod, ArkType, io-ts)** | 🟡 Medium | Types are compile-time only. Catalog data loaded from JSON at runtime is cast with `as EclipseRecord[]` — no shape validation. A corrupt JSON file causes silent type-lie bugs. |
 | S-03 | **No versioning strategy for type changes** | 🟢 Low | Since all packages are `workspace:*`, a breaking type change is invisible until runtime. Consider a CHANGELOG or semver bumps for `@eclipse-timer/shared`. |
 
@@ -161,9 +162,9 @@
 |----|------|----------|---------|
 | F-01 | **Multi-eclipse selection on timer screen** | 🟠 High | ✅ Resolved 2026-02-19: added an in-screen eclipse picker modal on Timer so users can switch eclipses directly without returning to Landing. |
 | F-02 | **Persisted user preferences** | 🟠 High | ✅ Resolved 2026-02-16: AsyncStorage persistence wired up via `APP_PREFERENCES_STORAGE_KEY`; user preferences survive app restart. |
-| F-03 | **Real alarm/notification scheduling** | 🟠 High | ✅ Resolved 2026-02-16 via A-07: computed eclipse contacts now schedule local notifications with configurable reminder lead times. |
+| F-03 | **Real alarm/notification scheduling** | 🟠 High | ✅ Updated 2026-02-20 via A-07: app now uses fixed per-eclipse `T-1h`/`T-10m` local reminders plus foreground in-app per-event `a1/a2` voice alarms. |
 | F-04 | **Offline support** | 🟡 Medium | Catalog JSON is bundled, but GIF previews require network. The app has no offline-first UX or cached assets. |
-| F-05 | **Elevation input / altitude from GPS** | 🟡 Medium | The engine supports `elevM` but the app hardcodes `0`. GPS provides altitude — wire it through. |
+| F-05 | **Elevation input / altitude from GPS** | 🟡 Medium | ✅ Resolved 2026-02-16: GPS altitude is captured and threaded through to `Observer.elevM`; map taps still default to 0. |
 | F-06 | **Share / export results** | 🟢 Low | No way to share computed contact times via OS share sheet or clipboard. |
 | F-07 | **Web platform support** | 🟢 Low | `app.json` lists only `ios`/`android`. Expo supports web — overlay rendering may need adjustment but the engine is platform-agnostic. |
 | F-08 | **Eclipse animation / sun coverage visualization** | 🟢 Low | Beyond the NASA GIF, a native real-time animation showing the moon transiting the sun at the observer's location would be a differentiating feature. |
@@ -201,7 +202,8 @@
 |----|------|----------|---------|
 | SP-01 | **Location permission requested without prior explanation** | 🟡 Medium | ✅ Resolved 2026-02-16: added a custom `Alert.alert` rationale dialog explaining on-device-only location use before the OS permission prompt. |
 | SP-02 | **No privacy policy or data usage disclosure** | 🟠 High | ✅ Resolved 2026-02-16: wrote `PRIVACY_POLICY.md`, created `documents/store-privacy-declarations.md` with Apple App Privacy and Google Play Data Safety declarations, added iOS privacy manifest to `app.json`. Remaining: host the policy at a public URL and link in store listings. |
-| SP-03 | **External URL (NASA GIF) loaded without HTTPS validation** | 🟢 Low | The URL is constructed dynamically. A malformed date could produce a broken URL — no sanitization. |
+| SP-03 | **External URL (NASA GIF) loaded without explicit allowlist guard** | 🟢 Low | The URL template is deterministic and HTTPS, but there's no explicit runtime allowlist/sanitization guard before rendering remote image URLs. |
+| SP-04 | **Duplicate iOS privacy manifest entries in `app.json`** | 🟡 Medium | `NSPrivacyAccessedAPITypes` and `NSPrivacyCollectedDataTypes` currently contain duplicate entries, which increases config drift risk and can complicate store review. |
 
 ---
 
@@ -210,17 +212,17 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | ✅ Resolved 2026-02-16: created `eas.json` with `development`/`preview`/`production` build profiles (EAS project ID `a29a7662-96be-4509-a79e-fbe4b5dac1ff`). |
-| CI-01 | **No CI pipeline** | 🔴 Critical | ✅ Resolved 2026-02-16: created `.github/workflows/ci.yml` (GitHub Actions) running `pnpm typecheck`, `pnpm lint`, `pnpm test` on push/PR to `main`. |
-| CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI → local EAS Build → direct store upload pipeline. Triggered on `main` push or manual dispatch. Submit job gated behind `environment: production` approval. |
-| CI-03 | **No app signing / keystore management** | 🟠 High | No `eas.json`, no code-signing config. Android `gradle.properties` still references debug keystore only. Required for store distribution. Severity upgraded — this blocks store submission. |
+| CI-01 | **No CI pipeline** | 🔴 Critical | ✅ Resolved 2026-02-16: created `.github/workflows/ci.yml` running `pnpm typecheck`, `pnpm lint`, and `pnpm test` on pull requests to `main` (docs/log-only changes ignored). |
+| CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI checks + local EAS builds on `main` push/manual dispatch and automated submit gated by semantic-version bump detection. |
+| CI-03 | **App signing / keystore flow not fully verified end-to-end** | 🟠 High | ✅ Partially resolved 2026-02-20: `eas.json` and submit identities are configured, but the first successful production build/signing/upload run still requires manual verification (Phase 1.4). |
 | CI-04 | **No environment configuration** | 🟡 Medium | ✅ Resolved 2026-02-16: created `apps/mobile/.env.example` with Sentry and EAS placeholders. |
 | CI-05 | **No crash reporting / analytics** | 🟠 High | ✅ Resolved 2026-02-16: installed `@sentry/react-native`, configured `app.json` plugin, wrapped root with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder requires replacement before production. |
 | CI-06 | **No OTA update mechanism** | 🟡 Medium | ✅ Resolved 2026-02-16: installed `expo-updates`, configured `runtimeVersion` (appVersion policy) and `updates` URL pointing to EAS project in `app.json`. |
-| CI-07 | **No app store metadata** | 🟡 Medium | No screenshots, store description, keyword list, or promotional assets. Required for both App Store Connect and Google Play Console submission. Severity upgraded — blocks submission. |
-| CI-08 | **iOS `bundleIdentifier` not set** | 🔴 Critical | ✅ Resolved 2026-02-16: set `expo.ios.bundleIdentifier` to `com.lallimaven.eclipse-timer` with `buildNumber: "1"`. |
-| CI-09 | **Android package name is a placeholder** | 🔴 Critical | ✅ Resolved 2026-02-16: set `android.package` to `com.lallimaven.eclipsetimer` with `versionCode: 1`. |
+| CI-07 | **App store metadata not fully complete** | 🟡 Medium | ✅ Partially resolved 2026-02-20: listing copy/content-rating docs are done and screenshot automation exists, but final store screenshots and Android feature graphic remain manual blockers. |
+| CI-08 | **iOS `bundleIdentifier` not set** | 🔴 Critical | ✅ Resolved 2026-02-16: set `expo.ios.bundleIdentifier` to `com.lallimaven.eclipse-timer`. |
+| CI-09 | **Android package name is a placeholder** | 🔴 Critical | ✅ Resolved 2026-02-16: set `android.package` to `com.lallimaven.eclipsetimer`. |
 | CI-10 | **No `expo-splash-screen` control** | 🟡 Medium | ✅ Resolved 2026-02-16: `SplashScreen.preventAutoHideAsync()` called at module level, `hideAsync()` after catalog loads. |
-| CI-11 | **Version `0.0.1` — needs release versioning** | 🟡 Medium | ✅ Resolved 2026-02-16: bumped to `1.0.0` in both `package.json` and `app.json`, set `ios.buildNumber: "1"` and `android.versionCode: 1`. |
+| CI-11 | **Version `0.0.1` — needs release versioning** | 🟡 Medium | ✅ Resolved 2026-02-20: semantic release versioning is active (`apps/mobile` is now `1.1.1`; iOS `buildNumber` `2`; Android `versionCode` `3`). |
 
 ---
 
@@ -229,8 +231,8 @@
 | ID | Item | Severity | Details |
 |----|------|----------|---------|
 | D-01 | **No CONTRIBUTING.md** | 🟡 Medium | No guide for external or new contributors on branch strategy, PR process, or code conventions. |
-| D-02 | **No CHANGELOG** | 🟡 Medium | ✅ Resolved 2026-02-16: created `CHANGELOG.md` with full v1.0.0 entry following Keep a Changelog format. |
-| D-03 | **API reference for engine is prose-only** | 🟢 Low | `engine-algorithm.md` describes the algorithm but there's no auto-generated TSDoc/TypeDoc API reference. |
+| D-02 | **No CHANGELOG** | 🟡 Medium | ✅ Resolved 2026-02-16: created and now actively maintains `CHANGELOG.md` (currently through v1.1.1) in Keep a Changelog format. |
+| D-03 | **API reference for engine is prose-only** | 🟢 Low | `documents/low-level/engine-algorithm.md` describes the algorithm but there's no auto-generated TSDoc/TypeDoc API reference. |
 | D-04 | **No architecture decision records (ADRs)** | 🟢 Low | Key decisions (Besselian approach, WGS84 vs spherical, ΔT strategy, overlay tracing method) are embedded in code comments. ADRs would capture rationale more durably. |
 | D-05 | **`evalPoly` JSDoc is wrong** | 🟢 Low | See E-07. Says "minutes" when the actual unit is hours. |
 | D-06 | **No catalog data provenance doc** | 🟡 Medium | The raw CSV origin, license, last-updated date, and transformation pipeline are undocumented. |
@@ -268,9 +270,9 @@
 | U-01 / F-09 | ✅ Resolved 2026-02-13: show local time for contacts |
 | F-01 | ✅ Resolved 2026-02-19: multi-eclipse switching on timer |
 | F-02 | ✅ Resolved 2026-02-16: persist user preferences via AsyncStorage |
-| F-03 | ✅ Resolved 2026-02-16: implement real alarm scheduling |
+| F-03 | ✅ Updated 2026-02-20: implement hybrid reminders + in-app alarms |
 | CI-02 | ✅ Resolved 2026-02-16: created local EAS Build + direct store upload workflow (`.github/workflows/eas-build.yml`) |
-| CI-03 | Configure app signing / keystore (blocks store submission) |
+| CI-03 | Verify production signing/upload flow end-to-end (Phase 1.4) |
 | CI-05 | ✅ Resolved 2026-02-16: integrated @sentry/react-native with Sentry.wrap + ErrorBoundary |
 | SP-02 | ✅ Resolved 2026-02-16: privacy policy written, store privacy declarations documented, iOS privacy manifest added |
 
@@ -283,7 +285,9 @@
 | L-03 | ✅ Resolved 2026-02-16: installed Husky + lint-staged pre-commit hooks |
 | A-03 | ✅ Resolved 2026-02-13: extract helper functions from App.tsx |
 | A-04 | ✅ Resolved 2026-02-13: add navigation library |
-| A-07 | ✅ Resolved 2026-02-16: wire up real notifications for alarms |
+| A-07 | ✅ Updated 2026-02-20: hybrid reminder + in-app alarm model implemented |
+| A-12 | Split large mobile modules (`TimerScreen`, `appState`, `RootNavigator`) |
+| A-13 | Replace Expo `build/*` notification imports with public APIs |
 | A-10 | ✅ Resolved 2026-02-16: wired GPS altitude through to engine `elevM` |
 | E-03 | ✅ Resolved 2026-02-13: deduplicate `evaluateAtT` calls |
 | E-04 | Extract magic numbers to config |
@@ -292,7 +296,7 @@
 | C-02 | Fix CJS `require()` in ESM package |
 | C-05 | Normalize eclipse kind codes at build time |
 | C-06 | Add overlay output validation |
-| S-01 | Type the `_debug` payload |
+| S-01 | ✅ Resolved 2026-02-20: `_debug` is now `Record<string, unknown>` |
 | S-02 | Add runtime type validation for catalog data |
 | M-01 | Enforce pnpm via Corepack |
 | M-04 | Add build step for packages |
@@ -310,22 +314,23 @@
 | SP-01 | ✅ Resolved 2026-02-16: added pre-permission rationale Alert dialog before location request |
 | CI-04 | ✅ Resolved 2026-02-16: created `.env.example` with Sentry/EAS placeholders |
 | CI-06 | ✅ Resolved 2026-02-16: installed + configured `expo-updates` with runtimeVersion and EAS update URL |
-| CI-07 | ✅ Partially resolved 2026-02-16: store descriptions, content rating answers, and icon fix completed. Screenshots and feature graphic still needed (manual). |
+| CI-07 | ✅ Partially resolved 2026-02-20: metadata docs + automation exist; final screenshots and Android feature graphic still manual. |
 | CI-10 | ✅ Resolved 2026-02-16: added `expo-splash-screen` with preventAutoHideAsync/hideAsync |
-| CI-11 | ✅ Resolved 2026-02-16: bumped to `1.0.0` with `buildNumber: "1"` and `versionCode: 1` |
+| CI-11 | ✅ Updated 2026-02-20: active semantic versioning (`1.1.1`, iOS build `2`, Android code `3`) |
 | D-01 | Write CONTRIBUTING.md |
-| D-02 | ✅ Resolved 2026-02-16: created `CHANGELOG.md` with v1.0.0 entry |
+| D-02 | ✅ Updated 2026-02-20: `CHANGELOG.md` is maintained through v1.1.1 |
 | D-06 | Document catalog data provenance |
 | F-04 | Offline support |
-| F-05 | ✅ Resolved 2026-02-16: GPS altitude wired through to engine `elevM` |
+| SP-04 | Deduplicate iOS privacy manifest entries |
 | F-10 | Geocoding / address search |
 
 ### 🟢 Low — Backlog
 | IDs | Summary |
 |-----|---------|
-| L-04 | `.editorconfig` |\n| L-05 | ✅ Resolved 2026-02-16: pinned Node 20 via `.nvmrc` |
-| A-08, A-09 | Minor code organization |
-| E-07, E-09, E-10 | Docs fix, `_debug` type, optimizer upgrade |
+| L-04 | `.editorconfig` |
+| L-05 | ✅ Resolved 2026-02-16: pinned Node 20 via `.nvmrc` |
+| A-09 | Minor code organization |
+| E-07, E-10 | Docs fix, optimizer upgrade |
 | C-03, C-04, C-07, C-08 | Generated file hygiene |
 | S-03 | Shared types versioning |
 | M-02, M-03, M-05, M-06 | Dep dedup, clean script, task runner |
@@ -350,7 +355,7 @@
 | 1.2 | **Set iOS `bundleIdentifier`** — set to `com.lallimaven.eclipse-timer` in `app.json` → `expo.ios.bundleIdentifier`. | CI-08 | ✅ Done 2026-02-16 |
 | 1.3 | **Create `eas.json`** with three build profiles: `development` (internal, simulator), `preview` (TestFlight / internal track APK), `production` (store release, autoIncrement). | CI-00, CI-03 | ✅ Done 2026-02-16 |
 | 1.4 | **Run `eas build --profile production --platform all`** once to verify builds complete and EAS manages signing credentials (keystore + provisioning profiles). | CI-03 | ⬜ Not started |
-| 1.5 | **Bump version to `1.0.0`** in both `apps/mobile/package.json` and `apps/mobile/app.json`. Set `expo.ios.buildNumber: "1"` and `expo.android.versionCode: 1`. | CI-11 | ✅ Done 2026-02-16 |
+| 1.5 | **Adopt release versioning from `apps/mobile/package.json` via `app.config.ts`** so app version/runtime stay in sync. Current release line: `1.1.1`, iOS `buildNumber` `2`, Android `versionCode` `3`. | CI-11 | ✅ Updated 2026-02-20 |
 
 ### Phase 2 — Stability & Quality (required before store review)
 
@@ -378,7 +383,7 @@
 |---|------|-----------|--------|
 | 4.1 | **Create production app icon** — `icon.png` flattened to 24-bit RGB (no alpha) for iOS. `adaptive-icon.png` (1024×1024) and `favicon.png` (256×256) verified. Android feature graphic (1024×500) still needed. | CI-07 | ✅ Done 2026-02-16 |
 | 4.2 | **Capture screenshots** — requirements documented in `documents/store-metadata.md` with device classes, sizes, and recommended screens. Actual capture requires `eas build --profile preview` on device/simulator. | CI-07 | ⬜ Manual step |
-| 4.3 | **Write store description** — short description (71 chars), full description (1 753 chars), keywords (78 chars), and "what's new" for v1.0.0 written in `documents/store-metadata.md`. | CI-07 | ✅ Done 2026-02-16 |
+| 4.3 | **Write store description** — short description, full description, keywords, and release-notes templates are documented in `documents/store-metadata.md`. | CI-07 | ✅ Done 2026-02-16 |
 | 4.4 | **Set content rating** — questionnaire answers documented in `documents/store-metadata.md`. Expected: 4+ (iOS) / Everyone (Android). Fill out in store consoles during submission. | CI-07 | ✅ Done 2026-02-16 |
 | 4.5 | **Create or verify Apple Developer & Google Play Console accounts** — requirements documented. Verify `lallimaven` Expo account is linked to store accounts. | — | ⬜ Manual step |
 
@@ -386,18 +391,18 @@
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
-| 5.1 | **Create a GitHub Actions CI workflow** — `.github/workflows/ci.yml` runs on push/PR to `main`: checkout → pnpm install → typecheck → lint → test. Includes concurrency grouping to cancel stale runs. | CI-01 | ✅ Done 2026-02-16 |
-| 5.2 | **Add an EAS Build workflow** — `.github/workflows/eas-build.yml` triggers on `main` push or manual dispatch. CI checks run first, then `eas build --profile production --local`. Platform selectable via `workflow_dispatch` input (default: `all`). Requires `EXPO_TOKEN` secret. | CI-02 | ✅ Done 2026-02-16 |
-| 5.3 | **Add a store upload step** — included as a gated `submit` job in `eas-build.yml`. Only runs on manual dispatch with `submit: true`. Uses `environment: production` for manual approval before store upload. Uploads iOS via `apple-actions/upload-testflight-build` and Android via `r0adkll/upload-google-play`. | CI-02 | ✅ Done 2026-02-16 |
+| 5.1 | **Create a GitHub Actions CI workflow** — `.github/workflows/ci.yml` runs on PRs to `main`: checkout → pnpm install → typecheck → lint → test, with docs/log path ignores and concurrency cancellation. | CI-01 | ✅ Done 2026-02-16 |
+| 5.2 | **Add an EAS Build workflow** — `.github/workflows/eas-build.yml` triggers on `main` push or manual dispatch. CI checks run first, then local EAS builds for iOS + Android (AAB + APK). Requires `EXPO_TOKEN` secret. | CI-02 | ✅ Done 2026-02-16 |
+| 5.3 | **Add a store upload step** — `submit` job in `eas-build.yml` uploads iOS/Android when a semver bump is detected against the latest release tag (automatic release gate). | CI-02 | ✅ Updated 2026-02-20 |
 | 5.4 | **Set up `expo-updates`** — installed `expo-updates`, added `runtimeVersion: { policy: "appVersion" }` and `updates` config (URL, checkAutomatically ON_LOAD, fallbackToCacheTimeout 0) to `app.json`, added `expo-updates` plugin. | CI-06 | ✅ Done 2026-02-16 |
 
-### Phase 6 — Nice-to-have before v1.0.0
+### Phase 6 — Nice-to-have (post v1.0.0)
 
 | # | Step | Relates To | Status |
 |---|------|-----------|--------|
 | 6.1 | Add pre-commit hooks (Husky + lint-staged) to prevent committing broken code. Configured `biome check --write` on staged files via `lint-staged` in root `package.json`. | L-03 | ✅ Done 2026-02-16 |
 | 6.2 | Add `.env.example` and `expo-constants` for environment configuration. Created `apps/mobile/.env.example` with `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, and `EXPO_PROJECT_ID` placeholders. | CI-04 | ✅ Done 2026-02-16 |
-| 6.3 | Start a `CHANGELOG.md`. Created with full v1.0.0 entry covering all Added/Changed/Fixed items. | D-02 | ✅ Done 2026-02-16 |
+| 6.3 | Start and maintain `CHANGELOG.md`. Keep a Changelog structure is in place and current through v1.1.1. | D-02 | ✅ Updated 2026-02-20 |
 | 6.4 | Pin Node version with `.nvmrc` (e.g., `20`). Created `.nvmrc` at repo root. | L-05 | ✅ Done 2026-02-16 |
 | 6.5 | Wire GPS altitude through to engine `elevM` for improved accuracy. `useGps` now captures `coords.altitude` and threads it through the `Pin` type to `Observer.elevM`. Map taps default to 0. | A-10, F-05 | ✅ Done 2026-02-16 |
 
@@ -409,7 +414,7 @@ The absolute minimum to submit to both stores (phases 1–4):
  Phases 1–4 complete
  ├── Final bundle ID + package name set
  ├── eas.json created, builds succeed
- ├── Version 1.0.0
+ ├── Versioning/release pipeline configured
  ├── Error boundary + crash reporting
  ├── Accessibility pass
  ├── Splash screen control
@@ -448,4 +453,3 @@ All automatable work across Phases 1–6 is complete. The items below require ma
 | — | Add `EXPO_TOKEN` secret to GitHub repo (used by local EAS build in CI). Generate at [expo.dev account settings](https://expo.dev/accounts/lallimaven/settings/access-tokens). | GitHub → Settings → Secrets → Actions |
 | — | Add App Store upload secrets: `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_PRIVATE_KEY`. | GitHub → Settings → Secrets → Actions |
 | — | Add Google Play upload secret: `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. | GitHub → Settings → Secrets → Actions |
-| — | Create a `production` environment in GitHub for manual approval before store upload. | GitHub → Settings → Environments |

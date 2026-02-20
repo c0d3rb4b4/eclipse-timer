@@ -427,12 +427,10 @@ function NotificationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
       onOpenMenu={onOpenMenu}
       settings={state.notificationSettings}
       mockTimeline={state.notificationMockTimeline}
-      notificationEntries={state.notificationEntries}
       onSetSetting={actions.setNotificationSetting}
       onSetAlarmTiming={actions.setAlarmTiming}
       onSetMockTimelineEnabled={actions.setNotificationMockTimelineEnabled}
       onSetMockTimelineOffsets={actions.setNotificationMockTimelineOffsets}
-      onRemoveNotificationEntry={actions.removeNotificationEntry}
     />
   );
 }

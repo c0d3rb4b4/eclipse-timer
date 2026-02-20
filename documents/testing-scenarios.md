@@ -29,7 +29,7 @@ All eclipse calculations run on-device. There are no user accounts.
 - Eclipse selection and search behavior on the landing screen
 - Map pin interactions and auto-recompute behavior
 - Result correctness presentation (UTC + local times, countdown, contact list)
-- Notification setup and scheduling behavior (including test notification)
+- Notification setup and scheduling behavior (including test TTS alarm)
 - Favorite locations and persistence across app relaunch
 - Preview timeline interaction (play/pause/scrub)
 
@@ -124,33 +124,30 @@ Expected:
 2. Toggle `Enable alarms and reminders for this eclipse` OFF.
 3. Verify contact alarm switches are disabled.
 4. Toggle it ON again and enable at least two contacts (for example `C1`, `MAX`).
-5. Open side menu -> `Notification/Alarm Settings`.
+5. Open side menu -> `Notification/Alarm Settings` and confirm alarm timing controls are visible.
 
 Expected:
 - Contact alarm switches are gated by the per-eclipse master toggle.
-- Enabled contact alarms appear in `Enabled In-App Event Alarms`.
-- Removing an entry from settings clears it.
+- Contact alarm enable/disable remains managed from the Timer contact list.
+- Notification settings focuses on reminder toggles and in-app alarm timing only.
 
 ### TS-09: Notification/Alarm settings matrix and mock timeline
 
 1. In `Notification/Alarm Settings`, toggle:
    - `Vibration`
    - `Sound`
-   - `Voice (TTS)`
    - `1 Hour Reminder`
    - `10 Minute Reminder`
-2. Confirm `Sound` is disabled when `Voice (TTS)` is enabled.
-3. Set alarm timing to `a1=10`, `a2=5`.
-4. Enter invalid alarm timing (`a1=5`, `a2=5`) and confirm validation.
-5. Tap `Send Test Notification`.
-6. Enable `Mock Contact Timeline`, set `C1 in` to `11` and `Gap` to `1`.
-7. Return to Timer and enable all five contact alarms.
+2. Set alarm timing to `a1=10`, `a2=5`.
+3. Enter invalid alarm timing (`a1=5`, `a2=5`) and confirm validation.
+4. Tap `Play Test TTS Alarm`.
+5. Enable `Mock Contact Timeline`, set `C1 in` to `11` and `Gap` to `1`.
+6. Return to Timer and enable all five contact alarms.
 
 Expected:
-- Toggles persist and dependency rules still apply (`Sound` disabled while `Voice (TTS)` is ON).
+- Toggles persist correctly.
 - Alarm timing enforces ranges and `a2 < a1`.
-- Test notification schedules successfully when permissions are granted.
-- Permission-denied path shows actionable alert text.
+- Test TTS alarm plays foreground voice prompts.
 - Mock timeline settings persist and produce a repeating near-term sequence (`C1 -> C2 -> MAX -> C3 -> C4`, then loop).
 - In mock mode, fixed reminders and in-app event alarms both use mocked contact times.
 
@@ -174,7 +171,7 @@ Expected:
 4. Fully close and relaunch app.
 
 Expected:
-- Favorites, notification settings, and enabled notification entries remain persisted.
+- Favorites and notification settings remain persisted.
 
 ### TS-12: Offline NASA preview fallback
 
@@ -195,12 +192,11 @@ Expected:
 - App is portrait-only.
 - Per-event second-level alarms (`a1/a2`) are foreground-only; keep app open during precision countdown checks.
 - Overlay differentiation relies heavily on color; accessibility patterns are limited.
-- `Voice (TTS)` is currently foreground-focused behavior.
 
 ## 6. Suggested regression set for each build
 
 - TS-02 (selection/search)
 - TS-03 (map + auto-compute)
-- TS-08 (alarm entry management)
-- TS-09 (notification settings + test alert)
+- TS-08 (per-eclipse alarm toggles)
+- TS-09 (notification settings + TTS alarm test)
 - TS-11 (persistence)
