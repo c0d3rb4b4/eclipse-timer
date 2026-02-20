@@ -1,6 +1,6 @@
 # Eclipse Timer - Tester Instructions and Scenarios
 
-Last updated: 2026-02-18
+Last updated: 2026-02-20
 Target app version: 1.0.0
 
 ## 1. Access and credentials
@@ -140,11 +140,14 @@ Expected:
    - `10 Minute Reminder`
 2. Confirm `Sound` is disabled when `Voice (TTS)` is enabled.
 3. Tap `Send Test Notification`.
+4. Enable `Mock Contact Timeline`, set `C1 in` to `5` and `Gap` to `1`.
+5. Return to Timer and enable at least two contact alarms.
 
 Expected:
 - Toggles persist and reflect dependency rules.
 - Test notification schedules successfully when permissions are granted.
 - Permission-denied path shows actionable alert text.
+- Mock timeline settings persist and produce a repeating near-term sequence (`C1 -> C2 -> MAX -> C3 -> C4`, then loop).
 
 ### TS-10: Preview screen interaction
 
@@ -195,4 +198,3 @@ Expected:
 - TS-08 (alarm entry management)
 - TS-09 (notification settings + test alert)
 - TS-11 (persistence)
-

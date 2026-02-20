@@ -1,4 +1,5 @@
 import type { Circumstances } from "@eclipse-timer/shared";
+import type { NotificationMockTimeline } from "../state/appState";
 
 export type ContactKey = "c1" | "c2" | "max" | "c3" | "c4";
 
@@ -28,8 +29,36 @@ export function buildContactItems(c: Circumstances): ContactItem[] {
   ];
 }
 
-export function nextEventCountdown(c: Circumstances, nowMs = Date.now()) {
-  const events = buildContactItems(c)
+export function applyMockContactTimeline(
+  items: ContactItem[],
+  mockTimeline: NotificationMockTimeline,
+  anchorNowMs = Date.now(),
+) {
+  if (!mockTimeline.enabled || !items.length) return items;
+
+  const safeAnchorMs = Number.isFinite(anchorNowMs) ? anchorNowMs : Date.now();
+  const firstContactOffsetMs =
+    Math.max(1, Math.round(mockTimeline.firstContactOffsetMinutes)) * 60 * 1000;
+  const subsequentContactGapMs =
+    Math.max(1, Math.round(mockTimeline.subsequentContactGapMinutes)) * 60 * 1000;
+
+  let nextContactMs = safeAnchorMs + firstContactOffsetMs;
+
+  return items.map((item) => {
+    if (!item.iso) return item;
+
+    const mockIso = new Date(nextContactMs).toISOString();
+    nextContactMs += subsequentContactGapMs;
+
+    return {
+      ...item,
+      iso: mockIso,
+    };
+  });
+}
+
+export function nextEventCountdownFromItems(items: ContactItem[], nowMs = Date.now()) {
+  const events = items
     .map((item) => {
       if (!item.iso) return null;
       const t = Date.parse(item.iso);
@@ -49,4 +78,8 @@ export function nextEventCountdown(c: Circumstances, nowMs = Date.now()) {
   const eventLabel = future.key === "max" ? "MAX" : future.key.toUpperCase();
 
   return `${eventLabel} in ${dd}d ${hh}h ${mm}m ${ss}s`;
+}
+
+export function nextEventCountdown(c: Circumstances, nowMs = Date.now()) {
+  return nextEventCountdownFromItems(buildContactItems(c), nowMs);
 }

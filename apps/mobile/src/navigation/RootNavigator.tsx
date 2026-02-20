@@ -311,6 +311,7 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
   const timerState = useTimerState(
     activeEclipse,
     state.notificationSettings,
+    state.notificationMockTimeline,
     state.notificationEntries,
     actions.upsertNotificationEntry,
     actions.removeNotificationEntry,
@@ -392,8 +393,11 @@ function NotificationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
     <NotificationSettingsScreen
       onOpenMenu={onOpenMenu}
       settings={state.notificationSettings}
+      mockTimeline={state.notificationMockTimeline}
       notificationEntries={state.notificationEntries}
       onSetSetting={actions.setNotificationSetting}
+      onSetMockTimelineEnabled={actions.setNotificationMockTimelineEnabled}
+      onSetMockTimelineOffsets={actions.setNotificationMockTimelineOffsets}
       onRemoveNotificationEntry={actions.removeNotificationEntry}
     />
   );
@@ -420,7 +424,11 @@ export default function RootNavigator() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
 
-  useNotificationScheduler(appState.notificationSettings, appState.notificationEntries);
+  useNotificationScheduler(
+    appState.notificationSettings,
+    appState.notificationMockTimeline,
+    appState.notificationEntries,
+  );
 
   const closeMenu = useCallback(() => {
     setIsMenuOpen(false);

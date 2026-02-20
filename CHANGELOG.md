@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-02-20
+
+### Added
+- Added a configurable mock contact timeline for on-device alarm testing, with persisted settings for `C1` offset and per-contact gap in Notification Settings.
+
+### Changed
+- Replaced manual mock timeline apply flow with clearer toggle-driven behavior and inline ON/OFF status feedback in Notification Settings.
+- Mock timeline notifications now schedule as a repeating cycle (`C1 -> C2 -> MAX -> C3 -> C4`) and continue looping while mock mode is enabled.
+- Added a regression test covering mock contact timeline offset/gap behavior.
+
 ## [1.0.2] — 2026-02-20
 
 ### Changed

@@ -1,12 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   createContext,
+  type ReactNode,
   useContext,
   useEffect,
   useMemo,
   useReducer,
   useState,
-  type ReactNode,
 } from "react";
 
 export type NotificationSettings = {
@@ -17,6 +17,17 @@ export type NotificationSettings = {
   useTtsVoice: boolean;
   remindOneHourBefore: boolean;
   remindTenMinutesBefore: boolean;
+};
+
+export const MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN = 1;
+export const MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX = 180;
+export const MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MIN = 1;
+export const MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX = 60;
+
+export type NotificationMockTimeline = {
+  enabled: boolean;
+  firstContactOffsetMinutes: number;
+  subsequentContactGapMinutes: number;
 };
 
 export type NotificationEntry = {
@@ -44,13 +55,14 @@ type AppState = {
   selectedLandingId: string | null;
   activeEclipseId: string | null;
   notificationSettings: NotificationSettings;
+  notificationMockTimeline: NotificationMockTimeline;
   favoriteLocations: FavoriteLocation[];
   notificationEntries: NotificationEntry[];
 };
 
 type PersistedPreferences = Pick<
   AppState,
-  "notificationSettings" | "favoriteLocations" | "notificationEntries"
+  "notificationSettings" | "notificationMockTimeline" | "favoriteLocations" | "notificationEntries"
 >;
 
 type AppAction =
@@ -61,6 +73,15 @@ type AppAction =
       type: "SET_NOTIFICATION_SETTING";
       key: keyof NotificationSettings;
       value: boolean;
+    }
+  | {
+      type: "SET_NOTIFICATION_MOCK_TIMELINE_ENABLED";
+      value: boolean;
+    }
+  | {
+      type: "SET_NOTIFICATION_MOCK_TIMELINE_OFFSETS";
+      firstContactOffsetMinutes: number;
+      subsequentContactGapMinutes: number;
     }
   | { type: "ADD_FAVORITE_LOCATION"; location: FavoriteLocation }
   | { type: "REMOVE_FAVORITE_LOCATION"; id: string }
@@ -79,6 +100,11 @@ const initialState: AppState = {
     remindOneHourBefore: true,
     remindTenMinutesBefore: true,
   },
+  notificationMockTimeline: {
+    enabled: false,
+    firstContactOffsetMinutes: 5,
+    subsequentContactGapMinutes: 1,
+  },
   favoriteLocations: [],
   notificationEntries: [],
 };
@@ -87,6 +113,10 @@ const APP_PREFERENCES_STORAGE_KEY = "eclipse_timer/preferences.v1";
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function clampRounded(value: number, min: number, max: number) {
+  return clamp(Math.round(value), min, max);
 }
 
 function createFavoriteLocationId(name: string, lat: number, lon: number) {
@@ -141,6 +171,36 @@ function parseNotificationSettings(raw: unknown): NotificationSettings {
   };
 }
 
+function parseNotificationMockTimeline(raw: unknown): NotificationMockTimeline {
+  if (!isRecord(raw)) return initialState.notificationMockTimeline;
+
+  const firstContactOffsetMinutesRaw =
+    typeof raw.firstContactOffsetMinutes === "number"
+      ? raw.firstContactOffsetMinutes
+      : initialState.notificationMockTimeline.firstContactOffsetMinutes;
+  const subsequentContactGapMinutesRaw =
+    typeof raw.subsequentContactGapMinutes === "number"
+      ? raw.subsequentContactGapMinutes
+      : initialState.notificationMockTimeline.subsequentContactGapMinutes;
+
+  return {
+    enabled:
+      typeof raw.enabled === "boolean"
+        ? raw.enabled
+        : initialState.notificationMockTimeline.enabled,
+    firstContactOffsetMinutes: clampRounded(
+      firstContactOffsetMinutesRaw,
+      MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN,
+      MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX,
+    ),
+    subsequentContactGapMinutes: clampRounded(
+      subsequentContactGapMinutesRaw,
+      MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MIN,
+      MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX,
+    ),
+  };
+}
+
 function parseFavoriteLocation(raw: unknown): FavoriteLocation | null {
   if (!isRecord(raw)) return null;
 
@@ -179,7 +239,8 @@ function parseNotificationEntry(raw: unknown): NotificationEntry | null {
 
   const eclipseId = typeof raw.eclipseId === "string" ? raw.eclipseId.trim() : "";
   const contactKey = typeof raw.contactKey === "string" ? raw.contactKey.trim().toLowerCase() : "";
-  const id = typeof raw.id === "string" ? raw.id.trim() : notificationEntryId(eclipseId, contactKey);
+  const id =
+    typeof raw.id === "string" ? raw.id.trim() : notificationEntryId(eclipseId, contactKey);
   const eclipseDateYmd = typeof raw.eclipseDateYmd === "string" ? raw.eclipseDateYmd.trim() : "";
   const eclipseLabel = typeof raw.eclipseLabel === "string" ? raw.eclipseLabel.trim() : eclipseId;
   const contactLabel = typeof raw.contactLabel === "string" ? raw.contactLabel.trim() : "";
@@ -221,6 +282,7 @@ function parsePersistedPreferences(raw: string): PersistedPreferences | null {
 
     return {
       notificationSettings: parseNotificationSettings(parsed.notificationSettings),
+      notificationMockTimeline: parseNotificationMockTimeline(parsed.notificationMockTimeline),
       favoriteLocations: parseFavoriteLocations(parsed.favoriteLocations),
       notificationEntries: parseNotificationEntries(parsed.notificationEntries),
     };
@@ -243,30 +305,56 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         notificationSettings: action.preferences.notificationSettings,
+        notificationMockTimeline: action.preferences.notificationMockTimeline,
         favoriteLocations: action.preferences.favoriteLocations,
         notificationEntries: action.preferences.notificationEntries,
       };
-    case "SET_NOTIFICATION_SETTING":
-      {
-        const nextSettings: NotificationSettings = {
-          ...state.notificationSettings,
-          [action.key]: action.value,
-        };
+    case "SET_NOTIFICATION_SETTING": {
+      const nextSettings: NotificationSettings = {
+        ...state.notificationSettings,
+        [action.key]: action.value,
+      };
 
-        if (action.key === "useTtsVoice" && action.value) {
-          nextSettings.soundEnabled = false;
-        }
-        if (action.key === "soundEnabled" && action.value) {
-          nextSettings.useTtsVoice = false;
-        }
-
-        return {
-          ...state,
-          notificationSettings: nextSettings,
-        };
+      if (action.key === "useTtsVoice" && action.value) {
+        nextSettings.soundEnabled = false;
       }
+      if (action.key === "soundEnabled" && action.value) {
+        nextSettings.useTtsVoice = false;
+      }
+
+      return {
+        ...state,
+        notificationSettings: nextSettings,
+      };
+    }
+    case "SET_NOTIFICATION_MOCK_TIMELINE_ENABLED":
+      return {
+        ...state,
+        notificationMockTimeline: {
+          ...state.notificationMockTimeline,
+          enabled: action.value,
+        },
+      };
+    case "SET_NOTIFICATION_MOCK_TIMELINE_OFFSETS":
+      return {
+        ...state,
+        notificationMockTimeline: {
+          ...state.notificationMockTimeline,
+          firstContactOffsetMinutes: clampRounded(
+            action.firstContactOffsetMinutes,
+            MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN,
+            MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX,
+          ),
+          subsequentContactGapMinutes: clampRounded(
+            action.subsequentContactGapMinutes,
+            MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MIN,
+            MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX,
+          ),
+        },
+      };
     case "ADD_FAVORITE_LOCATION":
-      if (state.favoriteLocations.some((location) => location.id === action.location.id)) return state;
+      if (state.favoriteLocations.some((location) => location.id === action.location.id))
+        return state;
       return {
         ...state,
         favoriteLocations: [...state.favoriteLocations, action.location],
@@ -277,7 +365,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         favoriteLocations: state.favoriteLocations.filter((location) => location.id !== action.id),
       };
     case "UPSERT_NOTIFICATION_ENTRY": {
-      const existingIndex = state.notificationEntries.findIndex((entry) => entry.id === action.entry.id);
+      const existingIndex = state.notificationEntries.findIndex(
+        (entry) => entry.id === action.entry.id,
+      );
       if (existingIndex < 0) {
         return {
           ...state,
@@ -321,6 +411,11 @@ type AppStateContextValue = {
     selectLanding: (id: string) => void;
     activateSelected: () => void;
     setNotificationSetting: (key: keyof NotificationSettings, value: boolean) => void;
+    setNotificationMockTimelineEnabled: (enabled: boolean) => void;
+    setNotificationMockTimelineOffsets: (
+      firstContactOffsetMinutes: number,
+      subsequentContactGapMinutes: number,
+    ) => void;
     addFavoriteLocation: (location: Omit<FavoriteLocation, "id">) => void;
     removeFavoriteLocation: (id: string) => void;
     upsertNotificationEntry: (entry: NotificationEntry) => void;
@@ -363,6 +458,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const payload: PersistedPreferences = {
       notificationSettings: state.notificationSettings,
+      notificationMockTimeline: state.notificationMockTimeline,
       favoriteLocations: state.favoriteLocations,
       notificationEntries: state.notificationEntries,
     };
@@ -372,7 +468,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         console.warn("Failed to save app preferences:", err);
       },
     );
-  }, [hasHydratedPreferences, state.favoriteLocations, state.notificationEntries, state.notificationSettings]);
+  }, [
+    hasHydratedPreferences,
+    state.favoriteLocations,
+    state.notificationEntries,
+    state.notificationMockTimeline,
+    state.notificationSettings,
+  ]);
 
   const actions = useMemo(
     () => ({
@@ -383,6 +485,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           type: "SET_NOTIFICATION_SETTING",
           key,
           value,
+        }),
+      setNotificationMockTimelineEnabled: (enabled: boolean) =>
+        dispatch({
+          type: "SET_NOTIFICATION_MOCK_TIMELINE_ENABLED",
+          value: enabled,
+        }),
+      setNotificationMockTimelineOffsets: (
+        firstContactOffsetMinutes: number,
+        subsequentContactGapMinutes: number,
+      ) =>
+        dispatch({
+          type: "SET_NOTIFICATION_MOCK_TIMELINE_OFFSETS",
+          firstContactOffsetMinutes,
+          subsequentContactGapMinutes,
         }),
       addFavoriteLocation: (location: Omit<FavoriteLocation, "id">) => {
         const trimmedName = location.name.trim();

@@ -1,20 +1,43 @@
-import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import BurgerButton from "../components/BurgerButton";
-import type { NotificationEntry, NotificationSettings } from "../state/appState";
 import {
-  scheduleTestNotificationAsync,
   type NotificationSchedulingSettings,
+  scheduleTestNotificationAsync,
 } from "../services/notifications";
+import {
+  MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX,
+  MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN,
+  MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX,
+  MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MIN,
+  type NotificationEntry,
+  type NotificationMockTimeline,
+  type NotificationSettings,
+} from "../state/appState";
 import { fmtLocalHuman } from "../utils/date";
 
 type NotificationSettingsScreenProps = {
   onOpenMenu: () => void;
   settings: NotificationSettings;
+  mockTimeline: NotificationMockTimeline;
   notificationEntries: NotificationEntry[];
   onSetSetting: (key: keyof NotificationSettings, value: boolean) => void;
+  onSetMockTimelineEnabled: (enabled: boolean) => void;
+  onSetMockTimelineOffsets: (
+    firstContactOffsetMinutes: number,
+    subsequentContactGapMinutes: number,
+  ) => void;
   onRemoveNotificationEntry: (id: string) => void;
 };
 
@@ -26,9 +49,16 @@ type SettingRowProps = {
   onValueChange: (nextValue: boolean) => void;
 };
 
-function SettingRow({ title, description, value, disabled = false, onValueChange }: SettingRowProps) {
+function SettingRow({
+  title,
+  description,
+  value,
+  disabled = false,
+  onValueChange,
+}: SettingRowProps) {
   return (
-    <View style={[styles.rowCard, disabled ? styles.rowCardDisabled : null]}
+    <View
+      style={[styles.rowCard, disabled ? styles.rowCardDisabled : null]}
       accessibilityRole="none"
     >
       <View style={styles.rowMain}>
@@ -48,7 +78,10 @@ function SettingRow({ title, description, value, disabled = false, onValueChange
   );
 }
 
-function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
+function toSchedulingSettings(
+  settings: NotificationSettings,
+  mockTimeline: NotificationMockTimeline,
+): NotificationSchedulingSettings {
   return {
     countdownAlerts: settings.countdownAlerts,
     vibrationEnabled: settings.vibrationEnabled,
@@ -56,20 +89,43 @@ function toSchedulingSettings(settings: NotificationSettings): NotificationSched
     useTtsVoice: settings.useTtsVoice,
     remindOneHourBefore: settings.remindOneHourBefore,
     remindTenMinutesBefore: settings.remindTenMinutesBefore,
+    mockTimelineEnabled: mockTimeline.enabled,
+    mockFirstContactOffsetMinutes: mockTimeline.firstContactOffsetMinutes,
+    mockSubsequentContactGapMinutes: mockTimeline.subsequentContactGapMinutes,
   };
 }
 
 export default function NotificationSettingsScreen({
   onOpenMenu,
   settings,
+  mockTimeline,
   notificationEntries,
   onSetSetting,
+  onSetMockTimelineEnabled,
+  onSetMockTimelineOffsets,
   onRemoveNotificationEntry,
 }: NotificationSettingsScreenProps) {
   const [isSchedulingTest, setIsSchedulingTest] = useState(false);
+  const [mockFirstOffsetText, setMockFirstOffsetText] = useState(
+    String(mockTimeline.firstContactOffsetMinutes),
+  );
+  const [mockGapOffsetText, setMockGapOffsetText] = useState(
+    String(mockTimeline.subsequentContactGapMinutes),
+  );
+  const [mockValidationMessage, setMockValidationMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMockFirstOffsetText(String(mockTimeline.firstContactOffsetMinutes));
+  }, [mockTimeline.firstContactOffsetMinutes]);
+
+  useEffect(() => {
+    setMockGapOffsetText(String(mockTimeline.subsequentContactGapMinutes));
+  }, [mockTimeline.subsequentContactGapMinutes]);
+
   const groupedEntries = useMemo(() => {
     const sorted = [...notificationEntries].sort((a, b) => {
-      if (a.eclipseDateYmd !== b.eclipseDateYmd) return a.eclipseDateYmd.localeCompare(b.eclipseDateYmd);
+      if (a.eclipseDateYmd !== b.eclipseDateYmd)
+        return a.eclipseDateYmd.localeCompare(b.eclipseDateYmd);
       const aTs = Date.parse(a.iso);
       const bTs = Date.parse(b.iso);
       if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return aTs - bTs;
@@ -109,7 +165,7 @@ export default function NotificationSettingsScreen({
 
     setIsSchedulingTest(true);
 
-    void scheduleTestNotificationAsync(toSchedulingSettings(settings))
+    void scheduleTestNotificationAsync(toSchedulingSettings(settings, mockTimeline))
       .then((outcome) => {
         if (!outcome.ok) {
           if (outcome.reason === "permission_denied") {
@@ -137,12 +193,56 @@ export default function NotificationSettingsScreen({
       });
   };
 
+  const commitMockTimelineOffsets = () => {
+    const firstRaw = Number(mockFirstOffsetText.trim());
+    if (!Number.isFinite(firstRaw)) {
+      setMockValidationMessage("C1 offset must be a valid number.");
+      return false;
+    }
+
+    const firstContactOffsetMinutes = Math.round(firstRaw);
+    if (
+      firstContactOffsetMinutes < MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN ||
+      firstContactOffsetMinutes > MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX
+    ) {
+      setMockValidationMessage(
+        `C1 offset must be between ${MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN} and ${MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX} minutes.`,
+      );
+      return false;
+    }
+
+    const gapRaw = Number(mockGapOffsetText.trim());
+    if (!Number.isFinite(gapRaw)) {
+      setMockValidationMessage("Gap must be a valid number.");
+      return false;
+    }
+
+    const subsequentContactGapMinutes = Math.round(gapRaw);
+    if (
+      subsequentContactGapMinutes < MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MIN ||
+      subsequentContactGapMinutes > MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX
+    ) {
+      setMockValidationMessage(
+        `Gap must be between ${MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MIN} and ${MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX} minutes.`,
+      );
+      return false;
+    }
+
+    onSetMockTimelineOffsets(firstContactOffsetMinutes, subsequentContactGapMinutes);
+    setMockFirstOffsetText(String(firstContactOffsetMinutes));
+    setMockGapOffsetText(String(subsequentContactGapMinutes));
+    setMockValidationMessage(null);
+    return true;
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <View style={styles.headerRow}>
         <BurgerButton onPress={onOpenMenu} />
         <View style={styles.headerMeta}>
-          <Text style={styles.title} accessibilityRole="header">Notification Settings</Text>
+          <Text style={styles.title} accessibilityRole="header">
+            Notification Settings
+          </Text>
           <Text style={styles.subtitle}>Manage how eclipse alerts should behave.</Text>
         </View>
       </View>
@@ -193,6 +293,74 @@ export default function NotificationSettingsScreen({
           disabled={!settings.countdownAlerts}
           onValueChange={(nextValue) => onSetSetting("remindTenMinutesBefore", nextValue)}
         />
+        <View style={styles.mockCard}>
+          <View style={styles.mockHeaderRow}>
+            <View style={styles.mockHeaderMain}>
+              <Text style={styles.mockTitle}>Mock Contact Timeline</Text>
+              <Text style={styles.mockDescription}>
+                Shift C1/C2/MAX/C3/C4 to run near now for on-device alarm testing.
+              </Text>
+            </View>
+            <Switch
+              value={mockTimeline.enabled}
+              onValueChange={(nextValue) => {
+                if (nextValue) {
+                  commitMockTimelineOffsets();
+                }
+                onSetMockTimelineEnabled(nextValue);
+                if (!nextValue) {
+                  setMockValidationMessage(null);
+                }
+              }}
+              accessibilityRole="switch"
+              accessibilityLabel="Enable mock contact timeline"
+            />
+          </View>
+
+          <View style={styles.mockInputRow}>
+            <View style={styles.mockInputGroup}>
+              <Text style={styles.mockInputLabel}>C1 in (min)</Text>
+              <TextInput
+                value={mockFirstOffsetText}
+                onChangeText={setMockFirstOffsetText}
+                onEndEditing={commitMockTimelineOffsets}
+                onSubmitEditing={commitMockTimelineOffsets}
+                placeholder="5"
+                placeholderTextColor="#6f6f6f"
+                style={[styles.mockInput, !mockTimeline.enabled ? styles.mockInputDisabled : null]}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={mockTimeline.enabled}
+              />
+            </View>
+            <View style={styles.mockInputGroup}>
+              <Text style={styles.mockInputLabel}>Gap (min)</Text>
+              <TextInput
+                value={mockGapOffsetText}
+                onChangeText={setMockGapOffsetText}
+                onEndEditing={commitMockTimelineOffsets}
+                onSubmitEditing={commitMockTimelineOffsets}
+                placeholder="1"
+                placeholderTextColor="#6f6f6f"
+                style={[styles.mockInput, !mockTimeline.enabled ? styles.mockInputDisabled : null]}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={mockTimeline.enabled}
+              />
+            </View>
+          </View>
+          <Text style={styles.mockStatus}>
+            {mockTimeline.enabled
+              ? `Mock mode ON. Sequence repeats: C1 +${mockTimeline.firstContactOffsetMinutes}m, then +${mockTimeline.subsequentContactGapMinutes}m per contact, then loops.`
+              : "Mock mode OFF."}
+          </Text>
+          <Text style={styles.mockHint}>Values save automatically when valid.</Text>
+          {mockValidationMessage ? (
+            <Text style={styles.mockError}>{mockValidationMessage}</Text>
+          ) : null}
+        </View>
 
         <View style={styles.testCard}>
           <Text style={styles.testTitle}>Test Notification</Text>
@@ -211,7 +379,9 @@ export default function NotificationSettingsScreen({
             </Text>
           </Pressable>
           {!settings.eclipseAlerts ? (
-            <Text style={styles.testHint}>Enable Eclipse Event Alerts to run test notifications.</Text>
+            <Text style={styles.testHint}>
+              Enable Eclipse Event Alerts to run test notifications.
+            </Text>
           ) : null}
         </View>
 
@@ -353,6 +523,75 @@ const styles = StyleSheet.create({
   },
   testHint: {
     color: "#b6b6b6",
+    fontSize: 12,
+  },
+  mockCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+    backgroundColor: "#141414",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  mockHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  mockHeaderMain: {
+    flex: 1,
+    gap: 4,
+  },
+  mockTitle: {
+    color: "#f7f7f7",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  mockDescription: {
+    color: "#a8a8a8",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  mockInputRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  mockInputGroup: {
+    flex: 1,
+    gap: 4,
+  },
+  mockInputLabel: {
+    color: "#d3d3d3",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  mockInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2f2f2f",
+    backgroundColor: "#1b1b1b",
+    color: "white",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  mockInputDisabled: {
+    opacity: 0.55,
+  },
+  mockStatus: {
+    color: "#d7d7d7",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  mockHint: {
+    color: "#b6b6b6",
+    fontSize: 12,
+  },
+  mockError: {
+    color: "#ff8c8c",
     fontSize: 12,
   },
   listCard: {

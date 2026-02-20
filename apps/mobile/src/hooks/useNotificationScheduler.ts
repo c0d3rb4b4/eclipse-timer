@@ -2,12 +2,19 @@ import { useEffect } from "react";
 
 import {
   cancelManagedScheduledNotificationsAsync,
-  rescheduleManagedNotificationEntriesAsync,
   type NotificationSchedulingSettings,
+  rescheduleManagedNotificationEntriesAsync,
 } from "../services/notifications";
-import type { NotificationEntry, NotificationSettings } from "../state/appState";
+import type {
+  NotificationEntry,
+  NotificationMockTimeline,
+  NotificationSettings,
+} from "../state/appState";
 
-function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
+function toSchedulingSettings(
+  settings: NotificationSettings,
+  mockTimeline: NotificationMockTimeline,
+): NotificationSchedulingSettings {
   return {
     countdownAlerts: settings.countdownAlerts,
     vibrationEnabled: settings.vibrationEnabled,
@@ -15,6 +22,9 @@ function toSchedulingSettings(settings: NotificationSettings): NotificationSched
     useTtsVoice: settings.useTtsVoice,
     remindOneHourBefore: settings.remindOneHourBefore,
     remindTenMinutesBefore: settings.remindTenMinutesBefore,
+    mockTimelineEnabled: mockTimeline.enabled,
+    mockFirstContactOffsetMinutes: mockTimeline.firstContactOffsetMinutes,
+    mockSubsequentContactGapMinutes: mockTimeline.subsequentContactGapMinutes,
   };
 }
 
@@ -36,6 +46,7 @@ function toSchedulableEntries(entries: NotificationEntry[]) {
 
 export function useNotificationScheduler(
   settings: NotificationSettings,
+  mockTimeline: NotificationMockTimeline,
   notificationEntries: NotificationEntry[],
 ) {
   useEffect(() => {
@@ -48,7 +59,7 @@ export function useNotificationScheduler(
       }
 
       const outcome = await rescheduleManagedNotificationEntriesAsync({
-        settings: toSchedulingSettings(settings),
+        settings: toSchedulingSettings(settings, mockTimeline),
         entries: toSchedulableEntries(notificationEntries),
       });
 
@@ -64,5 +75,5 @@ export function useNotificationScheduler(
     return () => {
       didCancel = true;
     };
-  }, [notificationEntries, settings]);
+  }, [mockTimeline, notificationEntries, settings]);
 }

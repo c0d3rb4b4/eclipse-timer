@@ -7,14 +7,16 @@ import type MapView from "react-native-maps";
 import type { Details, MapPressEvent, Region } from "react-native-maps";
 import {
   type NotificationEntry,
+  type NotificationMockTimeline,
   type NotificationSettings,
   notificationEntryId,
 } from "../state/appState";
 import {
+  applyMockContactTimeline,
   buildContactItems,
   type ContactItem,
   type ContactKey,
-  nextEventCountdown,
+  nextEventCountdownFromItems,
 } from "../utils/contacts";
 import {
   normalizeLongitude,
@@ -109,6 +111,7 @@ export type TimerState = {
 export function useTimerState(
   activeEclipse: EclipseRecord | null,
   notificationSettings: NotificationSettings,
+  notificationMockTimeline: NotificationMockTimeline,
   notificationEntries: NotificationEntry[],
   upsertNotificationEntry: (entry: NotificationEntry) => void,
   removeNotificationEntry: (id: string) => void,
@@ -131,6 +134,7 @@ export function useTimerState(
   const [isComputing, setIsComputing] = useState(false);
   const [didComputeFlash, setDidComputeFlash] = useState(false);
   const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
+  const [mockTimelineAnchorMs, setMockTimelineAnchorMs] = useState(() => Date.now());
   const resultFlash = useRef(new Animated.Value(0)).current;
   const computeTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(
     null,
@@ -149,11 +153,22 @@ export function useTimerState(
   const hasVisibleOverlayData = overlayVisiblePolygons.length > 0;
   const hasCentralOverlayData = overlayCentralPolygons.length > 0;
 
-  const contactItems = useMemo(() => (result ? buildContactItems(result) : []), [result]);
+  const contactItems = useMemo(() => {
+    if (!result) return [];
+
+    return applyMockContactTimeline(
+      buildContactItems(result),
+      notificationMockTimeline,
+      mockTimelineAnchorMs,
+    );
+  }, [mockTimelineAnchorMs, notificationMockTimeline, result]);
   const notificationsEnabled = notificationSettings.eclipseAlerts;
   const nextEventCountdownText = useMemo(
-    () => (result ? nextEventCountdown(result, countdownNowMs) : "No countdown available"),
-    [result, countdownNowMs],
+    () =>
+      contactItems.length
+        ? nextEventCountdownFromItems(contactItems, countdownNowMs)
+        : "No countdown available",
+    [contactItems, countdownNowMs],
   );
   const autoComputeKey = useMemo(() => {
     if (!activeEclipse) return "";
@@ -183,6 +198,16 @@ export function useTimerState(
     const intervalId = setInterval(() => setCountdownNowMs(Date.now()), 1000);
     return () => clearInterval(intervalId);
   }, [result]);
+
+  useEffect(() => {
+    setMockTimelineAnchorMs(Date.now());
+  }, [
+    activeEclipse?.id,
+    notificationMockTimeline.enabled,
+    notificationMockTimeline.firstContactOffsetMinutes,
+    notificationMockTimeline.subsequentContactGapMinutes,
+    result?.eclipseId,
+  ]);
 
   const cancelPendingCompute = useCallback(() => {
     computeRunTokenRef.current += 1;
@@ -365,6 +390,7 @@ export function useTimerState(
         const out = computeCircumstances(activeEclipse, observer);
         if (computeRunTokenRef.current !== runToken) return;
 
+        setMockTimelineAnchorMs(Date.now());
         setResult(out);
         setResultPin({ lat: observer.latDeg, lon: observer.lonDeg, elevM: observer.elevM ?? 0 });
         setStatus("Computed");
