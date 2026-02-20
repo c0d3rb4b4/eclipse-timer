@@ -3,44 +3,19 @@ name: Self-Hosted Mobile Build & Submit
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "documents/**"
+      - "logs/**"
   workflow_dispatch:
 
 concurrency:
   group: self-hosted-mobile-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
-  ci:
-    name: CI checks
-    runs-on: [self-hosted, macOS, eclipse-timer]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: pnpm test
-
   build:
-    name: Local Build (ios + android)
-    needs: ci
+    name: CI checks + Local Build (ios + android)
     runs-on: [self-hosted, macOS, eclipse-timer]
     env:
       GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
@@ -63,7 +38,16 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -78,12 +62,42 @@ jobs:
       - name: Install Android SDK packages
         run: |
           set -euo pipefail
+
+          sdk_root=""
+          for candidate in \
+            "${ANDROID_SDK_ROOT:-}" \
+            "${ANDROID_HOME:-}" \
+            "$HOME/Library/Android/sdk" \
+            "$HOME/Android/Sdk" \
+            "/usr/local/share/android-sdk" \
+            "/opt/homebrew/share/android-sdk"
+          do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              sdk_root="$candidate"
+              break
+            fi
+          done
+
+          if [ ! -d "$sdk_root" ]; then
+            echo "Android SDK directory not found."
+            echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
+            exit 1
+          fi
+
+          missing_packages=()
+          [ -d "$sdk_root/platform-tools" ] || missing_packages+=("platform-tools")
+          [ -d "$sdk_root/platforms/android-36" ] || missing_packages+=("platforms;android-36")
+          [ -d "$sdk_root/build-tools/36.0.0" ] || missing_packages+=("build-tools;36.0.0")
+          [ -d "$sdk_root/ndk/27.1.12297006" ] || missing_packages+=("ndk;27.1.12297006")
+
+          if [ "${#missing_packages[@]}" -eq 0 ]; then
+            echo "All required Android SDK packages are already installed in $sdk_root."
+            exit 0
+          fi
+
+          echo "Installing missing Android SDK packages: ${missing_packages[*]}"
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.1.12297006"
+          sdkmanager "${missing_packages[@]}"
 
       - name: Setup EAS CLI
         uses: expo/expo-github-action@v8
@@ -171,7 +185,6 @@ jobs:
 
   release_gate:
     name: Check mobile version change
-    needs: build
     runs-on: [self-hosted, macOS, eclipse-timer]
     outputs:
       should_submit: ${{ steps.gate.outputs.should_submit }}
@@ -181,7 +194,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: true
 
       - name: Determine submit eligibility
         id: gate
@@ -190,7 +204,6 @@ jobs:
           set -euo pipefail
 
           current_version="$(node -p "JSON.parse(require('fs').readFileSync('apps/mobile/package.json', 'utf8')).version")"
-          git fetch --tags --force
           latest_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
           previous_version=""
 
@@ -276,14 +289,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: true
 
       - name: Validate release version bump
         id: release_meta
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --tags --force
           latest_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
           LATEST_TAG="$latest_tag" node - <<'NODE'
           const fs = require('fs');
@@ -504,7 +517,7 @@ jobs:
           play_notes="$compact_notes"
           play_max_chars=500
           if [ "${#play_notes}" -gt "$play_max_chars" ]; then
-            play_notes="${play_notes:0:$((play_max_chars - 1))}…"
+            play_notes="${play_notes:0:$((play_max_chars - 3))}..."
           fi
 
           mkdir -p artifacts/submission/whatsnew
@@ -518,17 +531,7 @@ jobs:
           echo "has_store_notes=true" >> "$GITHUB_OUTPUT"
           echo "play_whatsnew_dir=artifacts/submission/whatsnew" >> "$GITHUB_OUTPUT"
 
-      - name: Upload iOS artifact to App Store Connect (with notes)
-        if: ${{ steps.store_notes.outputs.has_store_notes == 'true' }}
-        uses: apple-actions/upload-testflight-build@v3
-        with:
-          app-path: artifacts/submission/ios.ipa
-          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-
       - name: Upload iOS artifact to App Store Connect
-        if: ${{ steps.store_notes.outputs.has_store_notes != 'true' }}
         uses: apple-actions/upload-testflight-build@v3
         with:
           app-path: artifacts/submission/ios.ipa

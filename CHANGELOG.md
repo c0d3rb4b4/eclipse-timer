@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-02-20
+
+### Changed
+- Optimized GitHub Actions by removing duplicated setup/install work in `.github/workflows/eas-build.yml` (CI checks and local mobile build now share a single job setup).
+- Added `paths-ignore` for docs/log-only changes in `.github/workflows/ci.yml` and `.github/workflows/eas-build.yml` to avoid unnecessary runner usage.
+- Improved workflow runtime by preferring offline dependency installs (`pnpm install --frozen-lockfile --prefer-offline`) across CI/build/screenshot workflows.
+- Reduced redundant release overhead in `.github/workflows/eas-build.yml` with shallow checkouts plus tag fetch, and by running release gate checks in parallel with the build.
+- Made Android SDK install incremental in `.github/workflows/eas-build.yml` so only missing SDK components are installed.
+- Removed duplicate iOS submit step and fixed Play release-note truncation to stay within the 500-character limit.
+
 ## [1.0.1] — 2026-02-19
 
 ### Added
