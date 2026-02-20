@@ -118,36 +118,41 @@ Expected:
 - Valid favorite is added and listed.
 - Remove deletes it immediately.
 
-### TS-08: Contact alarms and notification entry list
+### TS-08: Per-eclipse master toggle and contact alarm list
 
 1. Compute a result on Timer.
-2. Enable alarm toggles for at least two contacts (for example `C1`, `MAX`).
-3. Open side menu -> `Notification Settings`.
+2. Toggle `Enable alarms and reminders for this eclipse` OFF.
+3. Verify contact alarm switches are disabled.
+4. Toggle it ON again and enable at least two contacts (for example `C1`, `MAX`).
+5. Open side menu -> `Notification/Alarm Settings`.
 
 Expected:
-- Enabled contact alarms appear in `Enabled Event Notifications`.
+- Contact alarm switches are gated by the per-eclipse master toggle.
+- Enabled contact alarms appear in `Enabled In-App Event Alarms`.
 - Removing an entry from settings clears it.
 
-### TS-09: Notification settings matrix and test alert
+### TS-09: Notification/Alarm settings matrix and mock timeline
 
-1. In `Notification Settings`, toggle:
-   - `Eclipse Event Alerts`
-   - `Countdown Reminders`
+1. In `Notification/Alarm Settings`, toggle:
    - `Vibration`
    - `Sound`
    - `Voice (TTS)`
    - `1 Hour Reminder`
    - `10 Minute Reminder`
 2. Confirm `Sound` is disabled when `Voice (TTS)` is enabled.
-3. Tap `Send Test Notification`.
-4. Enable `Mock Contact Timeline`, set `C1 in` to `5` and `Gap` to `1`.
-5. Return to Timer and enable at least two contact alarms.
+3. Set alarm timing to `a1=10`, `a2=5`.
+4. Enter invalid alarm timing (`a1=5`, `a2=5`) and confirm validation.
+5. Tap `Send Test Notification`.
+6. Enable `Mock Contact Timeline`, set `C1 in` to `11` and `Gap` to `1`.
+7. Return to Timer and enable all five contact alarms.
 
 Expected:
-- Toggles persist and reflect dependency rules.
+- Toggles persist and dependency rules still apply (`Sound` disabled while `Voice (TTS)` is ON).
+- Alarm timing enforces ranges and `a2 < a1`.
 - Test notification schedules successfully when permissions are granted.
 - Permission-denied path shows actionable alert text.
 - Mock timeline settings persist and produce a repeating near-term sequence (`C1 -> C2 -> MAX -> C3 -> C4`, then loop).
+- In mock mode, fixed reminders and in-app event alarms both use mocked contact times.
 
 ### TS-10: Preview screen interaction
 
@@ -188,6 +193,7 @@ Expected:
 - Timer screen does not provide in-place eclipse switching; switch eclipses from `Eclipse List`.
 - Address/geocoding search is not implemented; location entry is map/GPS/manual coordinates.
 - App is portrait-only.
+- Per-event second-level alarms (`a1/a2`) are foreground-only; keep app open during precision countdown checks.
 - Overlay differentiation relies heavily on color; accessibility patterns are limited.
 - `Voice (TTS)` is currently foreground-focused behavior.
 

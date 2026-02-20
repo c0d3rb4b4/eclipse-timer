@@ -6,9 +6,9 @@ import { Alert, Animated, InteractionManager } from "react-native";
 import type MapView from "react-native-maps";
 import type { Details, MapPressEvent, Region } from "react-native-maps";
 import {
+  eclipseReminderAnchorId,
   type NotificationEntry,
   type NotificationMockTimeline,
-  type NotificationSettings,
   notificationEntryId,
 } from "../state/appState";
 import {
@@ -110,11 +110,19 @@ export type TimerState = {
 
 export function useTimerState(
   activeEclipse: EclipseRecord | null,
-  notificationSettings: NotificationSettings,
   notificationMockTimeline: NotificationMockTimeline,
   notificationEntries: NotificationEntry[],
+  isActiveEclipseAlarmEnabled: boolean,
   upsertNotificationEntry: (entry: NotificationEntry) => void,
   removeNotificationEntry: (id: string) => void,
+  upsertEclipseReminderAnchor: (anchor: {
+    id: string;
+    eclipseId: string;
+    eclipseDateYmd: string;
+    eclipseLabel: string;
+    firstEventIso: string;
+  }) => void,
+  removeEclipseReminderAnchor: (eclipseId: string) => void,
 ): TimerState {
   const mapRef = useRef<MapView>(null);
   const [pin, setPin] = useState<Pin>({ lat: GIBRALTAR.lat, lon: GIBRALTAR.lon, elevM: 0 });
@@ -162,7 +170,7 @@ export function useTimerState(
       mockTimelineAnchorMs,
     );
   }, [mockTimelineAnchorMs, notificationMockTimeline, result]);
-  const notificationsEnabled = notificationSettings.eclipseAlerts;
+  const notificationsEnabled = isActiveEclipseAlarmEnabled;
   const nextEventCountdownText = useMemo(
     () =>
       contactItems.length
@@ -468,9 +476,34 @@ export function useTimerState(
     upsertNotificationEntry,
   ]);
 
+  useEffect(() => {
+    if (!activeEclipse) return;
+
+    const firstEvent = contactItems
+      .filter((item) => !!item.iso && Number.isFinite(Date.parse(item.iso)))
+      .sort((a, b) => Date.parse(a.iso as string) - Date.parse(b.iso as string))[0];
+
+    if (!firstEvent?.iso) {
+      removeEclipseReminderAnchor(activeEclipse.id);
+      return;
+    }
+
+    upsertEclipseReminderAnchor({
+      id: eclipseReminderAnchorId(activeEclipse.id),
+      eclipseId: activeEclipse.id,
+      eclipseDateYmd: activeEclipse.dateYmd,
+      eclipseLabel: activeEclipse.id,
+      firstEventIso: firstEvent.iso,
+    });
+  }, [activeEclipse, contactItems, removeEclipseReminderAnchor, upsertEclipseReminderAnchor]);
+
   const toggleAlarm = useCallback(
     (key: ContactKey, enabled: boolean) => {
       if (!activeEclipse) return;
+      if (!isActiveEclipseAlarmEnabled) {
+        setStatus("Enable alarms and reminders for this eclipse first.");
+        return;
+      }
       const id = notificationEntryId(activeEclipse.id, key);
 
       if (!enabled) {
@@ -494,7 +527,13 @@ export function useTimerState(
         iso: contact.iso,
       });
     },
-    [activeEclipse, contactItems, removeNotificationEntry, upsertNotificationEntry],
+    [
+      activeEclipse,
+      contactItems,
+      isActiveEclipseAlarmEnabled,
+      removeNotificationEntry,
+      upsertNotificationEntry,
+    ],
   );
 
   const resetForNewEclipse = useCallback(() => {

@@ -35,6 +35,7 @@ import {
 } from "react-native";
 import { enableScreens } from "react-native-screens";
 import { APP_LOGO } from "../assets/branding";
+import { useInAppAlarmEngine } from "../hooks/useInAppAlarmEngine";
 import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
 import { useNotificationScheduler } from "../hooks/useNotificationScheduler";
@@ -266,6 +267,7 @@ function LandingRoute({ navigation, catalog, onOpenMenu }: LandingRouteProps) {
 
 function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
   const { state, actions } = useAppState();
+  const isFocused = useIsFocused();
   const [activeEclipse, setActiveEclipse] = useState<EclipseRecord | null>(null);
   const [isActiveEclipseLoading, setIsActiveEclipseLoading] = useState(false);
   const todayYmd = useMemo(() => localYmdNow(), []);
@@ -308,14 +310,30 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
     };
   }, [state.activeEclipseId]);
 
+  const isActiveEclipseAlarmEnabled = useMemo(() => {
+    if (!state.activeEclipseId) return false;
+    return !state.disabledEclipseAlarmIds.includes(state.activeEclipseId);
+  }, [state.activeEclipseId, state.disabledEclipseAlarmIds]);
+
   const timerState = useTimerState(
     activeEclipse,
-    state.notificationSettings,
     state.notificationMockTimeline,
     state.notificationEntries,
+    isActiveEclipseAlarmEnabled,
     actions.upsertNotificationEntry,
     actions.removeNotificationEntry,
+    actions.upsertEclipseReminderAnchor,
+    actions.removeEclipseReminderAnchor,
   );
+
+  useInAppAlarmEngine({
+    isRouteFocused: isFocused,
+    activeEclipseId: state.activeEclipseId,
+    isActiveEclipseAlarmEnabled,
+    notificationEntries: state.notificationEntries,
+    alarmLeadSecondsA1: state.notificationSettings.alarmLeadSecondsA1,
+    alarmCountdownStartSecondsA2: state.notificationSettings.alarmCountdownStartSecondsA2,
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -358,6 +376,19 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
     },
     [actions, state.activeEclipseId],
   );
+  const setActiveEclipseAlarmEnabled = useCallback(
+    (enabled: boolean) => {
+      const activeId = state.activeEclipseId;
+      if (!activeId) return;
+      actions.setEclipseAlarmEnabled(activeId, enabled);
+      timerState.setStatusMessage(
+        enabled
+          ? "Alarms/reminders enabled for this eclipse."
+          : "Alarms/reminders disabled for this eclipse.",
+      );
+    },
+    [actions, state.activeEclipseId, timerState],
+  );
 
   return (
     <TimerScreen
@@ -366,7 +397,9 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
       isActiveEclipseLoading={isActiveEclipseLoading}
       eclipseOptions={eclipseOptions}
       timer={timerState}
+      isEclipseAlarmEnabled={isActiveEclipseAlarmEnabled}
       favoriteLocations={state.favoriteLocations}
+      onSetEclipseAlarmEnabled={setActiveEclipseAlarmEnabled}
       onAddFavoriteLocation={actions.addFavoriteLocation}
       onUseFavoriteLocation={useFavoriteLocation}
       onSelectEclipse={selectEclipse}
@@ -396,6 +429,7 @@ function NotificationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
       mockTimeline={state.notificationMockTimeline}
       notificationEntries={state.notificationEntries}
       onSetSetting={actions.setNotificationSetting}
+      onSetAlarmTiming={actions.setAlarmTiming}
       onSetMockTimelineEnabled={actions.setNotificationMockTimelineEnabled}
       onSetMockTimelineOffsets={actions.setNotificationMockTimelineOffsets}
       onRemoveNotificationEntry={actions.removeNotificationEntry}
@@ -426,8 +460,8 @@ export default function RootNavigator() {
 
   useNotificationScheduler(
     appState.notificationSettings,
-    appState.notificationMockTimeline,
-    appState.notificationEntries,
+    appState.eclipseReminderAnchors,
+    appState.disabledEclipseAlarmIds,
   );
 
   const closeMenu = useCallback(() => {

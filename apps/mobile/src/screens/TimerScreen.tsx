@@ -133,7 +133,9 @@ type TimerScreenProps = {
   isActiveEclipseLoading: boolean;
   eclipseOptions: TimerEclipseOption[];
   timer: TimerState;
+  isEclipseAlarmEnabled: boolean;
   favoriteLocations: FavoriteLocation[];
+  onSetEclipseAlarmEnabled: (enabled: boolean) => void;
   onAddFavoriteLocation: (location: Omit<FavoriteLocation, "id">) => void;
   onSelectEclipse: (eclipseId: string) => void;
   onUseFavoriteLocation: (location: FavoriteLocation) => void;
@@ -147,7 +149,9 @@ export default function TimerScreen({
   isActiveEclipseLoading,
   eclipseOptions,
   timer,
+  isEclipseAlarmEnabled,
   favoriteLocations,
+  onSetEclipseAlarmEnabled,
   onAddFavoriteLocation,
   onSelectEclipse,
   onUseFavoriteLocation,
@@ -734,16 +738,40 @@ export default function TimerScreen({
                 </View>
               </View>
 
+              <View style={styles.eclipseAlarmCard}>
+                <View style={styles.eclipseAlarmCardMain}>
+                  <Text style={styles.eclipseAlarmCardTitle}>
+                    Enable alarms and reminders for this eclipse
+                  </Text>
+                  <Text style={styles.eclipseAlarmCardDescription}>
+                    Enables fixed T-1h/T-10m reminders and per-event in-app `a1/a2` alarms.
+                  </Text>
+                </View>
+                <Switch
+                  value={isEclipseAlarmEnabled}
+                  onValueChange={onSetEclipseAlarmEnabled}
+                  disabled={!activeEclipse}
+                  accessibilityRole="switch"
+                  accessibilityLabel="Enable alarms and reminders for this eclipse"
+                />
+              </View>
+
               {!timer.notificationsEnabled ? (
                 <Text style={styles.notificationsDisabledHint}>
-                  Eclipse Event Alerts are off. Enable them in Notification Settings.
+                  Eclipse alarms/reminders are off for this eclipse. Enable them above.
                 </Text>
               ) : null}
 
               <View style={styles.sep} />
 
               {timer.contactItems.map((item) => (
-                <View style={styles.contactRow} key={item.key}>
+                <View
+                  style={[
+                    styles.contactRow,
+                    !isEclipseAlarmEnabled ? styles.contactRowDisabled : null,
+                  ]}
+                  key={item.key}
+                >
                   <View style={styles.contactMain}>
                     <View style={styles.contactLabelRow}>
                       <View
@@ -778,7 +806,7 @@ export default function TimerScreen({
                     <Switch
                       value={timer.alarmState[item.key]}
                       onValueChange={(enabled) => timer.toggleAlarm(item.key, enabled)}
-                      disabled={!item.iso}
+                      disabled={!item.iso || !isEclipseAlarmEnabled}
                     />
                   </View>
                 </View>
@@ -1132,6 +1160,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
+  eclipseAlarmCard: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2b2b2b",
+    backgroundColor: "#171717",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  eclipseAlarmCardMain: {
+    flex: 1,
+    gap: 3,
+  },
+  eclipseAlarmCardTitle: {
+    color: "#f3f3f3",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  eclipseAlarmCardDescription: {
+    color: "#a8a8a8",
+    fontSize: 11,
+    lineHeight: 16,
+  },
   notificationsDisabledHint: {
     marginTop: 8,
     color: "#b6b6b6",
@@ -1154,6 +1209,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
     marginBottom: 10,
+  },
+  contactRowDisabled: {
+    opacity: 0.55,
   },
   contactMain: { flex: 1 },
   contactLabelRow: {

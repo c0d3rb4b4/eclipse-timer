@@ -73,7 +73,7 @@
 | A-04 | **No navigation library** | 🟡 Medium | ✅ Resolved 2026-02-13: added React Navigation native stack and moved screen switching to the navigator. |
 | A-05 | **`computeCircumstances` runs on JS thread synchronously** | 🟠 High | ✅ Resolved 2026-02-13: compute now runs via `InteractionManager.runAfterInteractions` with cancellation guards for reset/unmount paths. |
 | A-06 | **Countdown timer never re-renders** | 🟠 High | ✅ Resolved 2026-02-13: timer state now owns a 1-second interval and feeds a live `nextEventCountdownText` string to the UI. |
-| A-07 | **Alarm system is a UI stub** | 🟡 Medium | ✅ Resolved 2026-02-16: wired `expo-notifications` local scheduling with per-contact toggles, test notification scheduling, and global reminder/sound/vibration controls in Notification Settings. |
+| A-07 | **Alarm system is a UI stub** | 🟡 Medium | ✅ Updated 2026-02-20: implemented hybrid model with per-eclipse master toggle, fixed `T-1h`/`T-10m` local reminders, and foreground in-app per-event `a1/a2` voice alarms. |
 | A-08 | **`loadCatalog()` called in `useMemo` with `[]` deps** | 🟢 Low | Works, but `loadCatalog` is synchronous and reads JSON via `require()`. On large catalogs this blocks the initial render. Could be deferred with `useEffect` + loading state. |
 | A-09 | **`StyleSheet` defined outside component but after `export default`** | 🟢 Low | Minor: the `const styles = StyleSheet.create(...)` block sits after the component's closing brace, inside the module. This is valid but unconventional and confusing. |
 | A-10 | **Hardcoded elevation `elevM: 0`** | 🟡 Medium | ✅ Resolved 2026-02-16: GPS altitude now captured from `coords.altitude` and threaded through `Pin.elevM` to `Observer.elevM`. Map taps default to 0. |

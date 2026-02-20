@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-02-20
+
+### Added
+- Added a per-eclipse master toggle on the Timer screen (`Enable alarms and reminders for this eclipse`) that gates all event alarms/reminders while preserving per-event selections.
+- Added foreground in-app alarm timing controls in Notification/Alarm Settings: `a1 lead (sec)` and `a2 countdown (sec)` with validation (`a1: 2..60`, `a2: 1..30`, `a2 < a1`).
+- Added a dedicated in-app alarm engine for enabled event contacts that speaks:
+  - `a1` phrase (`"<a1> seconds to <Event>"`)
+  - second-by-second countdown from `a2` to `1`
+  - final phrase at event time (`"We're at <Event>"`)
+- Added regression tests for alarm timing normalization, in-app alarm sequencing, and reminder schedule generation.
+
+### Changed
+- Renamed `Notification Settings` to `Notification/Alarm Settings` in UI labels/navigation.
+- Reworked reminder scheduling to fixed per-eclipse background reminders only:
+  - one reminder at `T-1h` and one at `T-10m`
+  - both anchored to the eclipse first event time
+  - no per-contact reminder scheduling
+- Preserved mock contact timeline compatibility with the new hybrid model for both fixed reminders and in-app event alarms.
+- Updated testing scenarios and status documentation to reflect the hybrid alarm/reminder model and foreground-only precision alarm behavior.
+
 ## [1.0.4] — 2026-02-20
 
 ### Added

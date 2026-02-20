@@ -17,6 +17,10 @@ import {
   scheduleTestNotificationAsync,
 } from "../services/notifications";
 import {
+  ALARM_COUNTDOWN_START_SECONDS_A2_MAX,
+  ALARM_COUNTDOWN_START_SECONDS_A2_MIN,
+  ALARM_LEAD_SECONDS_A1_MAX,
+  ALARM_LEAD_SECONDS_A1_MIN,
   MOCK_FIRST_CONTACT_OFFSET_MINUTES_MAX,
   MOCK_FIRST_CONTACT_OFFSET_MINUTES_MIN,
   MOCK_SUBSEQUENT_CONTACT_GAP_MINUTES_MAX,
@@ -24,6 +28,7 @@ import {
   type NotificationEntry,
   type NotificationMockTimeline,
   type NotificationSettings,
+  type NotificationSettingToggleKey,
 } from "../state/appState";
 import { fmtLocalHuman } from "../utils/date";
 
@@ -32,7 +37,8 @@ type NotificationSettingsScreenProps = {
   settings: NotificationSettings;
   mockTimeline: NotificationMockTimeline;
   notificationEntries: NotificationEntry[];
-  onSetSetting: (key: keyof NotificationSettings, value: boolean) => void;
+  onSetSetting: (key: NotificationSettingToggleKey, value: boolean) => void;
+  onSetAlarmTiming: (alarmLeadSecondsA1: number, alarmCountdownStartSecondsA2: number) => void;
   onSetMockTimelineEnabled: (enabled: boolean) => void;
   onSetMockTimelineOffsets: (
     firstContactOffsetMinutes: number,
@@ -78,20 +84,13 @@ function SettingRow({
   );
 }
 
-function toSchedulingSettings(
-  settings: NotificationSettings,
-  mockTimeline: NotificationMockTimeline,
-): NotificationSchedulingSettings {
+function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
   return {
-    countdownAlerts: settings.countdownAlerts,
     vibrationEnabled: settings.vibrationEnabled,
     soundEnabled: settings.soundEnabled,
     useTtsVoice: settings.useTtsVoice,
     remindOneHourBefore: settings.remindOneHourBefore,
     remindTenMinutesBefore: settings.remindTenMinutesBefore,
-    mockTimelineEnabled: mockTimeline.enabled,
-    mockFirstContactOffsetMinutes: mockTimeline.firstContactOffsetMinutes,
-    mockSubsequentContactGapMinutes: mockTimeline.subsequentContactGapMinutes,
   };
 }
 
@@ -101,6 +100,7 @@ export default function NotificationSettingsScreen({
   mockTimeline,
   notificationEntries,
   onSetSetting,
+  onSetAlarmTiming,
   onSetMockTimelineEnabled,
   onSetMockTimelineOffsets,
   onRemoveNotificationEntry,
@@ -113,6 +113,11 @@ export default function NotificationSettingsScreen({
     String(mockTimeline.subsequentContactGapMinutes),
   );
   const [mockValidationMessage, setMockValidationMessage] = useState<string | null>(null);
+  const [alarmLeadText, setAlarmLeadText] = useState(String(settings.alarmLeadSecondsA1));
+  const [alarmCountdownText, setAlarmCountdownText] = useState(
+    String(settings.alarmCountdownStartSecondsA2),
+  );
+  const [alarmValidationMessage, setAlarmValidationMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setMockFirstOffsetText(String(mockTimeline.firstContactOffsetMinutes));
@@ -121,6 +126,14 @@ export default function NotificationSettingsScreen({
   useEffect(() => {
     setMockGapOffsetText(String(mockTimeline.subsequentContactGapMinutes));
   }, [mockTimeline.subsequentContactGapMinutes]);
+
+  useEffect(() => {
+    setAlarmLeadText(String(settings.alarmLeadSecondsA1));
+  }, [settings.alarmLeadSecondsA1]);
+
+  useEffect(() => {
+    setAlarmCountdownText(String(settings.alarmCountdownStartSecondsA2));
+  }, [settings.alarmCountdownStartSecondsA2]);
 
   const groupedEntries = useMemo(() => {
     const sorted = [...notificationEntries].sort((a, b) => {
@@ -158,14 +171,9 @@ export default function NotificationSettingsScreen({
   }, [notificationEntries]);
 
   const runNotificationTest = () => {
-    if (!settings.eclipseAlerts) {
-      Alert.alert("Test Notification", "Enable Eclipse Event Alerts first.");
-      return;
-    }
-
     setIsSchedulingTest(true);
 
-    void scheduleTestNotificationAsync(toSchedulingSettings(settings, mockTimeline))
+    void scheduleTestNotificationAsync(toSchedulingSettings(settings))
       .then((outcome) => {
         if (!outcome.ok) {
           if (outcome.reason === "permission_denied") {
@@ -191,6 +199,51 @@ export default function NotificationSettingsScreen({
       .finally(() => {
         setIsSchedulingTest(false);
       });
+  };
+
+  const commitAlarmTiming = () => {
+    const a1Raw = Number(alarmLeadText.trim());
+    if (!Number.isFinite(a1Raw)) {
+      setAlarmValidationMessage("a1 lead time must be a valid number.");
+      return false;
+    }
+    const alarmLeadSecondsA1 = Math.round(a1Raw);
+    if (
+      alarmLeadSecondsA1 < ALARM_LEAD_SECONDS_A1_MIN ||
+      alarmLeadSecondsA1 > ALARM_LEAD_SECONDS_A1_MAX
+    ) {
+      setAlarmValidationMessage(
+        `a1 lead time must be between ${ALARM_LEAD_SECONDS_A1_MIN} and ${ALARM_LEAD_SECONDS_A1_MAX} seconds.`,
+      );
+      return false;
+    }
+
+    const a2Raw = Number(alarmCountdownText.trim());
+    if (!Number.isFinite(a2Raw)) {
+      setAlarmValidationMessage("a2 countdown start must be a valid number.");
+      return false;
+    }
+    const alarmCountdownStartSecondsA2 = Math.round(a2Raw);
+    if (
+      alarmCountdownStartSecondsA2 < ALARM_COUNTDOWN_START_SECONDS_A2_MIN ||
+      alarmCountdownStartSecondsA2 > ALARM_COUNTDOWN_START_SECONDS_A2_MAX
+    ) {
+      setAlarmValidationMessage(
+        `a2 countdown start must be between ${ALARM_COUNTDOWN_START_SECONDS_A2_MIN} and ${ALARM_COUNTDOWN_START_SECONDS_A2_MAX} seconds.`,
+      );
+      return false;
+    }
+
+    if (alarmCountdownStartSecondsA2 >= alarmLeadSecondsA1) {
+      setAlarmValidationMessage("a2 must be lower than a1.");
+      return false;
+    }
+
+    onSetAlarmTiming(alarmLeadSecondsA1, alarmCountdownStartSecondsA2);
+    setAlarmLeadText(String(alarmLeadSecondsA1));
+    setAlarmCountdownText(String(alarmCountdownStartSecondsA2));
+    setAlarmValidationMessage(null);
+    return true;
   };
 
   const commitMockTimelineOffsets = () => {
@@ -241,58 +294,94 @@ export default function NotificationSettingsScreen({
         <BurgerButton onPress={onOpenMenu} />
         <View style={styles.headerMeta}>
           <Text style={styles.title} accessibilityRole="header">
-            Notification Settings
+            Notification/Alarm Settings
           </Text>
-          <Text style={styles.subtitle}>Manage how eclipse alerts should behave.</Text>
+          <Text style={styles.subtitle}>Manage eclipse reminders and in-app alarm timing.</Text>
         </View>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         <SettingRow
-          title="Eclipse Event Alerts"
-          description="Enable notifications around eclipse contact events."
-          value={settings.eclipseAlerts}
-          onValueChange={(nextValue) => onSetSetting("eclipseAlerts", nextValue)}
-        />
-        <SettingRow
-          title="Countdown Reminders"
-          description="Receive reminder notifications as key events get closer."
-          value={settings.countdownAlerts}
-          onValueChange={(nextValue) => onSetSetting("countdownAlerts", nextValue)}
-        />
-        <SettingRow
           title="Vibration"
-          description="Vibrate when an enabled eclipse alert is delivered."
+          description="Vibrate when a background eclipse reminder is delivered."
           value={settings.vibrationEnabled}
           onValueChange={(nextValue) => onSetSetting("vibrationEnabled", nextValue)}
         />
         <SettingRow
           title="Sound"
-          description="Use default system notification sound."
+          description="Use default system notification sound for background reminders."
           value={settings.soundEnabled}
           disabled={settings.useTtsVoice}
           onValueChange={(nextValue) => onSetSetting("soundEnabled", nextValue)}
         />
         <SettingRow
           title="Voice (TTS)"
-          description="Speak event details instead of system sound (foreground playback for now)."
+          description="Speak reminder details instead of system sound."
           value={settings.useTtsVoice}
           onValueChange={(nextValue) => onSetSetting("useTtsVoice", nextValue)}
         />
         <SettingRow
           title="1 Hour Reminder"
-          description="Send a countdown reminder one hour before each enabled contact."
+          description="Send one background reminder at T-1h for each enabled eclipse."
           value={settings.remindOneHourBefore}
-          disabled={!settings.countdownAlerts}
           onValueChange={(nextValue) => onSetSetting("remindOneHourBefore", nextValue)}
         />
         <SettingRow
           title="10 Minute Reminder"
-          description="Send a countdown reminder ten minutes before each enabled contact."
+          description="Send one background reminder at T-10m for each enabled eclipse."
           value={settings.remindTenMinutesBefore}
-          disabled={!settings.countdownAlerts}
           onValueChange={(nextValue) => onSetSetting("remindTenMinutesBefore", nextValue)}
         />
+        <View style={styles.alarmTimingCard}>
+          <Text style={styles.alarmTimingTitle}>Alarm Timing</Text>
+          <Text style={styles.alarmTimingDescription}>
+            Configure in-app foreground voice prompts for each enabled event alarm.
+          </Text>
+          <View style={styles.mockInputRow}>
+            <View style={styles.mockInputGroup}>
+              <Text style={styles.mockInputLabel}>a1 lead (sec)</Text>
+              <TextInput
+                value={alarmLeadText}
+                onChangeText={setAlarmLeadText}
+                onEndEditing={commitAlarmTiming}
+                onSubmitEditing={commitAlarmTiming}
+                placeholder="10"
+                placeholderTextColor="#6f6f6f"
+                style={styles.mockInput}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <View style={styles.mockInputGroup}>
+              <Text style={styles.mockInputLabel}>a2 countdown (sec)</Text>
+              <TextInput
+                value={alarmCountdownText}
+                onChangeText={setAlarmCountdownText}
+                onEndEditing={commitAlarmTiming}
+                onSubmitEditing={commitAlarmTiming}
+                placeholder="5"
+                placeholderTextColor="#6f6f6f"
+                style={styles.mockInput}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+          <Text style={styles.alarmTimingPreview}>
+            At T-{settings.alarmLeadSecondsA1}s: "{settings.alarmLeadSecondsA1} seconds to C1"; at
+            T-{settings.alarmCountdownStartSecondsA2}s: "{settings.alarmCountdownStartSecondsA2}..
+            {Math.max(1, settings.alarmCountdownStartSecondsA2 - 1)}.. ... 1.. We're at C1".
+          </Text>
+          <Text style={styles.alarmTimingPreview}>
+            Also sends one background reminder at T-1h and one at T-10m for the eclipse (based on
+            first event time), even if app is closed.
+          </Text>
+          {alarmValidationMessage ? (
+            <Text style={styles.mockError}>{alarmValidationMessage}</Text>
+          ) : null}
+        </View>
         <View style={styles.mockCard}>
           <View style={styles.mockHeaderRow}>
             <View style={styles.mockHeaderMain}>
@@ -365,7 +454,7 @@ export default function NotificationSettingsScreen({
         <View style={styles.testCard}>
           <Text style={styles.testTitle}>Test Notification</Text>
           <Text style={styles.testDescription}>
-            Send a test alert using your current sound/vibration settings.
+            Send a test local reminder using your current sound/vibration settings.
           </Text>
           <Pressable
             style={[styles.testButton, isSchedulingTest ? styles.testButtonDisabled : null]}
@@ -378,15 +467,11 @@ export default function NotificationSettingsScreen({
               {isSchedulingTest ? "Scheduling..." : "Send Test Notification"}
             </Text>
           </Pressable>
-          {!settings.eclipseAlerts ? (
-            <Text style={styles.testHint}>
-              Enable Eclipse Event Alerts to run test notifications.
-            </Text>
-          ) : null}
+          <Text style={styles.testHint}>This test does not change eclipse reminder schedules.</Text>
         </View>
 
         <View style={styles.listCard}>
-          <Text style={styles.listTitle}>Enabled Event Notifications</Text>
+          <Text style={styles.listTitle}>Enabled In-App Event Alarms</Text>
           {!groupedEntries.length ? (
             <Text style={styles.listEmpty}>
               No event alarms enabled yet. Enable alarms from the Timer screen contacts list.
@@ -483,6 +568,30 @@ const styles = StyleSheet.create({
   },
   rowDescription: {
     color: "#a8a8a8",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  alarmTimingCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+    backgroundColor: "#141414",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  alarmTimingTitle: {
+    color: "#f7f7f7",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  alarmTimingDescription: {
+    color: "#a8a8a8",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  alarmTimingPreview: {
+    color: "#d7d7d7",
     fontSize: 12,
     lineHeight: 18,
   },

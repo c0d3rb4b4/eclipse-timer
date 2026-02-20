@@ -424,5 +424,5 @@ documents/
 
 - MVP behavior is implemented and usable for local exploration.
 - Workspace lint/format tooling is configured with Biome; current codebase still has existing lint warnings to address incrementally.
-- Alarm/test behavior now schedules real local notifications (`expo-notifications`) with per-contact toggles and configurable reminder lead times from Notification Settings.
+- Alarm/reminder behavior now uses fixed per-eclipse local reminders (`T-1h`, `T-10m`) plus foreground-only in-app per-event `a1/a2` voice alarms from Notification/Alarm Settings.
 - Product polish and persistence/history features are intentionally limited while core engine/data reliability is prioritized.

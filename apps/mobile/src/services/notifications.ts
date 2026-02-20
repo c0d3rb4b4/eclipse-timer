@@ -15,60 +15,38 @@ import { setNotificationHandler } from "expo-notifications/build/NotificationsHa
 import scheduleNotificationAsync from "expo-notifications/build/scheduleNotificationAsync";
 import setNotificationChannelAsync from "expo-notifications/build/setNotificationChannelAsync";
 import { Platform } from "react-native";
+import {
+  buildReminderScheduleRequests,
+  enabledReminderMinutes,
+  type ReminderScheduleRequest,
+  reminderLeadLabel,
+} from "./reminderSchedule";
 
 const MANAGED_NOTIFICATION_SOURCE = "eclipse-timer";
 const ANDROID_CHANNEL_ID = "eclipse-alerts";
 const MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC = 60;
-const MOCK_TIMELINE_SCHEDULE_HORIZON_HOURS = 24;
-const CONTACT_CYCLE_ORDER: Record<string, number> = {
-  c1: 0,
-  c2: 1,
-  max: 2,
-  c3: 3,
-  c4: 4,
-};
-const CONTACTS_PER_MOCK_CYCLE = 5;
 
 let hasConfiguredHandler = false;
 
 export type NotificationSchedulingSettings = {
-  countdownAlerts: boolean;
   vibrationEnabled: boolean;
   soundEnabled: boolean;
   useTtsVoice: boolean;
   remindOneHourBefore: boolean;
   remindTenMinutesBefore: boolean;
-  mockTimelineEnabled: boolean;
-  mockFirstContactOffsetMinutes: number;
-  mockSubsequentContactGapMinutes: number;
 };
 
-export type NotificationContact = {
-  key: string;
-  label: string;
-  iso?: string;
-  enabled: boolean;
-};
-
-export type RescheduleNotificationsInput = {
-  eclipseId: string;
-  eclipseDateYmd: string;
-  settings: NotificationSchedulingSettings;
-  contacts: NotificationContact[];
-};
-
-export type ManagedNotificationEntry = {
+export type ManagedEclipseReminderEntry = {
   id: string;
   eclipseId: string;
   eclipseDateYmd: string;
-  contactKey: string;
-  contactLabel: string;
-  iso: string;
+  eclipseLabel: string;
+  firstEventIso: string;
 };
 
-export type RescheduleManagedNotificationsInput = {
+export type RescheduleManagedEclipseRemindersInput = {
   settings: NotificationSchedulingSettings;
-  entries: ManagedNotificationEntry[];
+  entries: ManagedEclipseReminderEntry[];
 };
 
 export type RescheduleNotificationsResult = {
@@ -76,6 +54,8 @@ export type RescheduleNotificationsResult = {
   scheduledCount: number;
   skippedPastCount: number;
 };
+
+export type ManagedReminderScheduleRequest = ReminderScheduleRequest<ManagedEclipseReminderEntry>;
 
 export type TestNotificationResult =
   | {
@@ -129,63 +109,6 @@ function createNotificationContent(
   }
 
   return content;
-}
-
-function getEnabledReminderMinutes(settings: NotificationSchedulingSettings) {
-  const minutes: number[] = [];
-  if (settings.remindOneHourBefore) minutes.push(60);
-  if (settings.remindTenMinutesBefore) minutes.push(10);
-  return minutes;
-}
-
-function reminderLabel(minutes: number) {
-  if (minutes >= 60 && minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return `${hours} hour${hours === 1 ? "" : "s"}`;
-  }
-  return `${minutes} minutes`;
-}
-
-function parseDateIso(iso?: string) {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return null;
-  return date;
-}
-
-function contactCycleIndex(contactKey: string) {
-  const normalized = contactKey.trim().toLowerCase();
-  const index = CONTACT_CYCLE_ORDER[normalized];
-  return typeof index === "number" ? index : null;
-}
-
-function mockFirstOffsetMs(settings: NotificationSchedulingSettings) {
-  return Math.max(1, Math.round(settings.mockFirstContactOffsetMinutes)) * 60 * 1000;
-}
-
-function mockGapMs(settings: NotificationSchedulingSettings) {
-  return Math.max(1, Math.round(settings.mockSubsequentContactGapMinutes)) * 60 * 1000;
-}
-
-function mockCycleDurationMs(settings: NotificationSchedulingSettings) {
-  return mockFirstOffsetMs(settings) + mockGapMs(settings) * (CONTACTS_PER_MOCK_CYCLE - 1);
-}
-
-function mockContactDate(
-  settings: NotificationSchedulingSettings,
-  nowMs: number,
-  contactKey: string,
-  cycle: number,
-) {
-  const index = contactCycleIndex(contactKey);
-  if (index === null) return null;
-
-  const eventMs =
-    nowMs +
-    mockFirstOffsetMs(settings) +
-    index * mockGapMs(settings) +
-    cycle * mockCycleDurationMs(settings);
-  return new Date(eventMs);
 }
 
 function isManagedRequest(request: NotificationRequest) {
@@ -244,12 +167,13 @@ export async function cancelManagedScheduledNotificationsAsync() {
   );
 }
 
-export async function rescheduleManagedNotificationEntriesAsync(
-  input: RescheduleManagedNotificationsInput,
+export async function rescheduleManagedEclipseReminderEntriesAsync(
+  input: RescheduleManagedEclipseRemindersInput,
 ): Promise<RescheduleNotificationsResult> {
   await cancelManagedScheduledNotificationsAsync();
 
-  if (!input.entries.length) {
+  const reminderMinutes = enabledReminderMinutes(input.settings);
+  if (!input.entries.length || !reminderMinutes.length) {
     return {
       permissionGranted: true,
       scheduledCount: 0,
@@ -262,119 +186,40 @@ export async function rescheduleManagedNotificationEntriesAsync(
     return {
       permissionGranted,
       scheduledCount: 0,
-      skippedPastCount: input.entries.length,
+      skippedPastCount: input.entries.length * reminderMinutes.length,
     };
   }
 
   await configureAndroidChannel(input.settings);
 
-  const nowMs = Date.now();
+  const { requests, skippedPastCount } = buildReminderScheduleRequests(
+    input.settings,
+    input.entries,
+    Date.now(),
+  );
   let scheduledCount = 0;
-  let skippedPastCount = 0;
-  const reminderMinutes = input.settings.countdownAlerts
-    ? getEnabledReminderMinutes(input.settings)
-    : [];
 
-  const scheduleEntryAt = async (entry: ManagedNotificationEntry, contactDate: Date) => {
-    if (scheduledCount >= MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) return;
+  for (const request of requests) {
+    if (scheduledCount >= MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) break;
 
-    const eventTitle = `${entry.contactLabel} Now`;
-    const eventBody = `Eclipse ${entry.eclipseDateYmd} is starting at your selected location.`;
-    const eventContent = createNotificationContent(eventTitle, eventBody, input.settings, {
-      category: "event",
-      eclipseId: entry.eclipseId,
-      contactKey: entry.contactKey,
-      entryId: entry.id,
-      ttsText: `${entry.contactLabel}. Eclipse ${entry.eclipseDateYmd}. Event is starting now.`,
+    const title = `Eclipse in ${reminderLeadLabel(request.leadMinutes)}`;
+    const body = `${request.entry.eclipseLabel} (${request.entry.eclipseDateYmd}) starts soon at your selected location.`;
+    const content = createNotificationContent(title, body, input.settings, {
+      category: "eclipse_reminder",
+      eclipseId: request.entry.eclipseId,
+      leadMinutes: request.leadMinutes,
+      entryId: request.entry.id,
+      ttsText: `${request.entry.eclipseLabel} eclipse in ${reminderLeadLabel(request.leadMinutes)}.`,
     });
 
     try {
       await scheduleNotificationAsync({
-        content: eventContent,
-        trigger: buildDateTrigger(contactDate),
+        content,
+        trigger: buildDateTrigger(request.fireDate),
       });
       scheduledCount += 1;
     } catch {
-      // Ignore individual scheduling failures and continue with remaining requests.
-    }
-
-    for (const minutes of reminderMinutes) {
-      if (scheduledCount >= MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) return;
-
-      const reminderDate = new Date(contactDate.getTime() - minutes * 60 * 1000);
-      if (reminderDate.getTime() <= nowMs) continue;
-
-      const reminderTitle = `${entry.contactLabel} in ${reminderLabel(minutes)}`;
-      const reminderBody = `Upcoming eclipse contact on ${entry.eclipseDateYmd}.`;
-      const reminderContent = createNotificationContent(
-        reminderTitle,
-        reminderBody,
-        input.settings,
-        {
-          category: "reminder",
-          eclipseId: entry.eclipseId,
-          contactKey: entry.contactKey,
-          leadMinutes: minutes,
-          entryId: entry.id,
-          ttsText: `${entry.contactLabel} in ${reminderLabel(minutes)}. Eclipse ${entry.eclipseDateYmd}.`,
-        },
-      );
-
-      try {
-        await scheduleNotificationAsync({
-          content: reminderContent,
-          trigger: buildDateTrigger(reminderDate),
-        });
-        scheduledCount += 1;
-      } catch {
-        // Ignore individual scheduling failures and continue with remaining requests.
-      }
-    }
-  };
-
-  if (input.settings.mockTimelineEnabled) {
-    const horizonMs = nowMs + MOCK_TIMELINE_SCHEDULE_HORIZON_HOURS * 60 * 60 * 1000;
-    const cycleDurationMs = mockCycleDurationMs(input.settings);
-
-    for (const entry of input.entries) {
-      const cycleIndex = contactCycleIndex(entry.contactKey);
-      if (cycleIndex === null) {
-        const fallbackDate = parseDateIso(entry.iso);
-        if (!fallbackDate || fallbackDate.getTime() <= nowMs) {
-          skippedPastCount += 1;
-          continue;
-        }
-
-        await scheduleEntryAt(entry, fallbackDate);
-        if (scheduledCount >= MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) break;
-        continue;
-      }
-
-      let cycle = 0;
-      while (scheduledCount < MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) {
-        const contactDate = mockContactDate(input.settings, nowMs, entry.contactKey, cycle);
-        if (!contactDate) break;
-        const contactMs = contactDate.getTime();
-        if (!Number.isFinite(contactMs) || contactMs > horizonMs) break;
-
-        await scheduleEntryAt(entry, contactDate);
-        cycle += 1;
-
-        if (contactMs + cycleDurationMs > horizonMs) break;
-      }
-
-      if (scheduledCount >= MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) break;
-    }
-  } else {
-    for (const entry of input.entries) {
-      const contactDate = parseDateIso(entry.iso);
-      if (!contactDate || contactDate.getTime() <= nowMs) {
-        skippedPastCount += 1;
-        continue;
-      }
-
-      await scheduleEntryAt(entry, contactDate);
-      if (scheduledCount >= MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC) break;
+      // Continue scheduling remaining reminders.
     }
   }
 
@@ -383,26 +228,6 @@ export async function rescheduleManagedNotificationEntriesAsync(
     scheduledCount,
     skippedPastCount,
   };
-}
-
-export async function rescheduleEclipseNotificationsAsync(
-  input: RescheduleNotificationsInput,
-): Promise<RescheduleNotificationsResult> {
-  const entries: ManagedNotificationEntry[] = input.contacts
-    .filter((contact) => contact.enabled && !!contact.iso)
-    .map((contact) => ({
-      id: `${input.eclipseId}:${contact.key}`,
-      eclipseId: input.eclipseId,
-      eclipseDateYmd: input.eclipseDateYmd,
-      contactKey: contact.key,
-      contactLabel: contact.label,
-      iso: contact.iso as string,
-    }));
-
-  return rescheduleManagedNotificationEntriesAsync({
-    settings: input.settings,
-    entries,
-  });
 }
 
 export async function scheduleTestNotificationAsync(
@@ -421,11 +246,11 @@ export async function scheduleTestNotificationAsync(
   const fireDate = new Date(Date.now() + 2500);
   const content = createNotificationContent(
     "Eclipse Timer Test Alert",
-    "Local notifications are enabled for eclipse events.",
+    "Local reminder notifications are enabled.",
     settings,
     {
       category: "test",
-      ttsText: "This is a test eclipse alert notification.",
+      ttsText: "This is a test eclipse reminder notification.",
     },
   );
 

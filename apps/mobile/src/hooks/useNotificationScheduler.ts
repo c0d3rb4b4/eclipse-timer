@@ -2,71 +2,67 @@ import { useEffect } from "react";
 
 import {
   cancelManagedScheduledNotificationsAsync,
+  type ManagedEclipseReminderEntry,
   type NotificationSchedulingSettings,
-  rescheduleManagedNotificationEntriesAsync,
+  rescheduleManagedEclipseReminderEntriesAsync,
 } from "../services/notifications";
-import type {
-  NotificationEntry,
-  NotificationMockTimeline,
-  NotificationSettings,
-} from "../state/appState";
+import type { EclipseReminderAnchor, NotificationSettings } from "../state/appState";
 
-function toSchedulingSettings(
-  settings: NotificationSettings,
-  mockTimeline: NotificationMockTimeline,
-): NotificationSchedulingSettings {
+function toSchedulingSettings(settings: NotificationSettings): NotificationSchedulingSettings {
   return {
-    countdownAlerts: settings.countdownAlerts,
     vibrationEnabled: settings.vibrationEnabled,
     soundEnabled: settings.soundEnabled,
     useTtsVoice: settings.useTtsVoice,
     remindOneHourBefore: settings.remindOneHourBefore,
     remindTenMinutesBefore: settings.remindTenMinutesBefore,
-    mockTimelineEnabled: mockTimeline.enabled,
-    mockFirstContactOffsetMinutes: mockTimeline.firstContactOffsetMinutes,
-    mockSubsequentContactGapMinutes: mockTimeline.subsequentContactGapMinutes,
   };
 }
 
-function toSchedulableEntries(entries: NotificationEntry[]) {
-  const deduped = new Map<string, NotificationEntry>();
-  for (const entry of entries) {
-    deduped.set(entry.id, entry);
+function toSchedulableEntries(
+  anchors: EclipseReminderAnchor[],
+  disabledEclipseAlarmIds: string[],
+): ManagedEclipseReminderEntry[] {
+  const disabledSet = new Set(disabledEclipseAlarmIds.map((id) => id.trim()).filter(Boolean));
+  const deduped = new Map<string, ManagedEclipseReminderEntry>();
+
+  for (const anchor of anchors) {
+    if (disabledSet.has(anchor.eclipseId)) continue;
+    deduped.set(anchor.id, {
+      id: anchor.id,
+      eclipseId: anchor.eclipseId,
+      eclipseDateYmd: anchor.eclipseDateYmd,
+      eclipseLabel: anchor.eclipseLabel,
+      firstEventIso: anchor.firstEventIso,
+    });
   }
 
-  return [...deduped.values()].map((entry) => ({
-    id: entry.id,
-    eclipseId: entry.eclipseId,
-    eclipseDateYmd: entry.eclipseDateYmd,
-    contactKey: entry.contactKey,
-    contactLabel: entry.contactLabel,
-    iso: entry.iso,
-  }));
+  return [...deduped.values()];
 }
 
 export function useNotificationScheduler(
   settings: NotificationSettings,
-  mockTimeline: NotificationMockTimeline,
-  notificationEntries: NotificationEntry[],
+  eclipseReminderAnchors: EclipseReminderAnchor[],
+  disabledEclipseAlarmIds: string[],
 ) {
   useEffect(() => {
     let didCancel = false;
 
     const sync = async () => {
-      if (!settings.eclipseAlerts) {
+      const entries = toSchedulableEntries(eclipseReminderAnchors, disabledEclipseAlarmIds);
+
+      if (!entries.length || (!settings.remindOneHourBefore && !settings.remindTenMinutesBefore)) {
         await cancelManagedScheduledNotificationsAsync();
         return;
       }
 
-      const outcome = await rescheduleManagedNotificationEntriesAsync({
-        settings: toSchedulingSettings(settings, mockTimeline),
-        entries: toSchedulableEntries(notificationEntries),
+      const outcome = await rescheduleManagedEclipseReminderEntriesAsync({
+        settings: toSchedulingSettings(settings),
+        entries,
       });
 
       if (didCancel) return;
       if (!outcome.permissionGranted) {
-        // Keep this non-blocking for now; notification settings UI will surface failures on test.
-        console.warn("Notification permission denied while syncing scheduled notifications.");
+        console.warn("Notification permission denied while syncing eclipse reminders.");
       }
     };
 
@@ -75,5 +71,5 @@ export function useNotificationScheduler(
     return () => {
       didCancel = true;
     };
-  }, [mockTimeline, notificationEntries, settings]);
+  }, [disabledEclipseAlarmIds, eclipseReminderAnchors, settings]);
 }

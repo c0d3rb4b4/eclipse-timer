@@ -28,7 +28,9 @@ function MenuItem({ label, route, activeRoute, onNavigate }: MenuItemProps) {
       style={[styles.menuItem, isActive ? styles.menuItemActive : null]}
       onPress={() => onNavigate(route)}
     >
-      <Text style={[styles.menuItemText, isActive ? styles.menuItemTextActive : null]}>{label}</Text>
+      <Text style={[styles.menuItemText, isActive ? styles.menuItemTextActive : null]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -75,7 +77,7 @@ export default function SideMenu({ visible, activeRoute, onClose, onNavigate }: 
 
           <Text style={styles.sectionTitle}>Settings</Text>
           <MenuItem
-            label="Notification Settings"
+            label="Notification/Alarm Settings"
             route="NotificationSettings"
             activeRoute={activeRoute}
             onNavigate={onNavigate}
