@@ -60,6 +60,32 @@ function dedupeAndSortEvents(events: InAppAlarmEvent[]) {
   return [...deduped.values()].sort((a, b) => a.eventMs - b.eventMs);
 }
 
+function normalizeContactKey(contactKey: string) {
+  const normalized = contactKey.trim().toLowerCase();
+  if (normalized === "c1") return "c1";
+  if (normalized === "c2") return "c2";
+  if (normalized === "max") return "max";
+  if (normalized === "c3") return "c3";
+  if (normalized === "c4") return "c4";
+  return null;
+}
+
+function keyLabelFromContactKey(contactKey: string) {
+  const normalized = normalizeContactKey(contactKey);
+  if (!normalized) return contactKey.trim().toUpperCase();
+  return normalized === "max" ? "MAX" : normalized.toUpperCase();
+}
+
+function finalPhraseFromContactKey(contactKey: string) {
+  const normalized = normalizeContactKey(contactKey);
+  if (normalized === "c1") return "Partial eclipse started";
+  if (normalized === "c2") return "Totality started";
+  if (normalized === "max") return "This is the maximum eclipse";
+  if (normalized === "c3") return "Totality ended";
+  if (normalized === "c4") return "Partial eclipse ended";
+  return "Event reached";
+}
+
 export function createInAppAlarmEngine(options: InAppAlarmEngineOptions): InAppAlarmEngine {
   const clock = options.clock ?? defaultClock();
   const activeTimeouts = new Set<TimeoutHandle>();
@@ -133,8 +159,9 @@ export function createInAppAlarmEngine(options: InAppAlarmEngineOptions): InAppA
       const baseKey = eventBaseKey(event);
       const a1TargetMs = event.eventMs - a1Seconds * 1000;
       const a2TargetMs = event.eventMs - a2Seconds * 1000;
-      const a1Phrase = `${a1Seconds} seconds to ${event.contactLabel}`;
-      const finalPhrase = `We're at ${event.contactLabel}`;
+      const keyLabel = keyLabelFromContactKey(event.contactKey);
+      const a1Phrase = `${a1Seconds} seconds to ${keyLabel}`;
+      const finalPhrase = finalPhraseFromContactKey(event.contactKey);
 
       if (nowMs >= a1TargetMs && nowMs < a2TargetMs) {
         speakOnce(`${baseKey}:a1`, a1Phrase);

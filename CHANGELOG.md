@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-02-20
+
+### Changed
+- GitHub Release artifacts are now versioned as `eclipse-timer-v<version>.ipa`, `eclipse-timer-v<version>.aab`, and `eclipse-timer-v<version>.apk` instead of static names.
+- Updated in-app alarm TTS phrasing to use concise event keys for `a1` prompts (`"<a1> seconds to C1/C2/MAX/C3/C4"`) and event-specific completion phrases (`"Partial eclipse started"`, `"Totality started"`, `"This is the maximum eclipse"`, `"Totality ended"`, `"Partial eclipse ended"`).
+
 ## [1.1.0] — 2026-02-20
 
 ### Added

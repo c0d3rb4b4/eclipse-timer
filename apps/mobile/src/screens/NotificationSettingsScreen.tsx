@@ -372,7 +372,8 @@ export default function NotificationSettingsScreen({
           <Text style={styles.alarmTimingPreview}>
             At T-{settings.alarmLeadSecondsA1}s: "{settings.alarmLeadSecondsA1} seconds to C1"; at
             T-{settings.alarmCountdownStartSecondsA2}s: "{settings.alarmCountdownStartSecondsA2}..
-            {Math.max(1, settings.alarmCountdownStartSecondsA2 - 1)}.. ... 1.. We're at C1".
+            {Math.max(1, settings.alarmCountdownStartSecondsA2 - 1)}.. ... 1.. Partial eclipse
+            started".
           </Text>
           <Text style={styles.alarmTimingPreview}>
             Also sends one background reminder at T-1h and one at T-10m for the eclipse (based on

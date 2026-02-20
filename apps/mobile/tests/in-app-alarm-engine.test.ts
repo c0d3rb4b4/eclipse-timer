@@ -55,7 +55,15 @@ describe("in-app alarm engine", () => {
     expect(spoken).toEqual(["10 seconds to C1", "5", "4", "3", "2", "1"]);
 
     vi.advanceTimersByTime(1_000);
-    expect(spoken).toEqual(["10 seconds to C1", "5", "4", "3", "2", "1", "We're at C1"]);
+    expect(spoken).toEqual([
+      "10 seconds to C1",
+      "5",
+      "4",
+      "3",
+      "2",
+      "1",
+      "Partial eclipse started",
+    ]);
   });
 
   it("deduplicates already-spoken phases when re-armed with the same event", () => {
@@ -90,6 +98,6 @@ describe("in-app alarm engine", () => {
     vi.advanceTimersByTime(8_000);
 
     expect(spoken.filter((line) => line === "7 seconds to MAX")).toHaveLength(1);
-    expect(spoken.filter((line) => line === "We're at MAX")).toHaveLength(1);
+    expect(spoken.filter((line) => line === "This is the maximum eclipse")).toHaveLength(1);
   });
 });

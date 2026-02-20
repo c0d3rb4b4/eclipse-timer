@@ -160,27 +160,32 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/submission
+          version="$(node -p "JSON.parse(require('fs').readFileSync('apps/mobile/package.json', 'utf8')).version")"
+          artifact_prefix="eclipse-timer-v${version}"
+          ios_asset_name="${artifact_prefix}.ipa"
+          android_aab_asset_name="${artifact_prefix}.aab"
+          android_apk_asset_name="${artifact_prefix}.apk"
 
           ios_artifact="$(find artifacts/raw -type f -name '*.ipa' | head -n 1 || true)"
           if [ -z "$ios_artifact" ]; then
             echo "Missing iOS artifact (.ipa) in artifacts/raw."
             exit 1
           fi
-          cp "$ios_artifact" artifacts/submission/ios.ipa
+          cp "$ios_artifact" "artifacts/submission/$ios_asset_name"
 
           android_artifact="$(find artifacts/raw -type f -name '*.aab' | head -n 1 || true)"
           if [ -z "$android_artifact" ]; then
             echo "Missing Android artifact (.aab) in artifacts/raw."
             exit 1
           fi
-          cp "$android_artifact" artifacts/submission/android.aab
+          cp "$android_artifact" "artifacts/submission/$android_aab_asset_name"
 
           android_apk_artifact="$(find artifacts/raw -type f -name '*.apk' | head -n 1 || true)"
           if [ -z "$android_apk_artifact" ]; then
             echo "Missing Android artifact (.apk) in artifacts/raw."
             exit 1
           fi
-          cp "$android_apk_artifact" artifacts/submission/android.apk
+          cp "$android_apk_artifact" "artifacts/submission/$android_apk_asset_name"
 
           ls -lah artifacts/submission
 
@@ -374,23 +379,39 @@ jobs:
           name: local-mobile-builds-${{ github.run_id }}
           path: artifacts/submission
 
+      - name: Resolve release artifact names
+        id: artifact_names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.release_meta.outputs.version }}"
+          artifact_prefix="eclipse-timer-v${version}"
+          {
+            echo "ios=${artifact_prefix}.ipa"
+            echo "android_aab=${artifact_prefix}.aab"
+            echo "android_apk=${artifact_prefix}.apk"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Validate submission artifacts
         run: |
           set -euo pipefail
           artifact_root="${{ github.workspace }}/artifacts/submission"
+          ios_asset="${{ steps.artifact_names.outputs.ios }}"
+          android_aab_asset="${{ steps.artifact_names.outputs.android_aab }}"
+          android_apk_asset="${{ steps.artifact_names.outputs.android_apk }}"
 
-          if [ ! -f "$artifact_root/ios.ipa" ]; then
-            echo "Missing iOS artifact at $artifact_root/ios.ipa."
+          if [ ! -f "$artifact_root/$ios_asset" ]; then
+            echo "Missing iOS artifact at $artifact_root/$ios_asset."
             exit 1
           fi
 
-          if [ ! -f "$artifact_root/android.aab" ]; then
-            echo "Missing Android artifact at $artifact_root/android.aab."
+          if [ ! -f "$artifact_root/$android_aab_asset" ]; then
+            echo "Missing Android artifact at $artifact_root/$android_aab_asset."
             exit 1
           fi
 
-          if [ ! -f "$artifact_root/android.apk" ]; then
-            echo "Missing Android artifact at $artifact_root/android.apk."
+          if [ ! -f "$artifact_root/$android_apk_asset" ]; then
+            echo "Missing Android artifact at $artifact_root/$android_apk_asset."
             exit 1
           fi
 
@@ -402,9 +423,9 @@ jobs:
 
           {
             echo "files<<EOF"
-            echo "artifacts/submission/ios.ipa"
-            echo "artifacts/submission/android.aab"
-            echo "artifacts/submission/android.apk"
+            echo "artifacts/submission/${{ steps.artifact_names.outputs.ios }}"
+            echo "artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}"
+            echo "artifacts/submission/${{ steps.artifact_names.outputs.android_apk }}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -606,7 +627,7 @@ jobs:
       - name: Upload iOS artifact to App Store Connect
         uses: apple-actions/upload-testflight-build@v3
         with:
-          app-path: artifacts/submission/ios.ipa
+          app-path: artifacts/submission/${{ steps.artifact_names.outputs.ios }}
           issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
@@ -617,7 +638,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.lallimaven.eclipsetimer
-          releaseFiles: artifacts/submission/android.aab
+          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
           track: internal
           whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
 
@@ -627,7 +648,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.lallimaven.eclipsetimer
-          releaseFiles: artifacts/submission/android.aab
+          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
           track: internal
 
       - name: Create GitHub release with mobile artifacts
