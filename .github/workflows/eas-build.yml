@@ -114,7 +114,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build iOS and Android (AAB + APK + Wear APK)
+      - name: Build iOS and Android (AAB + APK + Wear AAB)
         working-directory: apps/mobile
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
@@ -166,7 +166,7 @@ jobs:
           ios_asset_name="${artifact_prefix}.ipa"
           android_aab_asset_name="${artifact_prefix}.aab"
           android_apk_asset_name="${artifact_prefix}.apk"
-          wear_apk_asset_name="${artifact_prefix}-wear.apk"
+          wear_aab_asset_name="${artifact_prefix}-wear.aab"
 
           ios_artifact="$(find artifacts/raw -type f -name '*.ipa' | head -n 1 || true)"
           if [ -z "$ios_artifact" ]; then
@@ -175,12 +175,38 @@ jobs:
           fi
           cp "$ios_artifact" "artifacts/submission/$ios_asset_name"
 
-          android_artifact="$(find artifacts/raw -type f -name '*.aab' | head -n 1 || true)"
-          if [ -z "$android_artifact" ]; then
+          aab_artifacts=()
+          while IFS= read -r artifact; do
+            aab_artifacts+=("$artifact")
+          done < <(find artifacts/raw -type f -name '*.aab' | sort)
+
+          if [ "${#aab_artifacts[@]}" -eq 0 ]; then
+            echo "Missing Android artifacts (.aab) in artifacts/raw."
+            exit 1
+          fi
+
+          android_aab_artifact="$(printf '%s\n' "${aab_artifacts[@]}" | grep -iv 'wear' | head -n 1 || true)"
+          if [ -z "$android_aab_artifact" ]; then
+            android_aab_artifact="${aab_artifacts[0]}"
+          fi
+          if [ -z "$android_aab_artifact" ]; then
             echo "Missing Android artifact (.aab) in artifacts/raw."
             exit 1
           fi
-          cp "$android_artifact" "artifacts/submission/$android_aab_asset_name"
+          cp "$android_aab_artifact" "artifacts/submission/$android_aab_asset_name"
+
+          wear_aab_artifact="$(find artifacts/raw -type f -name 'wear-release.aab' | head -n 1 || true)"
+          if [ -z "$wear_aab_artifact" ]; then
+            wear_aab_artifact="$(printf '%s\n' "${aab_artifacts[@]}" | grep -i 'wear' | head -n 1 || true)"
+          fi
+          if [ -z "$wear_aab_artifact" ] && [ "${#aab_artifacts[@]}" -ge 2 ]; then
+            wear_aab_artifact="${aab_artifacts[$((${#aab_artifacts[@]} - 1))]}"
+          fi
+          if [ -z "$wear_aab_artifact" ] || [ "$wear_aab_artifact" = "$android_aab_artifact" ]; then
+            echo "Missing Wear OS artifact (.aab) in artifacts/raw."
+            exit 1
+          fi
+          cp "$wear_aab_artifact" "artifacts/submission/$wear_aab_asset_name"
 
           apk_artifacts=()
           while IFS= read -r artifact; do
@@ -201,19 +227,6 @@ jobs:
             exit 1
           fi
           cp "$android_apk_artifact" "artifacts/submission/$android_apk_asset_name"
-
-          wear_apk_artifact="$(find artifacts/raw -type f -name 'wear-release.apk' | head -n 1 || true)"
-          if [ -z "$wear_apk_artifact" ]; then
-            wear_apk_artifact="$(find artifacts/raw -type f -name '*wear*.apk' | head -n 1 || true)"
-          fi
-          if [ -z "$wear_apk_artifact" ] && [ "${#apk_artifacts[@]}" -ge 2 ]; then
-            wear_apk_artifact="${apk_artifacts[$((${#apk_artifacts[@]} - 1))]}"
-          fi
-          if [ -z "$wear_apk_artifact" ] || [ "$wear_apk_artifact" = "$android_apk_artifact" ]; then
-            echo "Missing Wear OS artifact (.apk) in artifacts/raw."
-            exit 1
-          fi
-          cp "$wear_apk_artifact" "artifacts/submission/$wear_apk_asset_name"
 
           ls -lah artifacts/submission
 
@@ -418,7 +431,7 @@ jobs:
             echo "ios=${artifact_prefix}.ipa"
             echo "android_aab=${artifact_prefix}.aab"
             echo "android_apk=${artifact_prefix}.apk"
-            echo "wear_apk=${artifact_prefix}-wear.apk"
+            echo "wear_aab=${artifact_prefix}-wear.aab"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate submission artifacts
@@ -428,7 +441,7 @@ jobs:
           ios_asset="${{ steps.artifact_names.outputs.ios }}"
           android_aab_asset="${{ steps.artifact_names.outputs.android_aab }}"
           android_apk_asset="${{ steps.artifact_names.outputs.android_apk }}"
-          wear_apk_asset="${{ steps.artifact_names.outputs.wear_apk }}"
+          wear_aab_asset="${{ steps.artifact_names.outputs.wear_aab }}"
 
           if [ ! -f "$artifact_root/$ios_asset" ]; then
             echo "Missing iOS artifact at $artifact_root/$ios_asset."
@@ -445,8 +458,8 @@ jobs:
             exit 1
           fi
 
-          if [ ! -f "$artifact_root/$wear_apk_asset" ]; then
-            echo "Missing Wear OS artifact at $artifact_root/$wear_apk_asset."
+          if [ ! -f "$artifact_root/$wear_aab_asset" ]; then
+            echo "Missing Wear OS artifact at $artifact_root/$wear_aab_asset."
             exit 1
           fi
 
@@ -461,7 +474,7 @@ jobs:
             echo "artifacts/submission/${{ steps.artifact_names.outputs.ios }}"
             echo "artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}"
             echo "artifacts/submission/${{ steps.artifact_names.outputs.android_apk }}"
-            echo "artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}"
+            echo "artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -675,8 +688,6 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.lallimaven.eclipsetimer
           releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
-          # Wear APK upload is temporarily disabled because Google Play currently rejects APK uploads for this app.
-          # releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }},artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}
           track: internal
           whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
 
@@ -687,8 +698,25 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.lallimaven.eclipsetimer
           releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
-          # Wear APK upload is temporarily disabled because Google Play currently rejects APK uploads for this app.
-          # releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }},artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}
+          track: internal
+
+      - name: Upload Wear OS artifact to Google Play (with notes)
+        if: ${{ steps.store_notes.outputs.has_store_notes == 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.lallimaven.eclipsetimer.wear
+          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
+          track: internal
+          whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
+
+      - name: Upload Wear OS artifact to Google Play
+        if: ${{ steps.store_notes.outputs.has_store_notes != 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.lallimaven.eclipsetimer.wear
+          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
           track: internal
 
       - name: Create GitHub release with mobile artifacts

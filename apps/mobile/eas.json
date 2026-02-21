@@ -48,8 +48,8 @@
       "extends": "production",
       "autoIncrement": false,
       "android": {
-        "gradleCommand": ":wear:assembleRelease",
-        "applicationArchivePath": "android/wear/build/outputs/apk/release/wear-release.apk"
+        "gradleCommand": ":wear:bundleRelease",
+        "applicationArchivePath": "android/wear/build/outputs/bundle/release/wear-release.aab"
       }
     }
   },
