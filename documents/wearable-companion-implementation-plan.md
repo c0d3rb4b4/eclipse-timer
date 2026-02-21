@@ -1,7 +1,7 @@
 # Wearable Companion Implementation Plan (Concrete Checklist)
 
 Last updated: 2026-02-21  
-Status: In Progress (Phase 0 started)
+Status: In Progress (Phases 0-1 implemented; hardware verification pending)
 
 ## 1. Purpose
 
@@ -76,20 +76,29 @@ Files:
 
 Checklist:
 
-- [ ] Define `LiveRenderPayloadV1`.
-- [ ] Define `PreviewRenderPayloadV1`.
-- [ ] Define discriminated union `WearRenderPayloadV1`.
-- [ ] Add lightweight runtime guards/sanitizers for payload parse/clamp.
-- [ ] Export new types from `packages/shared/src/index.ts`.
-- [ ] Add tests for:
-  - [ ] mode discrimination (`live` vs `preview`)
-  - [ ] numeric clamp behavior (`[0,1]` where required)
-  - [ ] invalid payload rejection/fallback
+- [x] Define `LiveRenderPayloadV1`.
+- [x] Define `PreviewRenderPayloadV1`.
+- [x] Define discriminated union `WearRenderPayloadV1`.
+- [x] Add lightweight runtime guards/sanitizers for payload parse/clamp.
+- [x] Export new types from `packages/shared/src/index.ts`.
+- [x] Add tests for:
+  - [x] mode discrimination (`live` vs `preview`)
+  - [x] numeric clamp behavior (`[0,1]` where required)
+  - [x] invalid payload rejection/fallback
+
+
+Phase 1 implementation notes (2026-02-21):
+
+- Added shared wearable payload contracts and union types in `packages/shared/src/wearable.ts`.
+- Added runtime sanitizers for live/preview payload parsing, including numeric clamps for normalized fields.
+- Exported wearable contracts from shared package entrypoint (`packages/shared/src/index.ts`).
+- Added payload unit tests for mode discrimination, clamp behavior, and invalid payload rejection (`packages/shared/tests/wearable.payload.test.ts`).
+- Gap captured: phone/watch runtime code does not consume these shared contract helpers yet (planned in Phase 2+ integration work).
 
 Exit criteria:
 
-- [ ] Phone and watch code compile against shared payload types.
-- [ ] Payload tests pass.
+- [ ] Phone and watch code compile against shared payload types. *(Gap: adoption is pending in app/wear modules.)*
+- [x] Payload tests pass.
 
 ### Phase 2: Phone Live Compute Pipeline
 
@@ -258,6 +267,11 @@ Phase 0 checks run (2026-02-21):
 - [x] `pnpm --filter @eclipse-timer/mobile typecheck`
 - [x] `pnpm --filter @eclipse-timer/mobile lint`
 - [x] `./gradlew :wear:assembleDebug` (from `apps/mobile/android`)
+
+Phase 1 checks run (2026-02-21):
+
+- [x] `pnpm --filter @eclipse-timer/shared test`
+- [x] `pnpm --filter @eclipse-timer/shared typecheck`
 - [x] `./gradlew :app:compileDebugKotlin :app:processDebugManifest` (from `apps/mobile/android`)
 - [ ] `./gradlew :app:assembleDebug` is currently blocked by existing external CMake/prefab errors in `react-native-screens` / `expo-modules-core`.
 
