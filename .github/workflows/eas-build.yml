@@ -114,7 +114,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build iOS and Android (AAB + APK + Wear AAB)
+      - name: Build iOS and Android (AAB + APK + Wear AAB + Wear APK)
         working-directory: apps/mobile
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
@@ -156,6 +156,7 @@ jobs:
           pnpm exec eas build --profile production --platform android --local --non-interactive
           pnpm exec eas build --profile production-apk --platform android --local --non-interactive
           pnpm exec eas build --profile production-wear --platform android --local --non-interactive
+          pnpm exec eas build --profile production-wear-apk --platform android --local --non-interactive
 
       - name: Collect build artifacts
         run: |
@@ -167,6 +168,7 @@ jobs:
           android_aab_asset_name="${artifact_prefix}.aab"
           android_apk_asset_name="${artifact_prefix}.apk"
           wear_aab_asset_name="${artifact_prefix}-wear.aab"
+          wear_apk_asset_name="${artifact_prefix}-wear.apk"
 
           ios_artifact="$(find artifacts/raw -type f -name '*.ipa' | head -n 1 || true)"
           if [ -z "$ios_artifact" ]; then
@@ -227,6 +229,19 @@ jobs:
             exit 1
           fi
           cp "$android_apk_artifact" "artifacts/submission/$android_apk_asset_name"
+
+          wear_apk_artifact="$(find artifacts/raw -type f -name 'wear-release.apk' | head -n 1 || true)"
+          if [ -z "$wear_apk_artifact" ]; then
+            wear_apk_artifact="$(printf '%s\n' "${apk_artifacts[@]}" | grep -i 'wear' | head -n 1 || true)"
+          fi
+          if [ -z "$wear_apk_artifact" ] && [ "${#apk_artifacts[@]}" -ge 2 ]; then
+            wear_apk_artifact="${apk_artifacts[$((${#apk_artifacts[@]} - 1))]}"
+          fi
+          if [ -z "$wear_apk_artifact" ] || [ "$wear_apk_artifact" = "$android_apk_artifact" ]; then
+            echo "Missing Wear OS artifact (.apk) in artifacts/raw."
+            exit 1
+          fi
+          cp "$wear_apk_artifact" "artifacts/submission/$wear_apk_asset_name"
 
           ls -lah artifacts/submission
 
@@ -432,6 +447,7 @@ jobs:
             echo "android_aab=${artifact_prefix}.aab"
             echo "android_apk=${artifact_prefix}.apk"
             echo "wear_aab=${artifact_prefix}-wear.aab"
+            echo "wear_apk=${artifact_prefix}-wear.apk"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate submission artifacts
@@ -442,6 +458,7 @@ jobs:
           android_aab_asset="${{ steps.artifact_names.outputs.android_aab }}"
           android_apk_asset="${{ steps.artifact_names.outputs.android_apk }}"
           wear_aab_asset="${{ steps.artifact_names.outputs.wear_aab }}"
+          wear_apk_asset="${{ steps.artifact_names.outputs.wear_apk }}"
 
           if [ ! -f "$artifact_root/$ios_asset" ]; then
             echo "Missing iOS artifact at $artifact_root/$ios_asset."
@@ -458,11 +475,15 @@ jobs:
             exit 1
           fi
 
-          # Wear OS artifact validation disabled for now
-          # if [ ! -f "$artifact_root/$wear_aab_asset" ]; then
-          #   echo "Missing Wear OS artifact at $artifact_root/$wear_aab_asset."
-          #   exit 1
-          # fi
+          if [ ! -f "$artifact_root/$wear_aab_asset" ]; then
+            echo "Missing Wear OS artifact at $artifact_root/$wear_aab_asset."
+            exit 1
+          fi
+
+          if [ ! -f "$artifact_root/$wear_apk_asset" ]; then
+            echo "Missing Wear OS artifact at $artifact_root/$wear_apk_asset."
+            exit 1
+          fi
 
       - name: Prepare GitHub release assets
         id: release_assets
@@ -475,6 +496,8 @@ jobs:
             echo "artifacts/submission/${{ steps.artifact_names.outputs.ios }}"
             echo "artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}"
             echo "artifacts/submission/${{ steps.artifact_names.outputs.android_apk }}"
+            echo "artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}"
+            echo "artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 

@@ -158,6 +158,43 @@ pnpm test --watch
 - [high-level/user-flow-and-product-behavior.md](../high-level/user-flow-and-product-behavior.md)
 - [low-level/mobile-app-internals.md](../low-level/mobile-app-internals.md)
 
+### Wear OS Companion on Local Emulator
+
+Use this flow when working on the native watch companion under `apps/mobile/android/wear`.
+
+1. In Android Studio `SDK Manager`, install a Wear OS system image.
+2. In Android Studio `Device Manager`, create and start a Wear OS virtual device.
+3. Build the watch debug APK from the Android project root:
+
+```bash
+cd apps/mobile/android
+
+# macOS/Linux
+./gradlew :wear:assembleDebug
+
+# Windows PowerShell
+.\gradlew.bat :wear:assembleDebug
+```
+
+4. Install to the Wear emulator (use the watch serial from `adb devices`):
+
+```bash
+adb devices
+adb -s <wear-emulator-serial> install -r wear/build/outputs/apk/debug/wear-debug.apk
+```
+
+5. Launch the watch app:
+
+```bash
+adb -s <wear-emulator-serial> shell am start -n com.lallimaven.eclipsetimer.wear/com.lallimaven.eclipsetimer.wear.MainActivity
+```
+
+6. Optional phone/watch bridge check:
+   - Start an Android phone emulator.
+   - Run the phone app: `pnpm -C apps/mobile android`
+   - Pair phone + watch emulators in Android Studio Device Manager.
+   - Re-open the watch app and confirm it changes from "Sent test message. Waiting for phone..." to a "Phone reply: ..." status.
+
 ### Engine Developer
 
 ```bash

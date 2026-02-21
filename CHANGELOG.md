@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] — 2026-02-21
+
+### Added
+- Added `production-wear-apk` EAS build profile in `apps/mobile/eas.json` to produce Wear OS APK output (`wear-release.apk`) for release packaging.
+
+### Changed
+- Updated `.github/workflows/eas-build.yml` to build both Wear OS artifacts (`wear-release.aab` and `wear-release.apk`) and attach both to GitHub releases.
+- Kept store submission scoped to the phone Android AAB only; Wear OS artifacts are released on GitHub and not uploaded to Google Play.
+
 ## [1.1.8] — 2026-02-21
 
 ### Added

@@ -335,6 +335,13 @@ pnpm -C apps/mobile android
 pnpm -C apps/mobile web
 ```
 
+### Option 5: Wear OS emulator (native watch module)
+
+The Wear OS companion app is a separate native module (`apps/mobile/android/wear`) and is not launched by Expo commands above.
+
+Use the local simulator build/install/run guide in:
+- [documents/guides/setup-and-development.md#wear-os-companion-on-local-emulator](documents/guides/setup-and-development.md#wear-os-companion-on-local-emulator)
+
 ## Running Tests and Quality Checks
 
 From the repo root:
