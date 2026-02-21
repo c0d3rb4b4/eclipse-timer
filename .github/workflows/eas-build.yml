@@ -182,7 +182,20 @@ jobs:
           fi
           cp "$android_artifact" "artifacts/submission/$android_aab_asset_name"
 
-          android_apk_artifact="$(find artifacts/raw -type f -name '*.apk' ! -name '*wear*.apk' | head -n 1 || true)"
+          apk_artifacts=()
+          while IFS= read -r artifact; do
+            apk_artifacts+=("$artifact")
+          done < <(find artifacts/raw -type f -name '*.apk' | sort)
+
+          if [ "${#apk_artifacts[@]}" -eq 0 ]; then
+            echo "Missing Android artifacts (.apk) in artifacts/raw."
+            exit 1
+          fi
+
+          android_apk_artifact="$(printf '%s\n' "${apk_artifacts[@]}" | grep -iv 'wear' | head -n 1 || true)"
+          if [ -z "$android_apk_artifact" ]; then
+            android_apk_artifact="${apk_artifacts[0]}"
+          fi
           if [ -z "$android_apk_artifact" ]; then
             echo "Missing Android artifact (.apk) in artifacts/raw."
             exit 1
@@ -193,7 +206,10 @@ jobs:
           if [ -z "$wear_apk_artifact" ]; then
             wear_apk_artifact="$(find artifacts/raw -type f -name '*wear*.apk' | head -n 1 || true)"
           fi
-          if [ -z "$wear_apk_artifact" ]; then
+          if [ -z "$wear_apk_artifact" ] && [ "${#apk_artifacts[@]}" -ge 2 ]; then
+            wear_apk_artifact="${apk_artifacts[$((${#apk_artifacts[@]} - 1))]}"
+          fi
+          if [ -z "$wear_apk_artifact" ] || [ "$wear_apk_artifact" = "$android_apk_artifact" ]; then
             echo "Missing Wear OS artifact (.apk) in artifacts/raw."
             exit 1
           fi

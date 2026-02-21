@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] — 2026-02-21
+
+### Changed
+- Updated mobile build artifact collection in `.github/workflows/eas-build.yml` to reliably distinguish phone and Wear APK outputs when EAS local builds emit generic `build-*.apk` filenames.
+
 ## [1.1.3] — 2026-02-21
 
 ### Added
