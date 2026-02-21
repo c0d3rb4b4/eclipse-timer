@@ -30,7 +30,7 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "com.lallimaven.eclipsetimer"
+        applicationId "com.lallimaven.eclipsetimer.wear"
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode wearVersionCode
