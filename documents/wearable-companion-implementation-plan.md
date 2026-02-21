@@ -1,7 +1,7 @@
 # Wearable Companion Implementation Plan (Concrete Checklist)
 
-Last updated: 2026-02-20  
-Status: Proposed
+Last updated: 2026-02-21  
+Status: In Progress (Phase 0 started)
 
 ## 1. Purpose
 
@@ -40,20 +40,29 @@ Goal: establish native watch module and communication skeleton before feature lo
 
 Checklist:
 
-- [ ] Add Wear OS module under `apps/mobile/android` (expected path: `apps/mobile/android/wear`).
-- [ ] Confirm package/signing compatibility between `app` and `wear` modules.
-- [ ] Add Data Layer dependencies in phone and watch Gradle configs.
-- [ ] Add minimal watch app launcher screen (placeholder sun-only).
-- [ ] Add phone-side native bridge entry point for Data Layer (Kotlin).
-- [ ] Define Data Layer paths:
-  - [ ] `/wear/live/location/v1`
-  - [ ] `/wear/live/render/v1`
-  - [ ] `/wear/preview/render/v1`
-  - [ ] `/wear/preview/scrub/v1` (optional forward sync)
+- [x] Add Wear OS module under `apps/mobile/android` (expected path: `apps/mobile/android/wear`).
+- [x] Confirm package/signing compatibility between `app` and `wear` modules.
+- [x] Add Data Layer dependencies in phone and watch Gradle configs.
+- [x] Add minimal watch app launcher screen (placeholder sun-only).
+- [x] Add phone-side native bridge entry point for Data Layer (Kotlin).
+- [x] Define Data Layer paths:
+  - [x] `/wear/live/location/v1`
+  - [x] `/wear/live/render/v1`
+  - [x] `/wear/preview/render/v1`
+  - [x] `/wear/preview/scrub/v1` (optional forward sync)
+
+Phase 0 implementation notes (2026-02-21):
+
+- Added `wear` module scaffold and launcher UI (`apps/mobile/android/wear/...`).
+- Added phone-side Kotlin Data Layer bridge + RN native module (`apps/mobile/android/app/src/main/java/com/lallimaven/eclipsetimer/wearable/...`).
+- Added Data Layer dependency to phone app module (`com.google.android.gms:play-services-wearable:19.0.0`).
+- Added TypeScript wrapper bridge entry point (`apps/mobile/src/services/wearDataLayerBridge.ts`).
+- Implemented test-handshake wiring (watch sends test payload on launch, phone acks back on live-render path).
 
 Exit criteria:
 
-- [ ] Phone and watch can exchange a small test message.
+- [x] Phone/watch test-message exchange is implemented in code paths.
+- [ ] Phone and watch can exchange a small test message on paired hardware (manual verification pending).
 
 ### Phase 1: Shared Contracts and Validation
 
@@ -243,6 +252,22 @@ Run from repo root unless noted.
 - [ ] Android compile smoke check from `apps/mobile/android`:
   - [ ] `./gradlew :app:assembleDebug`
   - [ ] `./gradlew :wear:assembleDebug` (or replace `wear` with actual module name)
+
+Phase 0 checks run (2026-02-21):
+
+- [x] `pnpm --filter @eclipse-timer/mobile typecheck`
+- [x] `pnpm --filter @eclipse-timer/mobile lint`
+- [x] `./gradlew :wear:assembleDebug` (from `apps/mobile/android`)
+- [x] `./gradlew :app:compileDebugKotlin :app:processDebugManifest` (from `apps/mobile/android`)
+- [ ] `./gradlew :app:assembleDebug` is currently blocked by existing external CMake/prefab errors in `react-native-screens` / `expo-modules-core`.
+
+CI/Pipeline gap (Wear OS):
+
+- [x] Add explicit Wear build step in GitHub Actions (`eas build --profile production-wear --platform android --local`).
+- [x] Define release pipeline strategy for Wear artifact packaging/distribution and add corresponding workflow validation.
+- [x] Include Wear APK as a GitHub release asset.
+- [x] Upload Wear APK to Google Play in the same internal-track release edit as the phone AAB.
+- [x] Keep store submission target unchanged to internal testing track only.
 
 ## 6. Definition of Done
 

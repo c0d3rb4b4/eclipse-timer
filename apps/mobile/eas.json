@@ -43,12 +43,19 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "production-wear": {
+      "extends": "production",
+      "autoIncrement": false,
+      "android": {
+        "gradleCommand": ":wear:assembleRelease",
+        "applicationArchivePath": "android/wear/build/outputs/apk/release/wear-release.apk"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "lalit.nv@gmail.com",
         "ascAppId": "6759380856",
         "appleTeamId": "2R7B423ZQV"
       },

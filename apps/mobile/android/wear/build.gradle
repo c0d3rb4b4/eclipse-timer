@@ -1,0 +1,73 @@
+import groovy.json.JsonSlurper
+
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+
+def mobilePackageJson = new JsonSlurper().parse(file("../../package.json"))
+def mobileVersionName = (mobilePackageJson.version ?: "1.0.0").toString()
+def versionParts = mobileVersionName.tokenize(".")
+def parseVersionPart = { List<String> parts, int index ->
+    if (index >= parts.size()) {
+        return 0
+    }
+    def raw = parts[index]
+    def normalized = raw.replaceAll(/[^0-9].*$/, "")
+    if (normalized.isEmpty()) {
+        return 0
+    }
+    return Integer.parseInt(normalized)
+}
+def major = parseVersionPart(versionParts, 0)
+def minor = parseVersionPart(versionParts, 1)
+def patch = parseVersionPart(versionParts, 2)
+if (major > 99 || minor > 99 || patch > 99) {
+    throw new GradleException("Wear versionCode mapping requires major/minor/patch <= 99. Found: $mobileVersionName")
+}
+def wearVersionCode = (rootProject.ext.targetSdkVersion as int) * 1_000_000 + major * 10_000 + minor * 100 + patch
+
+android {
+    namespace "com.lallimaven.eclipsetimer.wear"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.lallimaven.eclipsetimer"
+        minSdkVersion 26
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode wearVersionCode
+        versionName mobileVersionName
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("../app/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.15.0"
+    implementation "androidx.activity:activity-ktx:1.10.1"
+    implementation "com.google.android.gms:play-services-wearable:19.0.0"
+}

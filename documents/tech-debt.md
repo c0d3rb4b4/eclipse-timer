@@ -214,7 +214,7 @@
 | CI-00 | **Convert from Expo Go to EAS Build for production releases** | 🔴 Critical | ✅ Resolved 2026-02-16: created `eas.json` with `development`/`preview`/`production` build profiles (EAS project ID `a29a7662-96be-4509-a79e-fbe4b5dac1ff`). |
 | CI-01 | **No CI pipeline** | 🔴 Critical | ✅ Resolved 2026-02-16: created `.github/workflows/ci.yml` running `pnpm typecheck`, `pnpm lint`, and `pnpm test` on pull requests to `main` (docs/log-only changes ignored). |
 | CI-02 | **No automated mobile builds in CI** | 🟠 High | ✅ Resolved 2026-02-16: created `.github/workflows/eas-build.yml` with CI checks + local EAS builds on `main` push/manual dispatch and automated submit gated by semantic-version bump detection. |
-| CI-03 | **App signing / keystore flow not fully verified end-to-end** | 🟠 High | ✅ Partially resolved 2026-02-20: `eas.json` and submit identities are configured, but the first successful production build/signing/upload run still requires manual verification (Phase 1.4). |
+| CI-03 | **App signing / keystore flow not fully verified end-to-end** | 🟠 High | ✅ Partially resolved 2026-02-20: `eas.json` build/submit profiles are configured, but the first successful production build/signing/upload run still requires manual verification (Phase 1.4). |
 | CI-04 | **No environment configuration** | 🟡 Medium | ✅ Resolved 2026-02-16: created `apps/mobile/.env.example` with Sentry and EAS placeholders. |
 | CI-05 | **No crash reporting / analytics** | 🟠 High | ✅ Resolved 2026-02-16: installed `@sentry/react-native`, configured `app.json` plugin, wrapped root with `Sentry.wrap` + `ErrorBoundary`. DSN placeholder requires replacement before production. |
 | CI-06 | **No OTA update mechanism** | 🟡 Medium | ✅ Resolved 2026-02-16: installed `expo-updates`, configured `runtimeVersion` (appVersion policy) and `updates` URL pointing to EAS project in `app.json`. |
@@ -439,7 +439,7 @@ All automatable work across Phases 1–6 is complete. The items below require ma
 |---|--------|-------|
 | — | Replace `__YOUR_SENTRY_DSN__` with a real Sentry DSN. | `apps/mobile/src/App.tsx` line 16 |
 | — | Replace `__YOUR_SENTRY_ORG__` and `__YOUR_SENTRY_PROJECT__` with real Sentry values. | `apps/mobile/app.json` → plugins → `@sentry/react-native/expo` |
-| — | Ensure iOS submit identity is set in `apps/mobile/eas.json` (`appleId`, `ascAppId`, `appleTeamId`). | `apps/mobile/eas.json` → submit → production |
+| — | Ensure iOS EAS submit metadata is set in `apps/mobile/eas.json` (`ascAppId`, `appleTeamId`) and pass Apple ID via `EXPO_APPLE_ID` env/secret when using EAS Submit fallback. | `apps/mobile/eas.json` + GitHub Actions secrets |
 | — | Host `PRIVACY_POLICY.md` at a public URL (e.g., GitHub Pages) and link it in both store listings. | GitHub repo settings or hosting provider |
 | 2.6 | Test on physical devices (iOS + Android) using `eas build --profile preview`. Validate notifications, location, map, and deep-link scheme. | Physical devices |
 | 4.2 | Capture screenshots for all required device classes (see `documents/store-metadata.md` for sizes and recommended screens). | Simulator / physical devices |
@@ -453,3 +453,4 @@ All automatable work across Phases 1–6 is complete. The items below require ma
 | — | Add `EXPO_TOKEN` secret to GitHub repo (used by local EAS build in CI). Generate at [expo.dev account settings](https://expo.dev/accounts/lallimaven/settings/access-tokens). | GitHub → Settings → Secrets → Actions |
 | — | Add App Store upload secrets: `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_PRIVATE_KEY`. | GitHub → Settings → Secrets → Actions |
 | — | Add Google Play upload secret: `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. | GitHub → Settings → Secrets → Actions |
+| — | Optional for EAS Submit fallback only: add `EXPO_APPLE_ID` secret (Apple ID email). | GitHub → Settings → Secrets → Actions |

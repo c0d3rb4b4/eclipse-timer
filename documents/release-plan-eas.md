@@ -32,8 +32,11 @@
   - `APPSTORE_API_KEY_ID`
   - `APPSTORE_API_PRIVATE_KEY`
   - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+- Optional GitHub Actions secret for EAS Submit fallback:
+  - `EXPO_APPLE_ID` (only needed if you use Option C below for iOS submits)
 - Where to get each secret (quick paths):
   - `EXPO_TOKEN`: Expo -> `Account Settings -> Access Tokens`.
+  - `EXPO_APPLE_ID`: Apple ID email used for App Store Connect access (only for EAS Submit fallback).
   - `GOOGLE_MAPS_ANDROID_API_KEY`: Google Cloud -> `APIs & Services -> Credentials -> API key` (restrict to Android app package/SHA-1 and Maps SDK for Android API).
   - `APPSTORE_ISSUER_ID` / `APPSTORE_API_KEY_ID` / `APPSTORE_API_PRIVATE_KEY`: App Store Connect -> `Users and Access -> Integrations -> App Store Connect API` (Team API key; paste full `.p8` contents for private key).
   - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`: Play Console -> `Setup -> API access` (link GCP project/service account) + Google Cloud service account JSON key.
@@ -107,8 +110,9 @@ Option B: manual direct upload from local machine
 
 Option C: EAS Submit (optional fallback)
 - Use only if you intentionally prefer EAS submit queue/credentials flow.
+- For iOS via CI, pass Apple ID via GitHub Actions secret (`EXPO_APPLE_ID`) instead of committing `appleId` in `eas.json`.
 ```bash
-pnpm -C apps/mobile exec eas submit --platform ios --path /absolute/path/to/ios.ipa
+EXPO_APPLE_ID="$EXPO_APPLE_ID" pnpm -C apps/mobile exec eas submit --platform ios --path /absolute/path/to/ios.ipa
 pnpm -C apps/mobile exec eas submit --platform android --path /absolute/path/to/android.aab
 ```
 
@@ -129,6 +133,8 @@ pnpm -C apps/mobile exec eas submit --platform android --path /absolute/path/to/
   - `EXPO_TOKEN` for build
   - `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_PRIVATE_KEY` for iOS upload
   - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` for Android upload
+- Optional for EAS Submit fallback:
+  - `EXPO_APPLE_ID` (iOS only)
 
 ---
 

@@ -36,4 +36,5 @@ rootProject.name = 'Eclipse Timer'
 expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
+include ':wear'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

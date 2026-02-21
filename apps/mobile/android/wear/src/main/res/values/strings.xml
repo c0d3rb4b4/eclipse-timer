@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Eclipse Timer Wear</string>
+  <string name="status_starting">Live mode (sun-only placeholder)</string>
+  <string name="status_no_phone">No phone connection</string>
+  <string name="status_sent_waiting_ack">Sent test message. Waiting for phone...</string>
+  <string name="status_send_failed">Unable to send test message</string>
+  <string name="status_phone_ack">Phone reply: %1$s</string>
+</resources>
