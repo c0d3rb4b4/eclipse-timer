@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] — 2026-02-21
+
+### Changed
+- Updated Play Store submission in `.github/workflows/eas-build.yml` to upload only the Android AAB and temporarily disable Wear APK upload after Google Play returned `APKs are not allowed for this application.`.
+
 ## [1.1.4] — 2026-02-21
 
 ### Changed

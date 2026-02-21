@@ -674,7 +674,9 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.lallimaven.eclipsetimer
-          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }},artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}
+          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
+          # Wear APK upload is temporarily disabled because Google Play currently rejects APK uploads for this app.
+          # releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }},artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}
           track: internal
           whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
 
@@ -684,7 +686,9 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.lallimaven.eclipsetimer
-          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }},artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}
+          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
+          # Wear APK upload is temporarily disabled because Google Play currently rejects APK uploads for this app.
+          # releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }},artifacts/submission/${{ steps.artifact_names.outputs.wear_apk }}
           track: internal
 
       - name: Create GitHub release with mobile artifacts
