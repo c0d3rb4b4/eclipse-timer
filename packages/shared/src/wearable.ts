@@ -12,9 +12,15 @@ export type LiveRenderPayloadV1 = {
   generatedAtUtc: string;
   watchLatDeg: number;
   watchLonDeg: number;
-  showMoon: boolean;
-  moon?: LiveMoonGeometryV1;
-};
+} & (
+  | {
+      showMoon: false;
+    }
+  | {
+      showMoon: true;
+      moon: LiveMoonGeometryV1;
+    }
+);
 
 export type PreviewVisualV1 = {
   sunRadiusNorm: number;

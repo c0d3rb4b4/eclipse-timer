@@ -100,6 +100,17 @@ describe("sanitizeWearRenderPayloadV1", () => {
       }),
     ).toBeNull();
 
+    expect(
+      sanitizeWearRenderPayloadV1({
+        version: 1,
+        mode: "live",
+        generatedAtUtc: "2026-08-12T10:00:00Z",
+        watchLatDeg: 20,
+        watchLonDeg: 20,
+        showMoon: true,
+      }),
+    ).toBeNull();
+
     expect(sanitizeWearRenderPayloadV1({ version: 99, mode: "live" })).toBeNull();
   });
 });
