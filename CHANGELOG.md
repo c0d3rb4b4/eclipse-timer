@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] — 2026-02-21
+
+### Added
+- Added a new docs guide set under `documents/guides/`: setup and development, contributing, deployment, troubleshooting, and performance optimization.
+- Added `documents/REORGANIZATION.md` to document the new documentation layout and migration summary.
+
+### Changed
+- Reorganized `documents/` into purpose-based sections (`guides/`, `planning/`, `reference/`) and updated `documents/README.md` with quick-start, role-based reading paths, and maintenance standards.
+- Updated `.github/workflows/eas-build.yml` to temporarily disable Wear OS artifact validation, release asset packaging, and Google Play upload steps until the Wear package is ready in Play Console.
+
 ## [1.1.7] — 2026-02-21
 
 ### Changed

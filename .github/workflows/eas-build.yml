@@ -458,10 +458,11 @@ jobs:
             exit 1
           fi
 
-          if [ ! -f "$artifact_root/$wear_aab_asset" ]; then
-            echo "Missing Wear OS artifact at $artifact_root/$wear_aab_asset."
-            exit 1
-          fi
+          # Wear OS artifact validation disabled for now
+          # if [ ! -f "$artifact_root/$wear_aab_asset" ]; then
+          #   echo "Missing Wear OS artifact at $artifact_root/$wear_aab_asset."
+          #   exit 1
+          # fi
 
       - name: Prepare GitHub release assets
         id: release_assets
@@ -474,7 +475,6 @@ jobs:
             echo "artifacts/submission/${{ steps.artifact_names.outputs.ios }}"
             echo "artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}"
             echo "artifacts/submission/${{ steps.artifact_names.outputs.android_apk }}"
-            echo "artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -700,24 +700,25 @@ jobs:
           releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.android_aab }}
           track: internal
 
-      - name: Upload Wear OS artifact to Google Play (with notes)
-        if: ${{ steps.store_notes.outputs.has_store_notes == 'true' }}
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.lallimaven.eclipsetimer.wear
-          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
-          track: internal
-          whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
-
-      - name: Upload Wear OS artifact to Google Play
-        if: ${{ steps.store_notes.outputs.has_store_notes != 'true' }}
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.lallimaven.eclipsetimer.wear
-          releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
-          track: internal
+      # TODO: Re-enable Wear OS uploads once the package is set up in Google Play Store
+      # - name: Upload Wear OS artifact to Google Play (with notes)
+      #   if: ${{ steps.store_notes.outputs.has_store_notes == 'true' }}
+      #   uses: r0adkll/upload-google-play@v1
+      #   with:
+      #     serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+      #     packageName: com.lallimaven.eclipsetimer.wear
+      #     releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
+      #     track: internal
+      #     whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
+      #
+      # - name: Upload Wear OS artifact to Google Play
+      #   if: ${{ steps.store_notes.outputs.has_store_notes != 'true' }}
+      #   uses: r0adkll/upload-google-play@v1
+      #   with:
+      #     serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+      #     packageName: com.lallimaven.eclipsetimer.wear
+      #     releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
+      #     track: internal
 
       - name: Create GitHub release with mobile artifacts
         uses: softprops/action-gh-release@v2
