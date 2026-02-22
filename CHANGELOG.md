@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.13] — 2026-02-22
+
+### Fixed
+- Corrected preview contact interpolation so C1/C2/C3/C4 remain geometrically consistent even when the moon track has a non-zero closest-approach offset.
+- Improved satellite/hybrid map readability by reducing eclipse overlay opacity in photo map modes and forcing map remount when switching map type to refresh tile detail loading.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.13`.
+
+### Tests
+- Added a regression test that verifies C1/C4 tangency remains exact for partial eclipse preview geometry with non-zero closest approach and directional travel.
+
 ## [1.1.12] — 2026-02-22
 
 ### Changed

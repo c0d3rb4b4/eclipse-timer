@@ -128,9 +128,18 @@ function buildMotionAnchors(
   contacts: PreviewMotionContacts,
   sunRadius: number,
   moonRadius: number,
+  moonClosestOffset: number,
 ): Array<{ progress: number; offsetX: number }> {
-  const externalTouchOffset = sunRadius + moonRadius;
-  const internalTouchOffset = Math.abs(sunRadius - moonRadius);
+  const axisDistanceForTouchOffset = (touchOffset: number) => {
+    const radialSq = touchOffset * touchOffset;
+    const closestSq = moonClosestOffset * moonClosestOffset;
+    const axisSq = radialSq - closestSq;
+    if (!Number.isFinite(axisSq) || axisSq <= 0) return 0;
+    return Math.sqrt(axisSq);
+  };
+
+  const externalTouchOffset = axisDistanceForTouchOffset(sunRadius + moonRadius);
+  const internalTouchOffset = axisDistanceForTouchOffset(Math.abs(sunRadius - moonRadius));
 
   const anchors: Array<{ progress: number; offsetX: number }> = [
     { progress: 0, offsetX: -externalTouchOffset },
@@ -195,7 +204,12 @@ export function calculatePreviewMoonGeometry(params: {
     sunRadius,
   );
 
-  const anchors = buildMotionAnchors(params.contacts ?? {}, sunRadius, moonRadius);
+  const anchors = buildMotionAnchors(
+    params.contacts ?? {},
+    sunRadius,
+    moonRadius,
+    moonClosestOffset,
+  );
   const axisOffset = interpolateOffsetX(params.progress, anchors);
   const travelVector = params.travelVector ?? { x: 1, y: 0 };
   const moonOffsetX = axisOffset * travelVector.x - moonClosestOffset * travelVector.y;

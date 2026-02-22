@@ -89,6 +89,12 @@ function normalizeLongitudeDeg(lonDeg: number) {
   return (((lonDeg % 360) + 540) % 360) - 180;
 }
 
+function mapTypeLabel(mapType: TimerState["mapType"]) {
+  if (mapType === "satellite") return "Satellite";
+  if (mapType === "hybrid") return "Hybrid";
+  return "Standard";
+}
+
 function destinationPoint(
   latDeg: number,
   lonDeg: number,
@@ -182,6 +188,13 @@ export default function TimerScreen({
       : activeKindCode === "H"
         ? "Central Path"
         : "Totality Path";
+  const isPhotoMapMode = timer.mapType !== "standard";
+  const visibleOverlayColor = isPhotoMapMode ? "rgba(79, 195, 247, 0.12)" : VISIBLE_PATH_COLOR;
+  const activeCentralOverlayColor = isPhotoMapMode
+    ? activeKindCode === "A"
+      ? "rgba(255, 167, 38, 0.16)"
+      : "rgba(255, 82, 82, 0.16)"
+    : centralOverlayColor;
   const favoriteAtCurrentPin = useMemo(
     () =>
       favoriteLocations.find((location) =>
@@ -242,6 +255,7 @@ export default function TimerScreen({
     timer.result,
   ]);
   const hasDirectionsData = contactDirectionOverlays.length > 0;
+  const mapTypeText = mapTypeLabel(timer.mapType);
 
   const closeAddFavoriteModal = () => {
     setIsAddFavoriteModalOpen(false);
@@ -341,19 +355,24 @@ export default function TimerScreen({
 
       <View style={styles.mapWrap}>
         <MapView
+          key={`map-${timer.mapType}`}
           ref={timer.mapRef}
           style={styles.map}
           region={timer.region}
           onRegionChangeComplete={timer.onRegionChangeComplete}
           onPress={timer.onMapPress}
           mapType={timer.mapType}
+          showsBuildings
+          showsCompass
+          showsIndoors
+          showsPointsOfInterest
         >
           {timer.showVisibleOverlay
             ? timer.overlayVisiblePolygons.map((coordinates, idx) => (
                 <Polygon
                   key={`visible-${idx}`}
                   coordinates={coordinates}
-                  fillColor={VISIBLE_PATH_COLOR}
+                  fillColor={visibleOverlayColor}
                   strokeColor="rgba(79, 195, 247, 0.05)"
                   strokeWidth={0.5}
                 />
@@ -364,7 +383,7 @@ export default function TimerScreen({
                 <Polygon
                   key={`central-${idx}`}
                   coordinates={coordinates}
-                  fillColor={centralOverlayColor}
+                  fillColor={activeCentralOverlayColor}
                   strokeColor="rgba(255,255,255,0.08)"
                   strokeWidth={0.5}
                 />
@@ -438,14 +457,17 @@ export default function TimerScreen({
         </Pressable>
 
         <Pressable style={styles.mapOverlayBtn} onPress={timer.cycleMapType}>
-          <Text style={styles.mapOverlayBtnText}>
-            {timer.mapType === "standard"
-              ? "Standard"
-              : timer.mapType === "satellite"
-                ? "Satellite"
-                : "Hybrid"}
-          </Text>
+          <Text style={styles.mapOverlayBtnText}>{mapTypeText}</Text>
         </Pressable>
+
+        {timer.mapType !== "standard" ? (
+          <View style={styles.mapModeHint}>
+            <Text style={styles.mapModeHintText}>
+              If satellite/hybrid tiles look old or blank on Android, rebuild with
+              GOOGLE_MAPS_ANDROID_API_KEY in apps/mobile/.env.local.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.mapLegend}>
           <Pressable
@@ -464,7 +486,7 @@ export default function TimerScreen({
             }
           >
             <View style={styles.mapLegendRow}>
-              <View style={[styles.mapLegendSwatch, { backgroundColor: VISIBLE_PATH_COLOR }]} />
+              <View style={[styles.mapLegendSwatch, { backgroundColor: visibleOverlayColor }]} />
               <Text style={styles.mapLegendText}>Eclipse Visible</Text>
             </View>
             <Text style={styles.mapLegendState}>{timer.showVisibleOverlay ? "On" : "Off"}</Text>
@@ -484,7 +506,9 @@ export default function TimerScreen({
             }
           >
             <View style={styles.mapLegendRow}>
-              <View style={[styles.mapLegendSwatch, { backgroundColor: centralOverlayColor }]} />
+              <View
+                style={[styles.mapLegendSwatch, { backgroundColor: activeCentralOverlayColor }]}
+              />
               <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
             </View>
             <Text style={styles.mapLegendState}>{timer.showCentralOverlay ? "On" : "Off"}</Text>
@@ -947,6 +971,21 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 12,
+  },
+  mapModeHint: {
+    position: "absolute",
+    top: 52,
+    right: 10,
+    maxWidth: 230,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(0,0,0,0.72)",
+  },
+  mapModeHintText: {
+    color: "#d2d2d2",
+    fontSize: 11,
+    lineHeight: 14,
   },
   mapGpsBtn: {
     position: "absolute",

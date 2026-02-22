@@ -95,4 +95,39 @@ describe("preview moon geometry", () => {
     );
     expect(describePreviewTravelDirection({ x: -0.7, y: 0.1 })).toBe("right to left");
   });
+
+  it("keeps C1 and C4 as tangency even with non-zero closest approach", () => {
+    const travelVector = determinePreviewTravelVector({
+      c1BearingDeg: 230,
+      c4BearingDeg: 30,
+    });
+
+    const c1Geometry = calculatePreviewMoonGeometry({
+      progress: 0,
+      kindAtLocation: "partial",
+      magnitude: 0.72,
+      contacts: { c1: 0, max: 0.5, c4: 1 },
+      travelVector,
+    });
+    const c4Geometry = calculatePreviewMoonGeometry({
+      progress: 1,
+      kindAtLocation: "partial",
+      magnitude: 0.72,
+      contacts: { c1: 0, max: 0.5, c4: 1 },
+      travelVector,
+    });
+
+    const stageCenter = 150;
+    const c1Distance = Math.hypot(
+      c1Geometry.moonCenterX - stageCenter,
+      c1Geometry.moonCenterY - stageCenter,
+    );
+    const c4Distance = Math.hypot(
+      c4Geometry.moonCenterX - stageCenter,
+      c4Geometry.moonCenterY - stageCenter,
+    );
+
+    expect(c1Distance).toBeCloseTo(PREVIEW_SUN_RADIUS + c1Geometry.moonRadius, 6);
+    expect(c4Distance).toBeCloseTo(PREVIEW_SUN_RADIUS + c4Geometry.moonRadius, 6);
+  });
 });
