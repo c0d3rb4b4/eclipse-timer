@@ -353,6 +353,10 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
         maxUtc: result.maxUtc,
         c3Utc: result.c3Utc,
         c4Utc: result.c4Utc,
+        c1BearingDeg: result.c1BearingDeg,
+        c2BearingDeg: result.c2BearingDeg,
+        c3BearingDeg: result.c3BearingDeg,
+        c4BearingDeg: result.c4BearingDeg,
       };
 
       navigation.navigate("Preview", { payload });

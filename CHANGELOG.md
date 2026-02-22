@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11] — 2026-02-22
+
+### Fixed
+- Updated preview mode moon motion so left/right travel direction follows local contact bearing progression when bearing data is available.
+- Wired contact bearing values into preview payload construction so direction-aware geometry has access to C1/C2/C3/C4 bearing inputs.
+- Added regression tests for bearing-based travel direction selection and fallback behavior when bearing pairs are incomplete.
+
 ## [1.1.10] — 2026-02-22
 
 ### Fixed
