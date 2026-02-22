@@ -16,6 +16,7 @@ import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import {
   calculatePreviewMoonGeometry,
+  determinePreviewTravelDirection,
   PREVIEW_STAGE_SIZE,
   PREVIEW_SUN_RADIUS,
 } from "../utils/previewGeometry";
@@ -46,6 +47,10 @@ export type PreviewPayload = {
   maxUtc?: string;
   c3Utc?: string;
   c4Utc?: string;
+  c1BearingDeg?: number;
+  c2BearingDeg?: number;
+  c3BearingDeg?: number;
+  c4BearingDeg?: number;
 };
 
 type EclipsePreviewScreenProps = {
@@ -310,8 +315,23 @@ export default function EclipsePreviewScreen({
         contacts: contactProgress,
         stageSize: SIM_STAGE_SIZE,
         sunRadius: SUN_RADIUS,
+        travelDirection: determinePreviewTravelDirection({
+          c1BearingDeg: payload.c1BearingDeg,
+          c2BearingDeg: payload.c2BearingDeg,
+          c3BearingDeg: payload.c3BearingDeg,
+          c4BearingDeg: payload.c4BearingDeg,
+        }),
       }),
-    [contactProgress, payload.kindAtLocation, payload.magnitude, progress],
+    [
+      contactProgress,
+      payload.c1BearingDeg,
+      payload.c2BearingDeg,
+      payload.c3BearingDeg,
+      payload.c4BearingDeg,
+      payload.kindAtLocation,
+      payload.magnitude,
+      progress,
+    ],
   );
 
   const phaseLabel = useMemo(

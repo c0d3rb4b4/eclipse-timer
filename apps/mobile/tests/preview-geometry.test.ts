@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { calculatePreviewMoonGeometry, PREVIEW_SUN_RADIUS } from "../src/utils/previewGeometry";
+import {
+  calculatePreviewMoonGeometry,
+  determinePreviewTravelDirection,
+  PREVIEW_SUN_RADIUS,
+} from "../src/utils/previewGeometry";
 
 describe("preview moon geometry", () => {
   it("places C1 at exact outer tangency", () => {
@@ -48,5 +52,40 @@ describe("preview moon geometry", () => {
 
     expect(c3Distance).toBeCloseTo(Math.abs(PREVIEW_SUN_RADIUS - c3Geometry.moonRadius), 6);
     expect(postC3Distance).toBeGreaterThan(c3Distance);
+  });
+
+  it("uses contact bearings to keep moon travel direction accurate", () => {
+    const leftToRightDirection = determinePreviewTravelDirection({
+      c1BearingDeg: 100,
+      c4BearingDeg: 140,
+    });
+    const rightToLeftDirection = determinePreviewTravelDirection({
+      c1BearingDeg: 140,
+      c4BearingDeg: 100,
+    });
+
+    const baseParams = {
+      progress: 0.25,
+      kindAtLocation: "total" as const,
+      contacts: { c1: 0, c2: 0.25, max: 0.5, c3: 0.75, c4: 1 },
+    };
+
+    const leftToRight = calculatePreviewMoonGeometry({
+      ...baseParams,
+      travelDirection: leftToRightDirection,
+    });
+    const rightToLeft = calculatePreviewMoonGeometry({
+      ...baseParams,
+      travelDirection: rightToLeftDirection,
+    });
+
+    expect(leftToRight.moonOffsetX).toBeLessThan(0);
+    expect(rightToLeft.moonOffsetX).toBeGreaterThan(0);
+    expect(Math.abs(leftToRight.moonOffsetX)).toBeCloseTo(Math.abs(rightToLeft.moonOffsetX), 6);
+  });
+
+  it("falls back to default travel direction when bearings are missing", () => {
+    expect(determinePreviewTravelDirection(undefined)).toBe(1);
+    expect(determinePreviewTravelDirection({ c2BearingDeg: 120 })).toBe(1);
   });
 });

@@ -20,8 +20,47 @@ export type PreviewMoonGeometry = {
   moonTravelHalfSpan: number;
 };
 
+export type PreviewDirectionBearings = {
+  c1BearingDeg?: number;
+  c2BearingDeg?: number;
+  c3BearingDeg?: number;
+  c4BearingDeg?: number;
+};
+
 function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
+}
+
+function normalizeSignedDeltaDeg(fromDeg: number, toDeg: number) {
+  const delta = ((toDeg - fromDeg + 540) % 360) - 180;
+  return delta === -180 ? 180 : delta;
+}
+
+function resolveDirectionalBearingPair(bearings: PreviewDirectionBearings) {
+  const pairs: Array<[number | undefined, number | undefined]> = [
+    [bearings.c1BearingDeg, bearings.c4BearingDeg],
+    [bearings.c2BearingDeg, bearings.c3BearingDeg],
+    [bearings.c1BearingDeg, bearings.c3BearingDeg],
+    [bearings.c2BearingDeg, bearings.c4BearingDeg],
+  ];
+
+  for (const [start, end] of pairs) {
+    if (typeof start !== "number" || !Number.isFinite(start)) continue;
+    if (typeof end !== "number" || !Number.isFinite(end)) continue;
+    return { start, end };
+  }
+
+  return null;
+}
+
+export function determinePreviewTravelDirection(
+  bearings: PreviewDirectionBearings | undefined,
+): 1 | -1 {
+  if (!bearings) return 1;
+  const pair = resolveDirectionalBearingPair(bearings);
+  if (!pair) return 1;
+  const delta = normalizeSignedDeltaDeg(pair.start, pair.end);
+  return delta >= 0 ? 1 : -1;
 }
 
 export function determineMoonRadius(kindAtLocation: EclipseKindAtLocation) {
@@ -109,6 +148,7 @@ export function calculatePreviewMoonGeometry(params: {
   contacts?: PreviewMotionContacts;
   stageSize?: number;
   sunRadius?: number;
+  travelDirection?: 1 | -1;
 }): PreviewMoonGeometry {
   const stageSize = params.stageSize ?? PREVIEW_STAGE_SIZE;
   const sunRadius = params.sunRadius ?? PREVIEW_SUN_RADIUS;
@@ -121,7 +161,8 @@ export function calculatePreviewMoonGeometry(params: {
   );
 
   const anchors = buildMotionAnchors(params.contacts ?? {}, sunRadius, moonRadius);
-  const moonOffsetX = interpolateOffsetX(params.progress, anchors);
+  const travelDirection = params.travelDirection ?? 1;
+  const moonOffsetX = interpolateOffsetX(params.progress, anchors) * travelDirection;
   const moonCenterX = stageSize / 2 + moonOffsetX;
   const moonCenterY = stageSize / 2 + moonClosestOffset;
 
