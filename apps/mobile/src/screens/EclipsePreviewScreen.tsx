@@ -14,6 +14,11 @@ import BurgerButton from "../components/BurgerButton";
 import type { ContactKey } from "../utils/contacts";
 import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
+import {
+  calculatePreviewMoonGeometry,
+  PREVIEW_STAGE_SIZE,
+  PREVIEW_SUN_RADIUS,
+} from "../utils/previewGeometry";
 
 type PreviewContactKey = ContactKey;
 
@@ -52,8 +57,8 @@ type EclipsePreviewScreenProps = {
 const DEFAULT_WINDOW_MS = 2 * 60 * 60 * 1000;
 const MIN_WINDOW_MS = 5 * 60 * 1000;
 const PLAYBACK_SPEED = 480;
-const SIM_STAGE_SIZE = 300;
-const SUN_RADIUS = 72;
+const SIM_STAGE_SIZE = PREVIEW_STAGE_SIZE;
+const SUN_RADIUS = PREVIEW_SUN_RADIUS;
 const MARKER_LABEL_HALF_WIDTH_PX = 18;
 const MARKER_LABEL_MIN_GAP_PX = 40;
 const MARKER_LABEL_ROW_LIMIT = 1;
@@ -102,31 +107,6 @@ function buildTimelineEvents(payload: PreviewPayload): TimelineEvent[] {
     })
     .filter((event): event is TimelineEvent => !!event)
     .sort((a, b) => a.t - b.t);
-}
-
-function determineMoonRadius(kindAtLocation: EclipseKindAtLocation) {
-  if (kindAtLocation === "annular") return 58;
-  if (kindAtLocation === "total") return 76;
-  if (kindAtLocation === "partial") return 68;
-  return 66;
-}
-
-function determineApproachOffset(
-  kindAtLocation: EclipseKindAtLocation,
-  magnitude: number | undefined,
-  moonRadius: number,
-) {
-  if (kindAtLocation === "none") {
-    return SUN_RADIUS + moonRadius + 14;
-  }
-
-  if (kindAtLocation === "partial") {
-    const safeMag =
-      typeof magnitude === "number" && Number.isFinite(magnitude) ? clamp01(magnitude) : 0.6;
-    return (1 - safeMag) * (SUN_RADIUS + moonRadius - 6);
-  }
-
-  return 0;
 }
 
 function phaseLabelForTime(nowMs: number, events: TimelineEvent[]) {
@@ -297,18 +277,42 @@ export default function EclipsePreviewScreen({
     return positionedMarkers;
   }, [progressTrackWidth, timelineBounds.startMs, timelineDurationMs, timelineEvents]);
 
-  const moonRadius = useMemo(
-    () => determineMoonRadius(payload.kindAtLocation),
-    [payload.kindAtLocation],
-  );
-  const moonClosestOffset = useMemo(
-    () => determineApproachOffset(payload.kindAtLocation, payload.magnitude, moonRadius),
-    [moonRadius, payload.kindAtLocation, payload.magnitude],
-  );
+  const contactProgress = useMemo(() => {
+    const toProgress = (iso?: string) => {
+      const t = parseUtcMs(iso);
+      if (typeof t !== "number") return undefined;
+      return clamp01((t - timelineBounds.startMs) / timelineDurationMs);
+    };
 
-  const moonTravelHalfSpan = SUN_RADIUS + moonRadius + 26;
-  const moonCenterX = SIM_STAGE_SIZE / 2 - moonTravelHalfSpan + progress * moonTravelHalfSpan * 2;
-  const moonCenterY = SIM_STAGE_SIZE / 2 + moonClosestOffset;
+    return {
+      c1: toProgress(payload.c1Utc),
+      c2: toProgress(payload.c2Utc),
+      max: toProgress(payload.maxUtc),
+      c3: toProgress(payload.c3Utc),
+      c4: toProgress(payload.c4Utc),
+    };
+  }, [
+    payload.c1Utc,
+    payload.c2Utc,
+    payload.c3Utc,
+    payload.c4Utc,
+    payload.maxUtc,
+    timelineBounds.startMs,
+    timelineDurationMs,
+  ]);
+
+  const moonGeometry = useMemo(
+    () =>
+      calculatePreviewMoonGeometry({
+        progress,
+        kindAtLocation: payload.kindAtLocation,
+        magnitude: payload.magnitude,
+        contacts: contactProgress,
+        stageSize: SIM_STAGE_SIZE,
+        sunRadius: SUN_RADIUS,
+      }),
+    [contactProgress, payload.kindAtLocation, payload.magnitude, progress],
+  );
 
   const phaseLabel = useMemo(
     () => phaseLabelForTime(currentMs, timelineEvents),
@@ -417,11 +421,11 @@ export default function EclipsePreviewScreen({
             style={[
               styles.moonDisk,
               {
-                width: moonRadius * 2,
-                height: moonRadius * 2,
-                borderRadius: moonRadius,
-                left: moonCenterX - moonRadius,
-                top: moonCenterY - moonRadius,
+                width: moonGeometry.moonRadius * 2,
+                height: moonGeometry.moonRadius * 2,
+                borderRadius: moonGeometry.moonRadius,
+                left: moonGeometry.moonCenterX - moonGeometry.moonRadius,
+                top: moonGeometry.moonCenterY - moonGeometry.moonRadius,
               },
             ]}
           />
