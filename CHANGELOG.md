@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.10] — 2026-02-22
+
+### Fixed
+- Improved eclipse preview moon-path geometry so contact phases align with expected tangency behavior: C1 starts at outer tangency, C2 reaches inner tangency, MAX is centered, and C3 remains at inner tangency before sun reappears.
+- Added regression tests for preview geometry calculations to keep C1/C2/MAX/C3 positioning behavior verifiable.
+
 ## [1.1.9] — 2026-02-21
 
 ### Added
