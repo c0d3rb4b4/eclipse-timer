@@ -14,6 +14,10 @@ if (typeof packageVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(packageVersion
 
 expo.version = packageVersion;
 expo.runtimeVersion = packageVersion;
+expo.extra = {
+  ...expo.extra,
+  googleMapsAndroidApiKeyConfigured: Boolean(googleMapsAndroidApiKey),
+};
 
 if (!googleMapsAndroidApiKey) {
   console.warn(
