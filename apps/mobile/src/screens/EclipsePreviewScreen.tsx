@@ -16,7 +16,8 @@ import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import {
   calculatePreviewMoonGeometry,
-  determinePreviewTravelDirection,
+  describePreviewTravelDirection,
+  determinePreviewTravelVector,
   PREVIEW_STAGE_SIZE,
   PREVIEW_SUN_RADIUS,
 } from "../utils/previewGeometry";
@@ -306,6 +307,17 @@ export default function EclipsePreviewScreen({
     timelineDurationMs,
   ]);
 
+  const travelVector = useMemo(
+    () =>
+      determinePreviewTravelVector({
+        c1BearingDeg: payload.c1BearingDeg,
+        c2BearingDeg: payload.c2BearingDeg,
+        c3BearingDeg: payload.c3BearingDeg,
+        c4BearingDeg: payload.c4BearingDeg,
+      }),
+    [payload.c1BearingDeg, payload.c2BearingDeg, payload.c3BearingDeg, payload.c4BearingDeg],
+  );
+
   const moonGeometry = useMemo(
     () =>
       calculatePreviewMoonGeometry({
@@ -315,23 +327,14 @@ export default function EclipsePreviewScreen({
         contacts: contactProgress,
         stageSize: SIM_STAGE_SIZE,
         sunRadius: SUN_RADIUS,
-        travelDirection: determinePreviewTravelDirection({
-          c1BearingDeg: payload.c1BearingDeg,
-          c2BearingDeg: payload.c2BearingDeg,
-          c3BearingDeg: payload.c3BearingDeg,
-          c4BearingDeg: payload.c4BearingDeg,
-        }),
+        travelVector,
       }),
-    [
-      contactProgress,
-      payload.c1BearingDeg,
-      payload.c2BearingDeg,
-      payload.c3BearingDeg,
-      payload.c4BearingDeg,
-      payload.kindAtLocation,
-      payload.magnitude,
-      progress,
-    ],
+    [contactProgress, payload.kindAtLocation, payload.magnitude, progress, travelVector],
+  );
+
+  const travelDirectionLabel = useMemo(
+    () => describePreviewTravelDirection(travelVector),
+    [travelVector],
   );
 
   const phaseLabel = useMemo(
@@ -431,6 +434,7 @@ export default function EclipsePreviewScreen({
             ? `  |  Mag ${payload.magnitude.toFixed(3)}`
             : ""}
         </Text>
+        <Text style={styles.directionText}>Moon path: {travelDirectionLabel}</Text>
       </View>
 
       <View style={styles.simContainer}>
@@ -648,6 +652,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
+  },
+  directionText: {
+    marginTop: 2,
+    color: "#9ea4c8",
+    fontSize: 11,
+    fontWeight: "600",
   },
   simContainer: {
     flex: 1,
