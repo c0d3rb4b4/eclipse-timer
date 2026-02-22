@@ -20,6 +20,11 @@ export type PreviewMoonGeometry = {
   moonTravelHalfSpan: number;
 };
 
+export type PreviewTravelVector = {
+  x: number;
+  y: number;
+};
+
 export type PreviewDirectionBearings = {
   c1BearingDeg?: number;
   c2BearingDeg?: number;
@@ -53,14 +58,44 @@ function resolveDirectionalBearingPair(bearings: PreviewDirectionBearings) {
   return null;
 }
 
-export function determinePreviewTravelDirection(
+function bearingDegToUnitCirclePoint(bearingDeg: number): PreviewTravelVector {
+  const angleRad = (bearingDeg * Math.PI) / 180;
+  return {
+    x: Math.sin(angleRad),
+    y: -Math.cos(angleRad),
+  };
+}
+
+export function determinePreviewTravelVector(
   bearings: PreviewDirectionBearings | undefined,
-): 1 | -1 {
-  if (!bearings) return 1;
+): PreviewTravelVector {
+  if (!bearings) return { x: 1, y: 0 };
   const pair = resolveDirectionalBearingPair(bearings);
-  if (!pair) return 1;
-  const delta = normalizeSignedDeltaDeg(pair.start, pair.end);
-  return delta >= 0 ? 1 : -1;
+  if (!pair) return { x: 1, y: 0 };
+
+  const start = bearingDegToUnitCirclePoint(pair.start);
+  const end = bearingDegToUnitCirclePoint(pair.end);
+  const deltaX = end.x - start.x;
+  const deltaY = end.y - start.y;
+  const magnitude = Math.hypot(deltaX, deltaY);
+
+  if (!Number.isFinite(magnitude) || magnitude < 1e-6) {
+    const fallbackDirection = normalizeSignedDeltaDeg(pair.start, pair.end) >= 0 ? 1 : -1;
+    return { x: fallbackDirection, y: 0 };
+  }
+
+  return {
+    x: deltaX / magnitude,
+    y: deltaY / magnitude,
+  };
+}
+
+export function describePreviewTravelDirection(vector: PreviewTravelVector): string {
+  const horizontal = vector.x >= 0 ? "left to right" : "right to left";
+  const vertical = vector.y <= -0.2 ? "bottom to top" : vector.y >= 0.2 ? "top to bottom" : "level";
+
+  if (vertical === "level") return horizontal;
+  return `${vertical}, ${horizontal}`;
 }
 
 export function determineMoonRadius(kindAtLocation: EclipseKindAtLocation) {
@@ -148,7 +183,7 @@ export function calculatePreviewMoonGeometry(params: {
   contacts?: PreviewMotionContacts;
   stageSize?: number;
   sunRadius?: number;
-  travelDirection?: 1 | -1;
+  travelVector?: PreviewTravelVector;
 }): PreviewMoonGeometry {
   const stageSize = params.stageSize ?? PREVIEW_STAGE_SIZE;
   const sunRadius = params.sunRadius ?? PREVIEW_SUN_RADIUS;
@@ -161,10 +196,12 @@ export function calculatePreviewMoonGeometry(params: {
   );
 
   const anchors = buildMotionAnchors(params.contacts ?? {}, sunRadius, moonRadius);
-  const travelDirection = params.travelDirection ?? 1;
-  const moonOffsetX = interpolateOffsetX(params.progress, anchors) * travelDirection;
+  const axisOffset = interpolateOffsetX(params.progress, anchors);
+  const travelVector = params.travelVector ?? { x: 1, y: 0 };
+  const moonOffsetX = axisOffset * travelVector.x - moonClosestOffset * travelVector.y;
+  const moonOffsetY = axisOffset * travelVector.y + moonClosestOffset * travelVector.x;
   const moonCenterX = stageSize / 2 + moonOffsetX;
-  const moonCenterY = stageSize / 2 + moonClosestOffset;
+  const moonCenterY = stageSize / 2 + moonOffsetY;
 
   return {
     moonRadius,

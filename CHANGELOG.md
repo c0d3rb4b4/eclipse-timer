@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.12] — 2026-02-22
+
+### Changed
+- Fixed eclipse preview moon trajectory to use contact-bearing motion vectors (including vertical drift), so locations like the 2024 eclipse path animate from lower-left toward upper-right when appropriate.
+- Preview now shows a text summary of the computed moon-path direction relative to the sun for the selected GPS point.
+
+### Tests
+- Added regression tests for diagonal travel vector behavior and user-facing direction labeling in preview geometry utilities.
+
 ## [1.1.11] — 2026-02-22
 
 ### Fixed

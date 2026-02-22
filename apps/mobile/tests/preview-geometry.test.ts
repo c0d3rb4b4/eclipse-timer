@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculatePreviewMoonGeometry,
-  determinePreviewTravelDirection,
+  describePreviewTravelDirection,
+  determinePreviewTravelVector,
   PREVIEW_SUN_RADIUS,
 } from "../src/utils/previewGeometry";
 
@@ -54,15 +55,14 @@ describe("preview moon geometry", () => {
     expect(postC3Distance).toBeGreaterThan(c3Distance);
   });
 
-  it("uses contact bearings to keep moon travel direction accurate", () => {
-    const leftToRightDirection = determinePreviewTravelDirection({
-      c1BearingDeg: 100,
-      c4BearingDeg: 140,
+  it("uses contact bearings to produce a diagonal moon travel vector", () => {
+    const travelVector = determinePreviewTravelVector({
+      c1BearingDeg: 246,
+      c4BearingDeg: 66,
     });
-    const rightToLeftDirection = determinePreviewTravelDirection({
-      c1BearingDeg: 140,
-      c4BearingDeg: 100,
-    });
+
+    expect(travelVector.x).toBeGreaterThan(0);
+    expect(travelVector.y).toBeLessThan(0);
 
     const baseParams = {
       progress: 0.25,
@@ -70,22 +70,29 @@ describe("preview moon geometry", () => {
       contacts: { c1: 0, c2: 0.25, max: 0.5, c3: 0.75, c4: 1 },
     };
 
-    const leftToRight = calculatePreviewMoonGeometry({
+    const earlyGeometry = calculatePreviewMoonGeometry({
       ...baseParams,
-      travelDirection: leftToRightDirection,
+      travelVector,
     });
-    const rightToLeft = calculatePreviewMoonGeometry({
+    const lateGeometry = calculatePreviewMoonGeometry({
       ...baseParams,
-      travelDirection: rightToLeftDirection,
+      progress: 0.75,
+      travelVector,
     });
 
-    expect(leftToRight.moonOffsetX).toBeLessThan(0);
-    expect(rightToLeft.moonOffsetX).toBeGreaterThan(0);
-    expect(Math.abs(leftToRight.moonOffsetX)).toBeCloseTo(Math.abs(rightToLeft.moonOffsetX), 6);
+    expect(lateGeometry.moonCenterX).toBeGreaterThan(earlyGeometry.moonCenterX);
+    expect(lateGeometry.moonCenterY).toBeLessThan(earlyGeometry.moonCenterY);
   });
 
-  it("falls back to default travel direction when bearings are missing", () => {
-    expect(determinePreviewTravelDirection(undefined)).toBe(1);
-    expect(determinePreviewTravelDirection({ c2BearingDeg: 120 })).toBe(1);
+  it("falls back to default travel vector when bearings are missing", () => {
+    expect(determinePreviewTravelVector(undefined)).toEqual({ x: 1, y: 0 });
+    expect(determinePreviewTravelVector({ c2BearingDeg: 120 })).toEqual({ x: 1, y: 0 });
+  });
+
+  it("describes moon travel direction in user-facing terms", () => {
+    expect(describePreviewTravelDirection({ x: 0.8, y: -0.4 })).toBe(
+      "bottom to top, left to right",
+    );
+    expect(describePreviewTravelDirection({ x: -0.7, y: 0.1 })).toBe("right to left");
   });
 });
