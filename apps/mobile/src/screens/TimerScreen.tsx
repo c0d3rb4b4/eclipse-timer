@@ -22,6 +22,7 @@ import type { TimerState } from "../hooks/useTimerState";
 import type { FavoriteLocation } from "../state/appState";
 import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
+import { formatTimerDuration } from "../utils/duration";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
@@ -38,14 +39,6 @@ function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   return "None";
 }
 
-function formatDuration(seconds?: number) {
-  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return "--";
-  const totalSeconds = Math.round(seconds);
-  const mm = Math.floor(totalSeconds / 60);
-  const ss = totalSeconds % 60;
-  return `${mm}m ${String(ss).padStart(2, "0")}s`;
-}
-
 function parseUtcTimestamp(iso?: string) {
   if (!iso) return undefined;
   const timestamp = Date.parse(iso);
@@ -57,7 +50,7 @@ function formatC1ToC4Duration(result: Circumstances) {
   const c1 = parseUtcTimestamp(result.c1Utc);
   const c4 = parseUtcTimestamp(result.c4Utc);
   if (c1 === undefined || c4 === undefined || c4 <= c1) return "--";
-  return formatDuration((c4 - c1) / 1000);
+  return formatTimerDuration((c4 - c1) / 1000);
 }
 
 function formatCardinalCoord(
@@ -757,7 +750,7 @@ export default function TimerScreen({
                 <View style={styles.metricTile}>
                   <Text style={styles.metricLabel}>Totality Duration</Text>
                   <Text style={styles.metricValue}>
-                    {formatDuration(timer.result.durationSeconds)}
+                    {formatTimerDuration(timer.result.durationSeconds)}
                   </Text>
                 </View>
               </View>
