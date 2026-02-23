@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.21] — 2026-02-23
+
+### Changed
+- Refined the Timer screen declutter pass by keeping the larger map while moving action controls out of the map viewport into a compact row below it, so map content is less obstructed.
+- Simplified the Active Eclipse switcher to a single concise row to reduce vertical and textual chrome.
+- Increased map viewport height to `420` for stronger map-first focus on the Timer screen.
+- Bumped `apps/mobile` version to `1.1.21`.
+
 ## [1.1.20] — 2026-02-23
 
 ### Changed
