@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.16] — 2026-02-23
+
+### Changed
+- Updated Timer screen summary metrics: replaced `Magnitude` with `C1-C4 Duration` (computed from first to last contact times) and renamed `Central Duration` to `Totality Duration` for clearer eclipse-phase wording.
+- Bumped `apps/mobile` version to `1.1.16`.
+
 ## [1.1.15] — 2026-02-23
 
 ### Removed
