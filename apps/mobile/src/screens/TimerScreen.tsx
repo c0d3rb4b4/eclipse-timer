@@ -532,84 +532,81 @@ export default function TimerScreen({
           <Text style={styles.mapOverlayBtnText}>{mapTypeText}</Text>
         </Pressable>
 
-        <View style={styles.mapLegend}>
-          <Pressable
-            style={[
-              styles.mapLegendItem,
-              !timer.showVisibleOverlay ? styles.mapLegendMuted : null,
-              !timer.hasVisibleOverlayData ? styles.mapLegendDisabled : null,
-            ]}
-            onPress={timer.toggleVisibleOverlay}
-            disabled={!timer.hasVisibleOverlayData}
-            accessibilityRole="button"
-            accessibilityLabel={
-              timer.showVisibleOverlay
-                ? "Hide eclipse visible overlay"
-                : "Show eclipse visible overlay"
-            }
-          >
-            <View style={styles.mapLegendRow}>
-              <View style={[styles.mapLegendSwatch, { backgroundColor: visibleOverlayColor }]} />
-              <Text style={styles.mapLegendText}>Eclipse Visible</Text>
-            </View>
-            <Text style={styles.mapLegendState}>{timer.showVisibleOverlay ? "On" : "Off"}</Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.mapLegendItem,
-              !timer.showCentralOverlay ? styles.mapLegendMuted : null,
-              !timer.hasCentralOverlayData ? styles.mapLegendDisabled : null,
-            ]}
-            onPress={timer.toggleCentralOverlay}
-            disabled={!timer.hasCentralOverlayData}
-            accessibilityRole="button"
-            accessibilityLabel={
-              timer.showCentralOverlay ? "Hide central path overlay" : "Show central path overlay"
-            }
-          >
-            <View style={styles.mapLegendRow}>
-              <View
-                style={[styles.mapLegendSwatch, { backgroundColor: activeCentralOverlayColor }]}
-              />
-              <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
-            </View>
-            <Text style={styles.mapLegendState}>{timer.showCentralOverlay ? "On" : "Off"}</Text>
-          </Pressable>
-        </View>
-
-        {timer.result && timer.isResultCurrentForPin ? (
-          <Pressable
-            style={[
-              styles.mapDirectionLegend,
-              !timer.showDirectionsOverlay ? styles.mapLegendMuted : null,
-              !hasDirectionsData ? styles.mapLegendDisabled : null,
-            ]}
-            onPress={timer.toggleDirectionsOverlay}
-            disabled={!hasDirectionsData}
-            accessibilityRole="button"
-            accessibilityLabel={
-              timer.showDirectionsOverlay ? "Hide direction overlays" : "Show direction overlays"
-            }
-          >
-            <View style={styles.mapDirectionLegendHeader}>
-              <Text style={styles.mapDirectionLegendTitle}>Directions</Text>
-              <Text style={styles.mapLegendState}>
-                {timer.showDirectionsOverlay ? "On" : "Off"}
-              </Text>
-            </View>
-            {contactDirectionOverlays.map((direction) => (
-              <View key={`direction-legend-${direction.key}`} style={styles.mapDirectionLegendRow}>
+        <View style={styles.mapLegendStack}>
+          {timer.result && timer.isResultCurrentForPin ? (
+            <Pressable
+              style={[
+                styles.mapDirectionLegend,
+                !timer.showDirectionsOverlay ? styles.mapLegendMuted : null,
+                !hasDirectionsData ? styles.mapLegendDisabled : null,
+              ]}
+              onPress={timer.toggleDirectionsOverlay}
+              disabled={!hasDirectionsData}
+              accessibilityRole="button"
+              accessibilityLabel={
+                timer.showDirectionsOverlay ? "Hide direction overlays" : "Show direction overlays"
+              }
+            >
+              {contactDirectionOverlays.map((direction) => (
                 <View
-                  style={[styles.mapDirectionLegendLine, { borderTopColor: direction.color }]}
-                />
-                <Text style={[styles.mapDirectionLegendText, { color: direction.color }]}>
-                  {direction.label}
-                </Text>
+                  key={`direction-legend-${direction.key}`}
+                  style={styles.mapDirectionLegendRow}
+                >
+                  <View
+                    style={[styles.mapDirectionLegendLine, { borderTopColor: direction.color }]}
+                  />
+                  <Text style={[styles.mapDirectionLegendText, { color: direction.color }]}>
+                    {direction.label}
+                  </Text>
+                </View>
+              ))}
+            </Pressable>
+          ) : null}
+
+          <View style={styles.mapLegend}>
+            <Pressable
+              style={[
+                styles.mapLegendItem,
+                !timer.showVisibleOverlay ? styles.mapLegendMuted : null,
+                !timer.hasVisibleOverlayData ? styles.mapLegendDisabled : null,
+              ]}
+              onPress={timer.toggleVisibleOverlay}
+              disabled={!timer.hasVisibleOverlayData}
+              accessibilityRole="button"
+              accessibilityLabel={
+                timer.showVisibleOverlay
+                  ? "Hide eclipse visible overlay"
+                  : "Show eclipse visible overlay"
+              }
+            >
+              <View style={styles.mapLegendRow}>
+                <View style={[styles.mapLegendSwatch, { backgroundColor: visibleOverlayColor }]} />
+                <Text style={styles.mapLegendText}>Eclipse Visible</Text>
               </View>
-            ))}
-          </Pressable>
-        ) : null}
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.mapLegendItem,
+                !timer.showCentralOverlay ? styles.mapLegendMuted : null,
+                !timer.hasCentralOverlayData ? styles.mapLegendDisabled : null,
+              ]}
+              onPress={timer.toggleCentralOverlay}
+              disabled={!timer.hasCentralOverlayData}
+              accessibilityRole="button"
+              accessibilityLabel={
+                timer.showCentralOverlay ? "Hide central path overlay" : "Show central path overlay"
+              }
+            >
+              <View style={styles.mapLegendRow}>
+                <View
+                  style={[styles.mapLegendSwatch, { backgroundColor: activeCentralOverlayColor }]}
+                />
+                <Text style={styles.mapLegendText}>{centralLegendLabel}</Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
       </View>
 
       <View style={styles.controls}>
@@ -1109,10 +1106,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "white",
   },
-  mapLegend: {
+  mapLegendStack: {
     position: "absolute",
     left: 10,
     bottom: 10,
+    gap: 6,
+  },
+  mapLegend: {
     paddingVertical: 7,
     paddingHorizontal: 8,
     borderRadius: 10,
@@ -1151,34 +1151,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-  mapLegendState: {
-    color: "#d6d6d6",
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
   mapDirectionLegend: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
     borderRadius: 10,
     backgroundColor: "rgba(0,0,0,0.62)",
     paddingHorizontal: 8,
     paddingVertical: 7,
     gap: 4,
-  },
-  mapDirectionLegendHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  mapDirectionLegendTitle: {
-    color: "#e2e2e2",
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
   },
   mapDirectionLegendRow: {
     flexDirection: "row",
