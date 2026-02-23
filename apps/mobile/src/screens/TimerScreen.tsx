@@ -12,6 +12,7 @@ import {
   Switch,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
@@ -215,6 +216,7 @@ export default function TimerScreen({
   onOpenPreview,
 }: TimerScreenProps) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [isEclipsePickerOpen, setIsEclipsePickerOpen] = useState(false);
   const [isAddFavoriteModalOpen, setIsAddFavoriteModalOpen] = useState(false);
   const [favoriteModalName, setFavoriteModalName] = useState("");
@@ -225,6 +227,10 @@ export default function TimerScreen({
   const activeEclipseOption = useMemo(
     () => eclipseOptions.find((option) => option.id === activeEclipseId) ?? null,
     [activeEclipseId, eclipseOptions],
+  );
+  const mapHeight = useMemo(
+    () => clamp((windowHeight - insets.top - insets.bottom) * 0.4, 260, 420),
+    [insets.bottom, insets.top, windowHeight],
   );
   const activeEclipseCenter = useMemo(() => eclipseCenterForRecord(activeEclipse), [activeEclipse]);
   const activeKindCode = useMemo(
@@ -420,7 +426,7 @@ export default function TimerScreen({
         </Pressable>
       </View>
 
-      <View style={styles.mapWrap}>
+      <View style={[styles.mapWrap, { height: mapHeight }]}>
         <MapView
           key={`map-${timer.mapType}`}
           ref={timer.mapRef}
@@ -998,7 +1004,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  mapWrap: { height: 420, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
+  mapWrap: { marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
   controls: {
     paddingHorizontal: 12,
