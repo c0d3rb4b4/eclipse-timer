@@ -460,15 +460,6 @@ export default function TimerScreen({
           <Text style={styles.mapOverlayBtnText}>{mapTypeText}</Text>
         </Pressable>
 
-        {timer.mapType !== "standard" ? (
-          <View style={styles.mapModeHint}>
-            <Text style={styles.mapModeHintText}>
-              If satellite/hybrid tiles look old or blank on Android, rebuild with
-              GOOGLE_MAPS_ANDROID_API_KEY in apps/mobile/.env.local.
-            </Text>
-          </View>
-        ) : null}
-
         <View style={styles.mapLegend}>
           <Pressable
             style={[
@@ -971,21 +962,6 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 12,
-  },
-  mapModeHint: {
-    position: "absolute",
-    top: 52,
-    right: 10,
-    maxWidth: 230,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "rgba(0,0,0,0.72)",
-  },
-  mapModeHintText: {
-    color: "#d2d2d2",
-    fontSize: 11,
-    lineHeight: 14,
   },
   mapGpsBtn: {
     position: "absolute",
