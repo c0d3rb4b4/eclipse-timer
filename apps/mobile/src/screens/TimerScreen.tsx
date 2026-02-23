@@ -38,17 +38,26 @@ function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   return "None";
 }
 
-function formatMagnitude(magnitude?: number) {
-  if (typeof magnitude !== "number" || !Number.isFinite(magnitude)) return "--";
-  return magnitude.toFixed(3);
-}
-
 function formatDuration(seconds?: number) {
   if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return "--";
   const totalSeconds = Math.round(seconds);
   const mm = Math.floor(totalSeconds / 60);
   const ss = totalSeconds % 60;
   return `${mm}m ${String(ss).padStart(2, "0")}s`;
+}
+
+function parseUtcTimestamp(iso?: string) {
+  if (!iso) return undefined;
+  const timestamp = Date.parse(iso);
+  if (!Number.isFinite(timestamp)) return undefined;
+  return timestamp;
+}
+
+function formatC1ToC4Duration(result: Circumstances) {
+  const c1 = parseUtcTimestamp(result.c1Utc);
+  const c4 = parseUtcTimestamp(result.c4Utc);
+  if (c1 === undefined || c4 === undefined || c4 <= c1) return "--";
+  return formatDuration((c4 - c1) / 1000);
 }
 
 function formatCardinalCoord(
@@ -742,11 +751,11 @@ export default function TimerScreen({
                   </Text>
                 </View>
                 <View style={styles.metricTile}>
-                  <Text style={styles.metricLabel}>Magnitude</Text>
-                  <Text style={styles.metricValue}>{formatMagnitude(timer.result.magnitude)}</Text>
+                  <Text style={styles.metricLabel}>C1-C4 Duration</Text>
+                  <Text style={styles.metricValue}>{formatC1ToC4Duration(timer.result)}</Text>
                 </View>
                 <View style={styles.metricTile}>
-                  <Text style={styles.metricLabel}>Central Duration</Text>
+                  <Text style={styles.metricLabel}>Totality Duration</Text>
                   <Text style={styles.metricValue}>
                     {formatDuration(timer.result.durationSeconds)}
                   </Text>
