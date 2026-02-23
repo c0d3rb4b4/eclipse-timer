@@ -408,19 +408,19 @@ export default function TimerScreen({
           accessibilityLabel="Switch active eclipse"
           accessibilityState={{ disabled: !eclipseOptions.length || isActiveEclipseLoading }}
         >
-          <View style={styles.eclipseSwitcherTopRow}>
+          <View style={styles.eclipseSwitcherRow}>
             <Text style={styles.eclipseSwitcherLabel}>Active Eclipse</Text>
+            <Text style={styles.eclipseSwitcherValue}>
+              {activeEclipseOption
+                ? `${activeEclipseOption.dateYmd} - ${activeEclipseOption.kindLabel}`
+                : "No eclipse selected"}
+            </Text>
             <Text style={styles.eclipseSwitcherHint}>Switch</Text>
           </View>
-          <Text style={styles.eclipseSwitcherValue}>
-            {activeEclipseOption
-              ? `${activeEclipseOption.dateYmd} - ${activeEclipseOption.kindLabel}`
-              : "No eclipse selected"}
-          </Text>
           <Text style={styles.eclipseSwitcherMeta}>
             {activeEclipseOption
-              ? `${activeEclipseOption.id} - ${activeEclipseOption.isPast ? "Past" : "Upcoming"}`
-              : "Pick an eclipse to compute on this screen"}
+              ? `${activeEclipseOption.id} · ${activeEclipseOption.isPast ? "Past" : "Upcoming"}`
+              : "Pick an eclipse to compute"}
           </Text>
         </Pressable>
       </View>
@@ -607,12 +607,10 @@ export default function TimerScreen({
             </Pressable>
           </View>
         </View>
-      </View>
 
-      <View style={styles.controls}>
-        <View style={styles.btnRow}>
+        <View style={styles.mapActionsRow}>
           <Pressable
-            style={[styles.btn, isActiveEclipseLoading ? styles.btnDisabled : null]}
+            style={[styles.mapActionBtn, isActiveEclipseLoading ? styles.btnDisabled : null]}
             onPress={() => {
               if (!activeEclipseCenter) {
                 timer.setStatusMessage("No center coordinates available for this eclipse");
@@ -622,16 +620,16 @@ export default function TimerScreen({
             }}
             disabled={isActiveEclipseLoading}
           >
-            <Text style={styles.btnText}>Greatest Eclipse</Text>
+            <Text style={styles.mapActionBtnText}>Greatest Eclipse</Text>
           </Pressable>
 
           <Pressable
-            style={[styles.btn, !canAddCurrentPinToFavorites ? styles.btnDisabled : null]}
+            style={[styles.mapActionBtn, !canAddCurrentPinToFavorites ? styles.btnDisabled : null]}
             onPress={openAddFavoriteModal}
             disabled={!canAddCurrentPinToFavorites}
           >
-            <Text style={styles.btnText}>
-              {canAddCurrentPinToFavorites ? "Add to Favorites" : "Already in Favorites"}
+            <Text style={styles.mapActionBtnText}>
+              {canAddCurrentPinToFavorites ? "Add Favorite" : "Saved"}
             </Text>
           </Pressable>
         </View>
@@ -974,17 +972,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2e3566",
     backgroundColor: "#151a43",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 10,
     gap: 4,
   },
   eclipseSwitcherBtnDisabled: {
     opacity: 0.68,
   },
-  eclipseSwitcherTopRow: {
+  eclipseSwitcherRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
   },
   eclipseSwitcherLabel: {
     color: "#b7beff",
@@ -995,28 +993,24 @@ const styles = StyleSheet.create({
   },
   eclipseSwitcherHint: {
     color: "#d9dcff",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
   eclipseSwitcherValue: {
     color: "white",
-    fontSize: 13,
+    flex: 1,
+    fontSize: 12,
     fontWeight: "700",
   },
   eclipseSwitcherMeta: {
     color: "#bcc2f4",
-    fontSize: 11,
+    fontSize: 10,
   },
-  mapWrap: { height: 300, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
+  mapWrap: { height: 360, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
-  controls: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    gap: 10,
-  },
   favoriteWrap: {
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 6,
     gap: 6,
   },
   favoriteList: {
@@ -1039,11 +1033,6 @@ const styles = StyleSheet.create({
   favoriteEmpty: {
     color: "#8f8f8f",
     fontSize: 12,
-  },
-  btnRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
   },
   mapOverlayBtn: {
     position: "absolute",
@@ -1111,6 +1100,24 @@ const styles = StyleSheet.create({
     left: 10,
     bottom: 10,
     gap: 6,
+  },
+  mapActionsRow: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    flexDirection: "row",
+    gap: 6,
+  },
+  mapActionBtn: {
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+  },
+  mapActionBtnText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "700",
   },
   mapLegend: {
     paddingVertical: 7,
@@ -1195,16 +1202,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.4,
   },
-  btn: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#1f1f1f",
-  },
   btnDisabled: {
     opacity: 0.7,
   },
-  btnText: { color: "white", fontWeight: "600" },
   statusBar: { paddingHorizontal: 12, paddingTop: 8 },
   statusText: { color: "#bdbdbd", fontSize: 12 },
   results: { flex: 1, paddingHorizontal: 12, paddingTop: 10 },
