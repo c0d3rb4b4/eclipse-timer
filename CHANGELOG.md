@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.14] — 2026-02-23
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.14` to trigger a fresh mobile release build after rotating Google Maps key secrets in GitHub Actions.
+
 ## [1.1.13] — 2026-02-22
 
 ### Fixed
