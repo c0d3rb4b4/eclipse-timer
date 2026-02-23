@@ -2,6 +2,12 @@ import type { EclipseKindAtLocation } from "@eclipse-timer/shared";
 
 export const PREVIEW_SUN_RADIUS = 72;
 export const PREVIEW_STAGE_SIZE = 300;
+const ANNULAR_RADIUS_RATIO = 58 / PREVIEW_SUN_RADIUS;
+const TOTAL_RADIUS_RATIO = 76 / PREVIEW_SUN_RADIUS;
+const PARTIAL_RADIUS_RATIO = 68 / PREVIEW_SUN_RADIUS;
+const NONE_RADIUS_RATIO = 66 / PREVIEW_SUN_RADIUS;
+const NONE_GAP_RATIO = 14 / PREVIEW_SUN_RADIUS;
+const PARTIAL_INTERNAL_MARGIN_RATIO = 6 / PREVIEW_SUN_RADIUS;
 
 export type PreviewMotionContacts = {
   c1?: number;
@@ -98,11 +104,14 @@ export function describePreviewTravelDirection(vector: PreviewTravelVector): str
   return `${vertical}, ${horizontal}`;
 }
 
-export function determineMoonRadius(kindAtLocation: EclipseKindAtLocation) {
-  if (kindAtLocation === "annular") return 58;
-  if (kindAtLocation === "total") return 76;
-  if (kindAtLocation === "partial") return 68;
-  return 66;
+export function determineMoonRadius(
+  kindAtLocation: EclipseKindAtLocation,
+  sunRadius = PREVIEW_SUN_RADIUS,
+) {
+  if (kindAtLocation === "annular") return sunRadius * ANNULAR_RADIUS_RATIO;
+  if (kindAtLocation === "total") return sunRadius * TOTAL_RADIUS_RATIO;
+  if (kindAtLocation === "partial") return sunRadius * PARTIAL_RADIUS_RATIO;
+  return sunRadius * NONE_RADIUS_RATIO;
 }
 
 export function determineApproachOffset(
@@ -112,13 +121,13 @@ export function determineApproachOffset(
   sunRadius = PREVIEW_SUN_RADIUS,
 ) {
   if (kindAtLocation === "none") {
-    return sunRadius + moonRadius + 14;
+    return sunRadius + moonRadius + sunRadius * NONE_GAP_RATIO;
   }
 
   if (kindAtLocation === "partial") {
     const safeMag =
       typeof magnitude === "number" && Number.isFinite(magnitude) ? clamp01(magnitude) : 0.6;
-    return (1 - safeMag) * (sunRadius + moonRadius - 6);
+    return (1 - safeMag) * (sunRadius + moonRadius - sunRadius * PARTIAL_INTERNAL_MARGIN_RATIO);
   }
 
   return 0;
@@ -196,7 +205,7 @@ export function calculatePreviewMoonGeometry(params: {
 }): PreviewMoonGeometry {
   const stageSize = params.stageSize ?? PREVIEW_STAGE_SIZE;
   const sunRadius = params.sunRadius ?? PREVIEW_SUN_RADIUS;
-  const moonRadius = determineMoonRadius(params.kindAtLocation);
+  const moonRadius = determineMoonRadius(params.kindAtLocation, sunRadius);
   const moonClosestOffset = determineApproachOffset(
     params.kindAtLocation,
     params.magnitude,

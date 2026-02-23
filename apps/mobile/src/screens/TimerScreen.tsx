@@ -27,6 +27,8 @@ import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 import {
   calculatePreviewMoonGeometry,
   determinePreviewTravelVector,
+  PREVIEW_STAGE_SIZE,
+  PREVIEW_SUN_RADIUS,
 } from "../utils/previewGeometry";
 
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
@@ -36,7 +38,8 @@ const FAVORITE_COORD_EPSILON = 0.0001;
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 const TIMER_HERO_PREVIEW_STAGE_SIZE = 84;
-const TIMER_HERO_PREVIEW_SUN_RADIUS = 19;
+const TIMER_HERO_PREVIEW_SUN_RADIUS =
+  (TIMER_HERO_PREVIEW_STAGE_SIZE * PREVIEW_SUN_RADIUS) / PREVIEW_STAGE_SIZE;
 const TIMER_HERO_PREVIEW_GLOW_SIZE = 118;
 
 function localKindLabel(kind: "none" | "partial" | "total" | "annular") {

@@ -4,6 +4,7 @@ import {
   calculatePreviewMoonGeometry,
   describePreviewTravelDirection,
   determinePreviewTravelVector,
+  PREVIEW_STAGE_SIZE,
   PREVIEW_SUN_RADIUS,
 } from "../src/utils/previewGeometry";
 
@@ -129,5 +130,55 @@ describe("preview moon geometry", () => {
 
     expect(c1Distance).toBeCloseTo(PREVIEW_SUN_RADIUS + c1Geometry.moonRadius, 6);
     expect(c4Distance).toBeCloseTo(PREVIEW_SUN_RADIUS + c4Geometry.moonRadius, 6);
+  });
+
+  it("keeps moon-size ratio consistent when rendered in compact max-view stage", () => {
+    const compactStageSize = 84;
+    const compactSunRadius = (compactStageSize * PREVIEW_SUN_RADIUS) / PREVIEW_STAGE_SIZE;
+    const fullGeometry = calculatePreviewMoonGeometry({
+      progress: 0.5,
+      kindAtLocation: "total",
+      contacts: { c1: 0, c2: 0.25, max: 0.5, c3: 0.75, c4: 1 },
+    });
+    const compactGeometry = calculatePreviewMoonGeometry({
+      progress: 0.5,
+      kindAtLocation: "total",
+      contacts: { c1: 0, c2: 0.25, max: 0.5, c3: 0.75, c4: 1 },
+      stageSize: compactStageSize,
+      sunRadius: compactSunRadius,
+    });
+
+    const fullRatio = fullGeometry.moonRadius / PREVIEW_SUN_RADIUS;
+    const compactRatio = compactGeometry.moonRadius / compactSunRadius;
+    expect(compactRatio).toBeCloseTo(fullRatio, 10);
+  });
+
+  it("preserves C1/C4 tangency distance in compact max-view stage", () => {
+    const compactStageSize = 84;
+    const compactSunRadius = (compactStageSize * PREVIEW_SUN_RADIUS) / PREVIEW_STAGE_SIZE;
+    const stageCenter = compactStageSize / 2;
+    const contacts = { c1: 0, c2: 0.25, max: 0.5, c3: 0.75, c4: 1 };
+
+    const c1Geometry = calculatePreviewMoonGeometry({
+      progress: 0,
+      kindAtLocation: "annular",
+      contacts,
+      stageSize: compactStageSize,
+      sunRadius: compactSunRadius,
+    });
+    const c4Geometry = calculatePreviewMoonGeometry({
+      progress: 1,
+      kindAtLocation: "annular",
+      contacts,
+      stageSize: compactStageSize,
+      sunRadius: compactSunRadius,
+    });
+
+    const c1Distance = Math.abs(c1Geometry.moonCenterX - stageCenter);
+    const c4Distance = Math.abs(c4Geometry.moonCenterX - stageCenter);
+    const expectedDistance = compactSunRadius + c1Geometry.moonRadius;
+
+    expect(c1Distance).toBeCloseTo(expectedDistance, 6);
+    expect(c4Distance).toBeCloseTo(expectedDistance, 6);
   });
 });

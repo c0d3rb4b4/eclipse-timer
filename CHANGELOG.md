@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.19] — 2026-02-23
+
+### Fixed
+- Corrected Timer screen compact `MAX View` moon/sun sizing so moon-size ratios now match the full preview geometry instead of using oversized fixed moon radii.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.19`.
+
+### Tests
+- Added regression tests to verify compact-stage moon/sun ratio scaling and C1/C4 tangency distance in the Timer screen `MAX View` size profile.
+
 ## [1.1.18] — 2026-02-23
 
 ### Added
