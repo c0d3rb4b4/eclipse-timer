@@ -417,11 +417,6 @@ export default function TimerScreen({
             </Text>
             <Text style={styles.eclipseSwitcherHint}>Switch</Text>
           </View>
-          <Text style={styles.eclipseSwitcherMeta}>
-            {activeEclipseOption
-              ? `${activeEclipseOption.id} · ${activeEclipseOption.isPast ? "Past" : "Upcoming"}`
-              : "Pick an eclipse to compute"}
-          </Text>
         </Pressable>
       </View>
 
@@ -607,10 +602,12 @@ export default function TimerScreen({
             </Pressable>
           </View>
         </View>
+      </View>
 
-        <View style={styles.mapActionsRow}>
+      <View style={styles.controls}>
+        <View style={styles.btnRowCompact}>
           <Pressable
-            style={[styles.mapActionBtn, isActiveEclipseLoading ? styles.btnDisabled : null]}
+            style={[styles.btnCompact, isActiveEclipseLoading ? styles.btnDisabled : null]}
             onPress={() => {
               if (!activeEclipseCenter) {
                 timer.setStatusMessage("No center coordinates available for this eclipse");
@@ -620,15 +617,15 @@ export default function TimerScreen({
             }}
             disabled={isActiveEclipseLoading}
           >
-            <Text style={styles.mapActionBtnText}>Greatest Eclipse</Text>
+            <Text style={styles.btnCompactText}>Greatest Eclipse</Text>
           </Pressable>
 
           <Pressable
-            style={[styles.mapActionBtn, !canAddCurrentPinToFavorites ? styles.btnDisabled : null]}
+            style={[styles.btnCompact, !canAddCurrentPinToFavorites ? styles.btnDisabled : null]}
             onPress={openAddFavoriteModal}
             disabled={!canAddCurrentPinToFavorites}
           >
-            <Text style={styles.mapActionBtnText}>
+            <Text style={styles.btnCompactText}>
               {canAddCurrentPinToFavorites ? "Add Favorite" : "Saved"}
             </Text>
           </Pressable>
@@ -974,7 +971,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#151a43",
     paddingVertical: 8,
     paddingHorizontal: 10,
-    gap: 4,
   },
   eclipseSwitcherBtnDisabled: {
     opacity: 0.68,
@@ -1002,12 +998,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  eclipseSwitcherMeta: {
-    color: "#bcc2f4",
-    fontSize: 10,
-  },
-  mapWrap: { height: 360, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
+  mapWrap: { height: 420, marginHorizontal: 12, borderRadius: 12, overflow: "hidden" },
   map: { flex: 1 },
+  controls: {
+    paddingHorizontal: 12,
+    paddingTop: 6,
+  },
+  btnRowCompact: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  btnCompact: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#2f376f",
+    backgroundColor: "#11163d",
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+  },
+  btnCompactText: {
+    color: "#eef0ff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   favoriteWrap: {
     paddingHorizontal: 12,
     paddingTop: 6,
@@ -1100,24 +1113,6 @@ const styles = StyleSheet.create({
     left: 10,
     bottom: 10,
     gap: 6,
-  },
-  mapActionsRow: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    flexDirection: "row",
-    gap: 6,
-  },
-  mapActionBtn: {
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-  },
-  mapActionBtnText: {
-    color: "white",
-    fontSize: 11,
-    fontWeight: "700",
   },
   mapLegend: {
     paddingVertical: 7,
