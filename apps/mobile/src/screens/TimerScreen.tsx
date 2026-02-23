@@ -24,6 +24,10 @@ import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import { formatTimerDuration } from "../utils/duration";
 import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
+import {
+  calculatePreviewMoonGeometry,
+  determinePreviewTravelVector,
+} from "../utils/previewGeometry";
 
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
 const TOTALITY_PATH_COLOR = "rgba(255, 82, 82, 0.28)";
@@ -31,6 +35,9 @@ const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 const FAVORITE_COORD_EPSILON = 0.0001;
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
+const TIMER_HERO_PREVIEW_STAGE_SIZE = 84;
+const TIMER_HERO_PREVIEW_SUN_RADIUS = 19;
+const TIMER_HERO_PREVIEW_GLOW_SIZE = 118;
 
 function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   if (kind === "total") return "Total";
@@ -44,6 +51,44 @@ function parseUtcTimestamp(iso?: string) {
   const timestamp = Date.parse(iso);
   if (!Number.isFinite(timestamp)) return undefined;
   return timestamp;
+}
+
+function buildPreviewContactProgress(result: Circumstances) {
+  const c1 = parseUtcTimestamp(result.c1Utc);
+  const c2 = parseUtcTimestamp(result.c2Utc);
+  const max = parseUtcTimestamp(result.maxUtc);
+  const c3 = parseUtcTimestamp(result.c3Utc);
+  const c4 = parseUtcTimestamp(result.c4Utc);
+  const definedTimes = [c1, c2, max, c3, c4].filter((t): t is number => typeof t === "number");
+
+  if (!definedTimes.length) return {};
+  const firstDefined = definedTimes[0];
+  const lastDefined = definedTimes[definedTimes.length - 1];
+  if (typeof firstDefined !== "number" || typeof lastDefined !== "number") return {};
+
+  let startMs: number = c1 ?? firstDefined;
+  let endMs: number = c4 ?? lastDefined;
+
+  if (endMs <= startMs) {
+    if (typeof max === "number") {
+      startMs = max - 30 * 60 * 1000;
+      endMs = max + 30 * 60 * 1000;
+    } else {
+      endMs = startMs + 1;
+    }
+  }
+
+  const spanMs = Math.max(1, endMs - startMs);
+  const toProgress = (timestamp: number | undefined) =>
+    typeof timestamp === "number" ? clamp((timestamp - startMs) / spanMs, 0, 1) : undefined;
+
+  return {
+    c1: toProgress(c1),
+    c2: toProgress(c2),
+    max: toProgress(max),
+    c3: toProgress(c3),
+    c4: toProgress(c4),
+  };
 }
 
 function formatC1ToC4Duration(result: Circumstances) {
@@ -258,6 +303,28 @@ export default function TimerScreen({
   ]);
   const hasDirectionsData = contactDirectionOverlays.length > 0;
   const mapTypeText = mapTypeLabel(timer.mapType);
+  const maxEventMoonGeometry = useMemo(() => {
+    if (!timer.result) return null;
+
+    const result = timer.result;
+    const contactProgress = buildPreviewContactProgress(result);
+    const progressAtMax = typeof contactProgress.max === "number" ? contactProgress.max : 0.5;
+
+    return calculatePreviewMoonGeometry({
+      progress: progressAtMax,
+      kindAtLocation: result.kindAtLocation,
+      magnitude: result.magnitude,
+      contacts: contactProgress,
+      stageSize: TIMER_HERO_PREVIEW_STAGE_SIZE,
+      sunRadius: TIMER_HERO_PREVIEW_SUN_RADIUS,
+      travelVector: determinePreviewTravelVector({
+        c1BearingDeg: result.c1BearingDeg,
+        c2BearingDeg: result.c2BearingDeg,
+        c3BearingDeg: result.c3BearingDeg,
+        c4BearingDeg: result.c4BearingDeg,
+      }),
+    });
+  }, [timer.result]);
 
   const closeAddFavoriteModal = () => {
     setIsAddFavoriteModalOpen(false);
@@ -732,8 +799,35 @@ export default function TimerScreen({
           ) : (
             <>
               <View style={styles.timerHero}>
-                <Text style={styles.timerHeroLabel}>Next Event Timer</Text>
-                <Text style={styles.timerHeroText}>{timer.nextEventCountdownText}</Text>
+                <View style={styles.timerHeroSplit}>
+                  <View style={styles.timerHeroMain}>
+                    <Text style={styles.timerHeroLabel}>Next Event Timer</Text>
+                    <Text style={styles.timerHeroText}>{timer.nextEventCountdownText}</Text>
+                  </View>
+                  <View style={styles.timerHeroPreviewWrap}>
+                    <Text style={styles.timerHeroPreviewLabel}>MAX View</Text>
+                    <View style={styles.timerHeroPreviewStage}>
+                      <View style={styles.timerHeroPreviewSunGlow} />
+                      <View style={styles.timerHeroPreviewSunDisk} />
+                      {maxEventMoonGeometry ? (
+                        <View
+                          style={[
+                            styles.timerHeroPreviewMoon,
+                            {
+                              width: maxEventMoonGeometry.moonRadius * 2,
+                              height: maxEventMoonGeometry.moonRadius * 2,
+                              borderRadius: maxEventMoonGeometry.moonRadius,
+                              left:
+                                maxEventMoonGeometry.moonCenterX - maxEventMoonGeometry.moonRadius,
+                              top:
+                                maxEventMoonGeometry.moonCenterY - maxEventMoonGeometry.moonRadius,
+                            },
+                          ]}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
               </View>
 
               <View style={styles.metricRow}>
@@ -1143,6 +1237,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
   },
+  timerHeroSplit: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  timerHeroMain: {
+    flex: 1,
+    minWidth: 0,
+  },
   timerHeroLabel: {
     color: "#a8b1ff",
     fontSize: 11,
@@ -1151,6 +1254,54 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   timerHeroText: { color: "white", fontSize: 16, fontWeight: "800", lineHeight: 22 },
+  timerHeroPreviewWrap: {
+    width: 92,
+    alignItems: "center",
+    gap: 4,
+  },
+  timerHeroPreviewLabel: {
+    color: "#cbd1ff",
+    fontSize: 9,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  timerHeroPreviewStage: {
+    width: TIMER_HERO_PREVIEW_STAGE_SIZE,
+    height: TIMER_HERO_PREVIEW_STAGE_SIZE,
+    borderRadius: TIMER_HERO_PREVIEW_STAGE_SIZE / 2,
+    borderWidth: 1,
+    borderColor: "#283170",
+    backgroundColor: "#090d2a",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timerHeroPreviewSunGlow: {
+    position: "absolute",
+    width: TIMER_HERO_PREVIEW_GLOW_SIZE,
+    height: TIMER_HERO_PREVIEW_GLOW_SIZE,
+    borderRadius: TIMER_HERO_PREVIEW_GLOW_SIZE / 2,
+    backgroundColor: "rgba(255, 205, 117, 0.15)",
+  },
+  timerHeroPreviewSunDisk: {
+    width: TIMER_HERO_PREVIEW_SUN_RADIUS * 2,
+    height: TIMER_HERO_PREVIEW_SUN_RADIUS * 2,
+    borderRadius: TIMER_HERO_PREVIEW_SUN_RADIUS,
+    backgroundColor: "#ffd36f",
+    borderWidth: 2,
+    borderColor: "#ffe2a6",
+    shadowColor: "#ffc96a",
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  timerHeroPreviewMoon: {
+    position: "absolute",
+    backgroundColor: "#0d1020",
+    borderWidth: 1,
+    borderColor: "#3d4267",
+  },
   metricRow: {
     marginTop: 10,
     flexDirection: "row",
