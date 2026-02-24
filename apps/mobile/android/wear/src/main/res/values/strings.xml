@@ -6,4 +6,5 @@
   <string name="status_sent_waiting_ack">Sent test message. Waiting for phone...</string>
   <string name="status_send_failed">Unable to send test message</string>
   <string name="status_phone_ack">Phone reply: %1$s</string>
+  <string name="status_deep_link_active">Deep link: %1$s</string>
 </resources>

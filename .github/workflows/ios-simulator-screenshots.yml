@@ -406,11 +406,33 @@ jobs:
             xcrun simctl shutdown "$udid" || true
           fi
 
+      - name: Package screenshots archive
+        id: package_archive
+        run: |
+          set -euo pipefail
+          screenshots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
+          release_dir="$GITHUB_WORKSPACE/artifacts/release"
+          archive_name="ios-simulator-screenshots-${GITHUB_RUN_ID}.zip"
+          archive_path="$release_dir/$archive_name"
+
+          if [ ! -d "$screenshots_dir" ]; then
+            echo "Screenshots directory not found: $screenshots_dir"
+            exit 1
+          fi
+
+          mkdir -p "$release_dir"
+          ditto -c -k --sequesterRsrc --keepParent "$screenshots_dir" "$archive_path"
+
+          {
+            echo "archive_name=$archive_name"
+            echo "archive_path=$archive_path"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload screenshots artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-screenshots-${{ github.run_id }}
-          path: artifacts/screenshots
+          path: ${{ steps.package_archive.outputs.archive_path }}
           if-no-files-found: error
 
       - name: Resolve latest GitHub release
@@ -436,37 +458,31 @@ jobs:
         env:
           RELEASE_ID: ${{ steps.latest_release.outputs.release_id }}
           RELEASE_TAG_NAME: ${{ steps.latest_release.outputs.tag_name }}
-          SCREENSHOTS_DIR: ${{ github.workspace }}/artifacts/screenshots
+          SCREENSHOTS_ARCHIVE_NAME: ${{ steps.package_archive.outputs.archive_name }}
+          SCREENSHOTS_ARCHIVE_PATH: ${{ steps.package_archive.outputs.archive_path }}
         with:
           script: |
             const fs = require("fs");
-            const path = require("path");
 
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const releaseId = Number(process.env.RELEASE_ID);
             const releaseTag = process.env.RELEASE_TAG_NAME || "unknown";
-            const screenshotsDir = process.env.SCREENSHOTS_DIR;
+            const archiveName = process.env.SCREENSHOTS_ARCHIVE_NAME || "";
+            const archivePath = process.env.SCREENSHOTS_ARCHIVE_PATH || "";
 
             if (!Number.isFinite(releaseId) || releaseId <= 0) {
               core.setFailed(`Invalid release id: ${process.env.RELEASE_ID}`);
               return;
             }
 
-            if (!fs.existsSync(screenshotsDir)) {
-              core.setFailed(`Screenshots directory not found: ${screenshotsDir}`);
+            if (!archiveName || !archivePath) {
+              core.setFailed("Screenshot archive metadata is missing.");
               return;
             }
 
-            const files = fs
-              .readdirSync(screenshotsDir)
-              .filter((name) => {
-                const fullPath = path.join(screenshotsDir, name);
-                return fs.statSync(fullPath).isFile();
-              });
-
-            if (!files.length) {
-              core.setFailed(`No screenshot files found in ${screenshotsDir}`);
+            if (!fs.existsSync(archivePath)) {
+              core.setFailed(`Screenshots archive not found: ${archivePath}`);
               return;
             }
 
@@ -477,26 +493,22 @@ jobs:
               per_page: 100,
             });
             const existingAssetsByName = new Map(existingAssets.map((asset) => [asset.name, asset]));
-
-            for (const fileName of files) {
-              const filePath = path.join(screenshotsDir, fileName);
-              const previous = existingAssetsByName.get(fileName);
-              if (previous) {
-                await github.rest.repos.deleteReleaseAsset({
-                  owner,
-                  repo,
-                  asset_id: previous.id,
-                });
-                core.info(`Deleted existing asset: ${fileName}`);
-              }
-
-              const data = fs.readFileSync(filePath);
-              await github.rest.repos.uploadReleaseAsset({
+            const previous = existingAssetsByName.get(archiveName);
+            if (previous) {
+              await github.rest.repos.deleteReleaseAsset({
                 owner,
                 repo,
-                release_id: releaseId,
-                name: fileName,
-                data,
+                asset_id: previous.id,
               });
-              core.info(`Uploaded ${fileName} to release ${releaseTag}`);
+              core.info(`Deleted existing asset: ${archiveName}`);
             }
+
+            const data = fs.readFileSync(archivePath);
+            await github.rest.repos.uploadReleaseAsset({
+              owner,
+              repo,
+              release_id: releaseId,
+              name: archiveName,
+              data,
+            });
+            core.info(`Uploaded ${archiveName} to release ${releaseTag}`);

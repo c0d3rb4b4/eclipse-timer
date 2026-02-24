@@ -1,0 +1,504 @@
+name: Android Emulator Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_profile:
+        description: "AVD device profile id (`avdmanager list device`) or auto"
+        required: true
+        default: "auto"
+        type: string
+      api_level:
+        description: "Android API level for emulator system image"
+        required: true
+        default: "35"
+        type: string
+      system_image_abi:
+        description: "System image ABI (auto, x86_64, or arm64-v8a)"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - x86_64
+          - arm64-v8a
+      startup_wait_seconds:
+        description: "Seconds to wait after first app launch"
+        required: true
+        default: "10"
+        type: string
+      per_page_wait_seconds:
+        description: "Seconds to wait after each deep link"
+        required: true
+        default: "3"
+        type: string
+      deep_links:
+        description: "Deep links separated by comma or newline"
+        required: false
+        type: string
+        default: "eclipsetimer://landing,eclipsetimer://timer,eclipsetimer://notifications,eclipsetimer://locations,eclipsetimer://eclipse/2026-total,eclipsetimer://eclipse/2026-total/preview,eclipsetimer://eclipse/2027-total,eclipsetimer://eclipse/2027-total/preview"
+
+concurrency:
+  group: android-screenshots-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  screenshots:
+    name: Capture Android Emulator Screenshots
+    runs-on: [self-hosted, macOS, eclipse-timer]
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      BUNDLE_ID: com.lallimaven.eclipsetimer
+      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
+      SENTRY_ALLOW_FAILURE: "true"
+      SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Android SDK tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages for build + emulator
+        env:
+          API_LEVEL: ${{ github.event.inputs.api_level }}
+          SYSTEM_IMAGE_ABI: ${{ github.event.inputs.system_image_abi }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$API_LEVEL" =~ ^[0-9]+$ ]]; then
+            echo "api_level must be an integer."
+            exit 1
+          fi
+
+          selected_abi="$SYSTEM_IMAGE_ABI"
+          if [ "$selected_abi" = "auto" ]; then
+            if [ "$(uname -m)" = "arm64" ]; then
+              selected_abi="arm64-v8a"
+            else
+              selected_abi="x86_64"
+            fi
+          fi
+
+          sdk_root=""
+          for candidate in \
+            "${ANDROID_SDK_ROOT:-}" \
+            "${ANDROID_HOME:-}" \
+            "$HOME/Library/Android/sdk" \
+            "$HOME/Android/Sdk" \
+            "/usr/local/share/android-sdk" \
+            "/opt/homebrew/share/android-sdk"
+          do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              sdk_root="$candidate"
+              break
+            fi
+          done
+
+          if [ ! -d "$sdk_root" ]; then
+            echo "Android SDK directory not found."
+            echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
+            exit 1
+          fi
+
+          echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+          echo "SCREENSHOT_SYSTEM_IMAGE_ABI=$selected_abi" >> "$GITHUB_ENV"
+          echo "$sdk_root/platform-tools" >> "$GITHUB_PATH"
+          echo "$sdk_root/emulator" >> "$GITHUB_PATH"
+          if [ -d "$sdk_root/cmdline-tools/latest/bin" ]; then
+            echo "$sdk_root/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          fi
+
+          system_image_package="system-images;android-${API_LEVEL};google_apis;${selected_abi}"
+          system_image_dir="$sdk_root/system-images/android-${API_LEVEL}/google_apis/${selected_abi}"
+
+          missing_packages=()
+          [ -d "$sdk_root/platform-tools" ] || missing_packages+=("platform-tools")
+          [ -d "$sdk_root/emulator" ] || missing_packages+=("emulator")
+          [ -d "$sdk_root/platforms/android-36" ] || missing_packages+=("platforms;android-36")
+          [ -d "$sdk_root/build-tools/36.0.0" ] || missing_packages+=("build-tools;36.0.0")
+          [ -d "$sdk_root/ndk/27.1.12297006" ] || missing_packages+=("ndk;27.1.12297006")
+          [ -d "$system_image_dir" ] || missing_packages+=("$system_image_package")
+
+          if [ "${#missing_packages[@]}" -eq 0 ]; then
+            echo "All required Android SDK packages are already installed in $sdk_root."
+            exit 0
+          fi
+
+          echo "Installing missing Android SDK packages: ${missing_packages[*]}"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "${missing_packages[@]}"
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Validate Google Maps Android key
+        run: |
+          if [ -z "$GOOGLE_MAPS_ANDROID_API_KEY" ]; then
+            echo "Missing GOOGLE_MAPS_ANDROID_API_KEY GitHub secret."
+            echo "Add it in: Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Build Android APK
+        working-directory: apps/mobile
+        env:
+          EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root" ]; then
+            echo "ANDROID_SDK_ROOT/ANDROID_HOME is not configured."
+            exit 1
+          fi
+
+          export ANDROID_SDK_ROOT="$sdk_root"
+          export ANDROID_HOME="$sdk_root"
+          escaped_sdk_root="${sdk_root// /\\ }"
+          printf 'sdk.dir=%s\n' "$escaped_sdk_root" > android/local.properties
+          echo "Using Android SDK at $sdk_root"
+
+          pnpm exec eas build --platform android --profile production-apk --local --non-interactive
+
+      - name: Resolve Android APK artifact
+        id: resolve_apk
+        run: |
+          set -euo pipefail
+          artifacts_dir="$GITHUB_WORKSPACE/artifacts/raw"
+          apk_path="$(find "$artifacts_dir" -type f -name '*.apk' | grep -iv 'wear' | head -n 1 || true)"
+          if [ -z "$apk_path" ]; then
+            apk_path="$(find "$artifacts_dir" -type f -name '*.apk' | head -n 1 || true)"
+          fi
+
+          if [ -z "$apk_path" ]; then
+            echo "Could not find Android APK artifact in $artifacts_dir."
+            find "$artifacts_dir" -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          echo "Using APK: $apk_path"
+          {
+            echo "apk_path<<EOF"
+            echo "$apk_path"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Boot emulator and capture screenshots
+        id: capture
+        env:
+          DEVICE_PROFILE: ${{ github.event.inputs.device_profile }}
+          API_LEVEL: ${{ github.event.inputs.api_level }}
+          STARTUP_WAIT_SECONDS: ${{ github.event.inputs.startup_wait_seconds }}
+          PER_PAGE_WAIT_SECONDS: ${{ github.event.inputs.per_page_wait_seconds }}
+          APP_PATH: ${{ steps.resolve_apk.outputs.apk_path }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$API_LEVEL" =~ ^[0-9]+$ ]]; then
+            echo "api_level must be an integer."
+            exit 1
+          fi
+          if [[ ! "$STARTUP_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+            echo "startup_wait_seconds must be an integer."
+            exit 1
+          fi
+          if [[ ! "$PER_PAGE_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+            echo "per_page_wait_seconds must be an integer."
+            exit 1
+          fi
+          if [ ! -f "$APP_PATH" ]; then
+            echo "APK not found at $APP_PATH."
+            exit 1
+          fi
+
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root" ]; then
+            echo "ANDROID_SDK_ROOT/ANDROID_HOME is not configured."
+            exit 1
+          fi
+
+          export ANDROID_SDK_ROOT="$sdk_root"
+          export ANDROID_HOME="$sdk_root"
+          export PATH="$sdk_root/platform-tools:$sdk_root/emulator:$PATH"
+          if [ -d "$sdk_root/cmdline-tools/latest/bin" ]; then
+            export PATH="$sdk_root/cmdline-tools/latest/bin:$PATH"
+          fi
+
+          running_emulators="$(adb devices | awk '/^emulator-[0-9]+\t(device|offline)$/{print $1}')"
+          if [ -n "$running_emulators" ]; then
+            while IFS= read -r serial; do
+              [ -z "$serial" ] && continue
+              adb -s "$serial" emu kill || true
+            done <<< "$running_emulators"
+            sleep 5
+          fi
+
+          system_image="system-images;android-${API_LEVEL};google_apis;${SCREENSHOT_SYSTEM_IMAGE_ABI}"
+          device_suffix="$(printf '%s' "${DEVICE_PROFILE:-auto}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+          [ -z "$device_suffix" ] && device_suffix="auto"
+          avd_name="eclipse-timer-android-${API_LEVEL}-${device_suffix}"
+
+          if ! avdmanager list avd | grep -Fq "Name: $avd_name"; then
+            if [ "${DEVICE_PROFILE:-auto}" = "auto" ]; then
+              echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --force
+            else
+              if ! echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --device "$DEVICE_PROFILE" --force; then
+                echo "::warning::Unable to use device profile '$DEVICE_PROFILE'. Retrying with default profile."
+                echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --force
+              fi
+            fi
+          fi
+
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          emulator_log="$GITHUB_WORKSPACE/artifacts/android-emulator.log"
+          "$sdk_root/emulator/emulator" \
+            -avd "$avd_name" \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -gpu swiftshader_indirect \
+            -no-snapshot \
+            -no-snapshot-save \
+            >"$emulator_log" 2>&1 &
+          emulator_pid=$!
+
+          emulator_serial=""
+          for _ in {1..120}; do
+            emulator_serial="$(adb devices | awk '/^emulator-[0-9]+\t(device|offline)$/{print $1; exit}')"
+            [ -n "$emulator_serial" ] && break
+            sleep 2
+          done
+
+          if [ -z "$emulator_serial" ]; then
+            echo "Android emulator did not start."
+            tail -n 200 "$emulator_log" || true
+            exit 1
+          fi
+
+          adb -s "$emulator_serial" wait-for-device
+
+          boot_completed=""
+          for _ in {1..180}; do
+            boot_completed="$(adb -s "$emulator_serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            if [ "$boot_completed" = "1" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$boot_completed" != "1" ]; then
+            echo "Android emulator failed to boot."
+            tail -n 200 "$emulator_log" || true
+            exit 1
+          fi
+
+          adb -s "$emulator_serial" shell settings put global window_animation_scale 0 || true
+          adb -s "$emulator_serial" shell settings put global transition_animation_scale 0 || true
+          adb -s "$emulator_serial" shell settings put global animator_duration_scale 0 || true
+          adb -s "$emulator_serial" shell input keyevent 82 || true
+
+          adb -s "$emulator_serial" install -r "$APP_PATH"
+          adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.POST_NOTIFICATIONS || true
+          adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.ACCESS_FINE_LOCATION || true
+          adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.ACCESS_COARSE_LOCATION || true
+
+          shots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
+          mkdir -p "$shots_dir"
+          printf "index,url,file\n" > "$shots_dir/manifest.csv"
+
+          adb -s "$emulator_serial" shell monkey -p "$BUNDLE_ID" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+          sleep "$STARTUP_WAIT_SECONDS"
+          adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/00-launch.png"
+          printf "00,launch,00-launch.png\n" >> "$shots_dir/manifest.csv"
+
+          DEEP_LINKS_INPUT="$(cat <<'EOF'
+          ${{ github.event.inputs.deep_links }}
+          EOF
+          )"
+          deep_links="$(
+            printf '%s\n' "$DEEP_LINKS_INPUT" \
+              | tr -d '\r' \
+              | tr ',' '\n' \
+              | sed -E 's#([A-Za-z][A-Za-z0-9+.-]*://)#\n\1#g' \
+              | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+              | sed '/^[[:space:]]*$/d'
+          )"
+
+          if [ -n "$deep_links" ]; then
+            index=1
+            while IFS= read -r url; do
+              [ -z "$url" ] && continue
+              slug="$(printf '%s' "$url" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#[^A-Za-z0-9._-]+#-#g; s#-+#-#g; s#^-##; s#-$##')"
+              if [ -z "$slug" ]; then
+                slug="screen-$index"
+              fi
+              filename="$(printf '%02d' "$index")-$slug.png"
+
+              if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" "$BUNDLE_ID" >/dev/null 2>&1; then
+                sleep "$PER_PAGE_WAIT_SECONDS"
+                adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/$filename"
+                printf "%02d,%s,%s\n" "$index" "$url" "$filename" >> "$shots_dir/manifest.csv"
+              else
+                echo "::warning::Failed to open deep link: $url"
+              fi
+
+              index=$((index + 1))
+            done <<< "$deep_links"
+          fi
+
+          {
+            echo "emulator_serial=$emulator_serial"
+            echo "emulator_pid=$emulator_pid"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Shutdown emulator
+        if: always()
+        run: |
+          set -euo pipefail
+          emulator_serial="${{ steps.capture.outputs.emulator_serial }}"
+          emulator_pid="${{ steps.capture.outputs.emulator_pid }}"
+
+          if [ -n "$emulator_serial" ]; then
+            adb -s "$emulator_serial" emu kill || true
+          fi
+
+          if [ -n "$emulator_pid" ] && kill -0 "$emulator_pid" >/dev/null 2>&1; then
+            kill "$emulator_pid" || true
+          fi
+
+      - name: Package screenshots archive
+        id: package_archive
+        run: |
+          set -euo pipefail
+          screenshots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
+          release_dir="$GITHUB_WORKSPACE/artifacts/release"
+          archive_name="android-emulator-screenshots-${GITHUB_RUN_ID}.zip"
+          archive_path="$release_dir/$archive_name"
+
+          if [ ! -d "$screenshots_dir" ]; then
+            echo "Screenshots directory not found: $screenshots_dir"
+            exit 1
+          fi
+
+          mkdir -p "$release_dir"
+          ditto -c -k --sequesterRsrc --keepParent "$screenshots_dir" "$archive_path"
+
+          {
+            echo "archive_name=$archive_name"
+            echo "archive_path=$archive_path"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-screenshots-${{ github.run_id }}
+          path: ${{ steps.package_archive.outputs.archive_path }}
+          if-no-files-found: error
+
+      - name: Resolve latest GitHub release
+        id: latest_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: release } = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+
+              core.info(`Using latest release: ${release.tag_name} (id: ${release.id})`);
+              core.setOutput("release_id", String(release.id));
+              core.setOutput("tag_name", release.tag_name);
+            } catch (error) {
+              core.setFailed(`Unable to resolve latest release: ${error.message}`);
+            }
+
+      - name: Attach screenshots archive to latest release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.latest_release.outputs.release_id }}
+          RELEASE_TAG_NAME: ${{ steps.latest_release.outputs.tag_name }}
+          SCREENSHOTS_ARCHIVE_NAME: ${{ steps.package_archive.outputs.archive_name }}
+          SCREENSHOTS_ARCHIVE_PATH: ${{ steps.package_archive.outputs.archive_path }}
+        with:
+          script: |
+            const fs = require("fs");
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const releaseId = Number(process.env.RELEASE_ID);
+            const releaseTag = process.env.RELEASE_TAG_NAME || "unknown";
+            const archiveName = process.env.SCREENSHOTS_ARCHIVE_NAME || "";
+            const archivePath = process.env.SCREENSHOTS_ARCHIVE_PATH || "";
+
+            if (!Number.isFinite(releaseId) || releaseId <= 0) {
+              core.setFailed(`Invalid release id: ${process.env.RELEASE_ID}`);
+              return;
+            }
+
+            if (!archiveName || !archivePath) {
+              core.setFailed("Screenshot archive metadata is missing.");
+              return;
+            }
+
+            if (!fs.existsSync(archivePath)) {
+              core.setFailed(`Screenshots archive not found: ${archivePath}`);
+              return;
+            }
+
+            const existingAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: releaseId,
+              per_page: 100,
+            });
+            const existingAssetsByName = new Map(existingAssets.map((asset) => [asset.name, asset]));
+            const previous = existingAssetsByName.get(archiveName);
+            if (previous) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: previous.id,
+              });
+              core.info(`Deleted existing asset: ${archiveName}`);
+            }
+
+            const data = fs.readFileSync(archivePath);
+            await github.rest.repos.uploadReleaseAsset({
+              owner,
+              repo,
+              release_id: releaseId,
+              name: archiveName,
+              data,
+            });
+            core.info(`Uploaded ${archiveName} to release ${releaseTag}`);

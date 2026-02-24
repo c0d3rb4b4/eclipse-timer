@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.23] — 2026-02-24
+
+### Added
+- Added dedicated Android and Wear OS emulator screenshot workflows that build local APK artifacts, capture screenshots, package results into a single zip, and upload that zip to the latest GitHub release.
+- Added Wear app deep-link handling for the `eclipsetimer://` scheme in the Wear module so screenshot automation can drive deterministic screens by URL.
+
+### Changed
+- Updated iOS simulator screenshot release publishing to upload one packaged screenshots zip asset instead of attaching each screenshot file individually.
+- Updated the Wear OS screenshot workflow to support configurable deep-link inputs and per-link screenshot capture behavior.
+- Bumped `apps/mobile` version to `1.1.23`.
+
 ## [1.1.22] — 2026-02-24
 
 ### Fixed
