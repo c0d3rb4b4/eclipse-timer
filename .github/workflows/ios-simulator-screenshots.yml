@@ -336,7 +336,23 @@ jobs:
 
           xcrun simctl uninstall "$udid" "$BUNDLE_ID" || true
           xcrun simctl install "$udid" "$APP_PATH"
+
+          ensure_notification_permission() {
+            local permission_state
+            permission_state="$(xcrun simctl privacy "$udid" get notifications "$BUNDLE_ID" 2>/dev/null || true)"
+            if [[ "$permission_state" == *"granted"* ]]; then
+              return 0
+            fi
+
+            xcrun simctl privacy "$udid" grant notifications "$BUNDLE_ID" || true
+          }
+
+          # Avoid notification permission popups appearing in captured screenshots.
+          ensure_notification_permission
           xcrun simctl launch "$udid" "$BUNDLE_ID"
+
+          # Some iOS runtimes only persist the permission after first launch.
+          ensure_notification_permission
 
           sleep "$STARTUP_WAIT_SECONDS"
           xcrun simctl io "$udid" screenshot "$shots_dir/00-launch.png"
