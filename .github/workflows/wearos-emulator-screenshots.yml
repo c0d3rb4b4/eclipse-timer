@@ -490,9 +490,7 @@ jobs:
               fi
 
               index=$((index + 1))
-            done <<EOF
-$deep_links
-EOF
+            done <<< "$deep_links"
           fi
 
           {
