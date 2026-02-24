@@ -8,3 +8,7 @@ export function envFlagEnabled(value: string | undefined) {
 export function readEnvFlag(name: string) {
   return envFlagEnabled(process.env[name]);
 }
+
+export function readSkipNotificationPermissionPromptFlag() {
+  return envFlagEnabled(process.env.EXPO_PUBLIC_SKIP_NOTIFICATION_PERMISSION_PROMPT);
+}

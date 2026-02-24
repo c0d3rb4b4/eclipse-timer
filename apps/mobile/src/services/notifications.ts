@@ -15,7 +15,7 @@ import { setNotificationHandler } from "expo-notifications/build/NotificationsHa
 import scheduleNotificationAsync from "expo-notifications/build/scheduleNotificationAsync";
 import setNotificationChannelAsync from "expo-notifications/build/setNotificationChannelAsync";
 import { Platform } from "react-native";
-import { readEnvFlag } from "../utils/env";
+import { readSkipNotificationPermissionPromptFlag } from "../utils/env";
 import {
   buildReminderScheduleRequests,
   enabledReminderMinutes,
@@ -26,12 +26,11 @@ import {
 const MANAGED_NOTIFICATION_SOURCE = "eclipse-timer";
 const ANDROID_CHANNEL_ID = "eclipse-alerts";
 const MAX_SCHEDULED_NOTIFICATIONS_PER_SYNC = 60;
-const SKIP_PERMISSION_PROMPT_FLAG = "EXPO_PUBLIC_SKIP_NOTIFICATION_PERMISSION_PROMPT";
 
 let hasConfiguredHandler = false;
 
 export function shouldSkipNotificationPermissionPrompt() {
-  return readEnvFlag(SKIP_PERMISSION_PROMPT_FLAG);
+  return readSkipNotificationPermissionPromptFlag();
 }
 
 export type NotificationSchedulingSettings = {
