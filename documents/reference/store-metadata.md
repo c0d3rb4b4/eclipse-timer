@@ -231,6 +231,23 @@ eas build --profile preview --platform all
 # Or use Xcode Simulator: File > Save Screen, Android Studio emulator: camera icon
 ```
 
+### Handling Permission Prompts Before Screenshots
+
+If location or notification permission dialogs block your shot, prefer pre-granting permissions so the prompt never appears.
+
+```bash
+# iOS Simulator (replace bundle id if needed)
+xcrun simctl privacy booted grant location com.lallimaven.eclipse-timer
+xcrun simctl privacy booted grant notifications com.lallimaven.eclipse-timer
+
+# Android Emulator / device
+adb shell pm grant com.lallimaven.eclipsetimer android.permission.ACCESS_FINE_LOCATION
+adb shell pm grant com.lallimaven.eclipsetimer android.permission.ACCESS_COARSE_LOCATION
+adb shell pm grant com.lallimaven.eclipsetimer android.permission.POST_NOTIFICATIONS
+```
+
+If the dialog is already on screen, you can still continue by tapping **Allow** in the simulator/emulator before capturing the screenshot.
+
 ---
 
 ## Account Verification
