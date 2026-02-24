@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.24] — 2026-02-24
+
+### Changed
+- Tightened the Timer screen compact `MAX View` preview to show the sun-only disk area (without surrounding corona glow) and reduced its footprint so the hero layout fits more cleanly.
+- Bumped `apps/mobile` version to `1.1.24`.
+
 ## [1.1.23] — 2026-02-24
 
 ### Added

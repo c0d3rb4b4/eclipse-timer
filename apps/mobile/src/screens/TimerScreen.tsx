@@ -28,8 +28,6 @@ import { eclipseCenterForRecord, kindCodeForRecord } from "../utils/eclipse";
 import {
   calculatePreviewMoonGeometry,
   determinePreviewTravelVector,
-  PREVIEW_STAGE_SIZE,
-  PREVIEW_SUN_RADIUS,
 } from "../utils/previewGeometry";
 
 const VISIBLE_PATH_COLOR = "rgba(79, 195, 247, 0.22)";
@@ -38,10 +36,8 @@ const ANNULARITY_PATH_COLOR = "rgba(255, 167, 38, 0.30)";
 const FAVORITE_COORD_EPSILON = 0.0001;
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
-const TIMER_HERO_PREVIEW_STAGE_SIZE = 84;
-const TIMER_HERO_PREVIEW_SUN_RADIUS =
-  (TIMER_HERO_PREVIEW_STAGE_SIZE * PREVIEW_SUN_RADIUS) / PREVIEW_STAGE_SIZE;
-const TIMER_HERO_PREVIEW_GLOW_SIZE = 118;
+const TIMER_HERO_PREVIEW_SUN_RADIUS = 16;
+const TIMER_HERO_PREVIEW_STAGE_SIZE = 34;
 
 function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   if (kind === "total") return "Total";
@@ -808,7 +804,6 @@ export default function TimerScreen({
                   <View style={styles.timerHeroPreviewWrap}>
                     <Text style={styles.timerHeroPreviewLabel}>MAX View</Text>
                     <View style={styles.timerHeroPreviewStage}>
-                      <View style={styles.timerHeroPreviewSunGlow} />
                       <View style={styles.timerHeroPreviewSunDisk} />
                       {maxEventMoonGeometry ? (
                         <View
@@ -1237,7 +1232,7 @@ const styles = StyleSheet.create({
   },
   timerHeroText: { color: "white", fontSize: 16, fontWeight: "800", lineHeight: 22 },
   timerHeroPreviewWrap: {
-    width: 92,
+    width: 72,
     alignItems: "center",
     gap: 4,
   },
@@ -1252,31 +1247,18 @@ const styles = StyleSheet.create({
     width: TIMER_HERO_PREVIEW_STAGE_SIZE,
     height: TIMER_HERO_PREVIEW_STAGE_SIZE,
     borderRadius: TIMER_HERO_PREVIEW_STAGE_SIZE / 2,
-    borderWidth: 1,
-    borderColor: "#283170",
-    backgroundColor: "#090d2a",
+    backgroundColor: "transparent",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-  },
-  timerHeroPreviewSunGlow: {
-    position: "absolute",
-    width: TIMER_HERO_PREVIEW_GLOW_SIZE,
-    height: TIMER_HERO_PREVIEW_GLOW_SIZE,
-    borderRadius: TIMER_HERO_PREVIEW_GLOW_SIZE / 2,
-    backgroundColor: "rgba(255, 205, 117, 0.15)",
   },
   timerHeroPreviewSunDisk: {
     width: TIMER_HERO_PREVIEW_SUN_RADIUS * 2,
     height: TIMER_HERO_PREVIEW_SUN_RADIUS * 2,
     borderRadius: TIMER_HERO_PREVIEW_SUN_RADIUS,
     backgroundColor: "#ffd36f",
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: "#ffe2a6",
-    shadowColor: "#ffc96a",
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
   },
   timerHeroPreviewMoon: {
     position: "absolute",
