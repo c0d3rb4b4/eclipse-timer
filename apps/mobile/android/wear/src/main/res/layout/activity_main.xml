@@ -1,24 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
-  android:background="#050505"
-  android:gravity="center"
-  android:orientation="vertical"
-  android:padding="12dp">
+  android:background="#050505">
 
-  <View
-    android:layout_width="72dp"
-    android:layout_height="72dp"
-    android:background="@drawable/sun_disk" />
+  <com.lallimaven.eclipsetimer.wear.EclipseRenderView
+    android:id="@+id/eclipse_render_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
 
   <TextView
     android:id="@+id/status_text"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="10dp"
+    android:layout_gravity="bottom"
+    android:background="#66000000"
     android:gravity="center"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="6dp"
     android:text="@string/status_starting"
     android:textColor="#FFFFFF"
-    android:textSize="12sp" />
-</LinearLayout>
+    android:textSize="10sp"
+    android:visibility="gone" />
+</FrameLayout>

@@ -45,6 +45,8 @@ import LandingScreen from "../screens/LandingScreen";
 import LocationSettingsScreen from "../screens/LocationSettingsScreen";
 import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
+import { syncWearPreviewRouteState } from "../services/wearPreviewPublisher";
+import { startWearLiveSync } from "../services/wearSync";
 import { type FavoriteLocation, useAppState } from "../state/appState";
 import { localYmdNow } from "../utils/date";
 import { kindCodeForRecord, kindLabelFromCode } from "../utils/eclipse";
@@ -466,6 +468,19 @@ export default function RootNavigator() {
     appState.disabledEclipseAlarmIds,
   );
 
+  useEffect(() => {
+    const stopWearLiveSync = startWearLiveSync();
+    return () => {
+      stopWearLiveSync();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      syncWearPreviewRouteState({ routeName: null, previewPayload: null });
+    };
+  }, []);
+
   const closeMenu = useCallback(() => {
     setIsMenuOpen(false);
   }, []);
@@ -474,10 +489,26 @@ export default function RootNavigator() {
     setIsMenuOpen(true);
   }, []);
 
-  const updateRouteName = useCallback(() => {
-    const routeName = navigationRef.getCurrentRoute()?.name;
-    if (!routeName) return;
-    setCurrentRouteName(routeName);
+  const syncWearPreviewWithRoute = useCallback(() => {
+    const route = navigationRef.getCurrentRoute();
+    if (!route) return;
+
+    setCurrentRouteName(route.name);
+
+    if (route.name !== "Preview") {
+      syncWearPreviewRouteState({ routeName: route.name, previewPayload: null });
+      return;
+    }
+
+    const previewPayload =
+      route.params && typeof route.params === "object" && "payload" in route.params
+        ? (route.params.payload as PreviewPayload | undefined)
+        : undefined;
+
+    syncWearPreviewRouteState({
+      routeName: route.name,
+      previewPayload: previewPayload ?? null,
+    });
   }, [navigationRef]);
 
   const activateEclipseById = useCallback(
@@ -531,12 +562,12 @@ export default function RootNavigator() {
   );
 
   const onNavigationReady = useCallback(() => {
-    updateRouteName();
+    syncWearPreviewWithRoute();
     const pendingAction = pendingFeaturedDeepLinkActionRef.current;
     if (!pendingAction) return;
     pendingFeaturedDeepLinkActionRef.current = null;
     runFeaturedDeepLinkAction(pendingAction);
-  }, [runFeaturedDeepLinkAction, updateRouteName]);
+  }, [runFeaturedDeepLinkAction, syncWearPreviewWithRoute]);
 
   const onNavigateFromMenu = useCallback(
     (route: MenuRouteName) => {
@@ -605,7 +636,7 @@ export default function RootNavigator() {
       ref={navigationRef}
       linking={linking}
       onReady={onNavigationReady}
-      onStateChange={updateRouteName}
+      onStateChange={syncWearPreviewWithRoute}
     >
       <View style={styles.navigationRoot}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>

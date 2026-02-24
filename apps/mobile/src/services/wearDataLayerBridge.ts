@@ -16,9 +16,10 @@ export type WearDataLayerMessage = {
 type WearDataLayerBridgeNativeModule = {
   getDataLayerPaths: () => Promise<WearDataLayerPaths>;
   sendPhaseZeroTestMessage: () => Promise<boolean>;
+  sendMessage: (path: string, payload: string) => Promise<boolean>;
 };
 
-const DEFAULT_DATA_LAYER_PATHS: WearDataLayerPaths = {
+export const DEFAULT_WEAR_DATA_LAYER_PATHS: WearDataLayerPaths = {
   liveLocation: "/wear/live/location/v1",
   liveRender: "/wear/live/render/v1",
   previewRender: "/wear/preview/render/v1",
@@ -40,13 +41,13 @@ export function isWearDataLayerBridgeAvailable() {
 
 export async function getWearDataLayerPaths() {
   if (!nativeWearBridge) {
-    return DEFAULT_DATA_LAYER_PATHS;
+    return DEFAULT_WEAR_DATA_LAYER_PATHS;
   }
 
   try {
     return await nativeWearBridge.getDataLayerPaths();
   } catch {
-    return DEFAULT_DATA_LAYER_PATHS;
+    return DEFAULT_WEAR_DATA_LAYER_PATHS;
   }
 }
 
@@ -57,6 +58,18 @@ export async function sendPhaseZeroWearTestMessage() {
 
   try {
     return await nativeWearBridge.sendPhaseZeroTestMessage();
+  } catch {
+    return false;
+  }
+}
+
+export async function sendWearDataLayerMessage(path: string, payload: string) {
+  if (!nativeWearBridge) {
+    return false;
+  }
+
+  try {
+    return await nativeWearBridge.sendMessage(path, payload);
   } catch {
     return false;
   }

@@ -341,6 +341,7 @@ The Wear OS companion app is a separate native module (`apps/mobile/android/wear
 
 Use the local simulator build/install/run guide in:
 - [documents/guides/setup-and-development.md#wear-os-companion-on-local-emulator](documents/guides/setup-and-development.md#wear-os-companion-on-local-emulator)
+- [documents/guides/windows-disposable-phone-wear-emulator.md](documents/guides/windows-disposable-phone-wear-emulator.md) for a disposable Windows workflow (`C:\e`) that runs phone and watch emulators together and deletes the copy afterward.
 
 ## Running Tests and Quality Checks
 

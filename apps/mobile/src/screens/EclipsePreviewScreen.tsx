@@ -11,6 +11,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import BurgerButton from "../components/BurgerButton";
+import { getActiveWearPreviewSessionId } from "../services/wearPreviewPublisher";
+import {
+  publishWearPreviewScrubProgress,
+  subscribeToWearPreviewScrubEvents,
+} from "../services/wearPreviewScrubSync";
 import type { ContactKey } from "../utils/contacts";
 import { colorForContactKey } from "../utils/contactTheme";
 import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
@@ -21,6 +26,7 @@ import {
   PREVIEW_STAGE_SIZE,
   PREVIEW_SUN_RADIUS,
 } from "../utils/previewGeometry";
+import { calculateTotalityGlowBlend } from "../utils/previewVisuals";
 
 type PreviewContactKey = ContactKey;
 
@@ -37,6 +43,8 @@ type TimelineMarker = TimelineEvent & {
   labelProgress: number;
   labelRow: number;
 };
+
+type ProgressUpdateSource = "phone" | "watch";
 
 export type PreviewPayload = {
   eclipseId: string;
@@ -156,10 +164,11 @@ export default function EclipsePreviewScreen({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progressTrackWidth, setProgressTrackWidth] = useState(0);
   const isScrubbingRef = useRef(false);
-  const pendingProgressRef = useRef<number | null>(null);
+  const pendingProgressRef = useRef<{ value: number; source: ProgressUpdateSource } | null>(null);
   const progressRafRef = useRef<number | null>(null);
   const progressTrackRef = useRef<View | null>(null);
   const progressTrackPageXRef = useRef(0);
+  const progressUpdateSourceRef = useRef<ProgressUpdateSource>("phone");
 
   const timelineEvents = useMemo(() => buildTimelineEvents(payload), [payload]);
 
@@ -201,6 +210,7 @@ export default function EclipsePreviewScreen({
   }, [payload.c1Utc, payload.c4Utc, payload.maxUtc, timelineEvents]);
 
   useEffect(() => {
+    progressUpdateSourceRef.current = "phone";
     setProgress(0);
     setIsPlaying(false);
   }, [payload.eclipseId, timelineBounds.endMs, timelineBounds.startMs]);
@@ -218,6 +228,7 @@ export default function EclipsePreviewScreen({
       const dtMs = now - lastTickMs;
       lastTickMs = now;
 
+      progressUpdateSourceRef.current = "phone";
       setProgress((prev) => {
         if (isScrubbingRef.current) return prev;
         const delta = (dtMs * PLAYBACK_SPEED) / timelineDurationMs;
@@ -237,6 +248,58 @@ export default function EclipsePreviewScreen({
       }
     };
   }, []);
+
+  const commitProgress = useCallback(
+    (nextProgress: number, source: ProgressUpdateSource = "phone") => {
+      pendingProgressRef.current = {
+        value: clamp01(nextProgress),
+        source,
+      };
+      if (typeof progressRafRef.current === "number") return;
+
+      progressRafRef.current = requestAnimationFrame(() => {
+        progressRafRef.current = null;
+        const pending = pendingProgressRef.current;
+        pendingProgressRef.current = null;
+        if (!pending) return;
+
+        progressUpdateSourceRef.current = pending.source;
+        setProgress((prev) => (Math.abs(prev - pending.value) < 0.0005 ? prev : pending.value));
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const unsubscribe = subscribeToWearPreviewScrubEvents((event) => {
+      const activePreviewSessionId = getActiveWearPreviewSessionId();
+      if (!activePreviewSessionId || event.previewSessionId !== activePreviewSessionId) {
+        return;
+      }
+
+      setIsPlaying(false);
+      commitProgress(event.progress, "watch");
+    });
+
+    return unsubscribe;
+  }, [commitProgress]);
+
+  useEffect(() => {
+    if (progressUpdateSourceRef.current !== "phone") {
+      progressUpdateSourceRef.current = "phone";
+      return;
+    }
+
+    const activePreviewSessionId = getActiveWearPreviewSessionId();
+    if (!activePreviewSessionId) {
+      return;
+    }
+
+    void publishWearPreviewScrubProgress({
+      previewSessionId: activePreviewSessionId,
+      progress,
+    });
+  }, [progress]);
 
   const eventMarkers = useMemo<TimelineMarker[]>(() => {
     const baseMarkers = timelineEvents.map((event) => ({
@@ -342,18 +405,25 @@ export default function EclipsePreviewScreen({
     [currentMs, timelineEvents],
   );
 
-  const commitProgress = useCallback((nextProgress: number) => {
-    pendingProgressRef.current = clamp01(nextProgress);
-    if (typeof progressRafRef.current === "number") return;
+  const totalityGlowBlend = useMemo(
+    () =>
+      calculateTotalityGlowBlend({
+        kindAtLocation: payload.kindAtLocation,
+        currentMs,
+        c2Utc: payload.c2Utc,
+        c3Utc: payload.c3Utc,
+      }),
+    [currentMs, payload.c2Utc, payload.c3Utc, payload.kindAtLocation],
+  );
 
-    progressRafRef.current = requestAnimationFrame(() => {
-      progressRafRef.current = null;
-      const pending = pendingProgressRef.current;
-      pendingProgressRef.current = null;
-      if (typeof pending !== "number") return;
-      setProgress((prev) => (Math.abs(prev - pending) < 0.0005 ? prev : pending));
-    });
-  }, []);
+  const sunGlowOpacity = 1 - totalityGlowBlend * 0.7;
+  const sunDiskOpacity = 1 - totalityGlowBlend * 0.94;
+  const totalityRingRadius = moonGeometry.moonRadius + 3;
+  const totalityCoronaRadius = moonGeometry.moonRadius + 16;
+  const totalityRingOpacity = totalityGlowBlend * 0.92;
+  const totalityCoronaOpacity = totalityGlowBlend * 0.66;
+  const totalityRingScale = 0.92 + totalityGlowBlend * 0.1;
+  const totalityCoronaScale = 0.88 + totalityGlowBlend * 0.22;
 
   const refreshProgressTrackPageX = useCallback(() => {
     progressTrackRef.current?.measureInWindow((x) => {
@@ -439,8 +509,23 @@ export default function EclipsePreviewScreen({
 
       <View style={styles.simContainer}>
         <View style={styles.simStage}>
-          <View style={styles.sunGlow} />
-          <View style={styles.sunDisk} />
+          <View style={[styles.sunGlow, { opacity: sunGlowOpacity }]} />
+          <View style={[styles.sunDisk, { opacity: sunDiskOpacity }]} />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.totalityCorona,
+              {
+                width: totalityCoronaRadius * 2,
+                height: totalityCoronaRadius * 2,
+                borderRadius: totalityCoronaRadius,
+                left: moonGeometry.moonCenterX - totalityCoronaRadius,
+                top: moonGeometry.moonCenterY - totalityCoronaRadius,
+                opacity: totalityCoronaOpacity,
+                transform: [{ scale: totalityCoronaScale }],
+              },
+            ]}
+          />
           <View
             style={[
               styles.moonDisk,
@@ -450,6 +535,21 @@ export default function EclipsePreviewScreen({
                 borderRadius: moonGeometry.moonRadius,
                 left: moonGeometry.moonCenterX - moonGeometry.moonRadius,
                 top: moonGeometry.moonCenterY - moonGeometry.moonRadius,
+              },
+            ]}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.totalityRing,
+              {
+                width: totalityRingRadius * 2,
+                height: totalityRingRadius * 2,
+                borderRadius: totalityRingRadius,
+                left: moonGeometry.moonCenterX - totalityRingRadius,
+                top: moonGeometry.moonCenterY - totalityRingRadius,
+                opacity: totalityRingOpacity,
+                transform: [{ scale: totalityRingScale }],
               },
             ]}
           />
@@ -463,6 +563,7 @@ export default function EclipsePreviewScreen({
             style={styles.playPauseBtn}
             onPress={() => {
               if (!isPlaying && progress >= 1) {
+                progressUpdateSourceRef.current = "phone";
                 setProgress(0);
               }
               setIsPlaying((prev) => !prev);
@@ -697,11 +798,31 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
   },
+  totalityCorona: {
+    position: "absolute",
+    borderWidth: 16,
+    borderColor: "rgba(164, 215, 255, 0.18)",
+    backgroundColor: "transparent",
+    shadowColor: "#b7ddff",
+    shadowOpacity: 0.86,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 0 },
+  },
   moonDisk: {
     position: "absolute",
     backgroundColor: "#0d1020",
     borderWidth: 1,
     borderColor: "#3d4267",
+  },
+  totalityRing: {
+    position: "absolute",
+    borderWidth: 4,
+    borderColor: "rgba(230, 243, 255, 0.95)",
+    backgroundColor: "transparent",
+    shadowColor: "#d9eeff",
+    shadowOpacity: 0.88,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
   phaseText: {
     color: "#c7cbdf",

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.26] — 2026-02-24
+
+### Added
+- Added end-to-end Wear companion live pipeline: watch GPS payload publishing, phone-side active-eclipse computation, and live render payload sync with sun-only fallback when no active eclipse is found.
+- Added Wear preview mode synchronization with strict phone `Preview` route gating, preview payload publishing, and two-way preview scrub messaging between phone and watch.
+- Added watch native eclipse renderer (`EclipseRenderView`) with sun/moon drawing and totality ring/corona transitions, plus stale-live fallback handling and status messaging.
+- Added a Windows disposable phone+Wear emulator workflow guide for path-length-safe local native testing (`documents/guides/windows-disposable-phone-wear-emulator.md`).
+
+### Changed
+- Extended wearable shared preview payload schema with travel vector and contact progress anchors so phone and watch preview frames stay aligned while scrubbing.
+- Improved Android Data Layer reliability with node-id caching/retry send flow, a listener service fallback handshake, and JS bridge `sendMessage` support.
+- Updated Wear package/config wiring to use `com.lallimaven.eclipsetimer` package naming in watch build/docs/workflows and to require watch location permissions.
+- Updated phone preview visuals to blend totality ring/corona effects and synchronize scrub progress with watch input.
+- Excluded Android build output folders from Metro resolution to avoid duplicate module/path issues.
+- Bumped `apps/mobile` version to `1.1.26`.
+
+### Tests
+- Added regression tests for wear live payload computation, preview payload generation, preview scrub payload parsing, and totality glow blending behavior.
+
 ## [1.1.25] — 2026-02-24
 
 ### Added

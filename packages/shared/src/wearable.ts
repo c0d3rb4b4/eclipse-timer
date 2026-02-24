@@ -27,6 +27,13 @@ export type PreviewVisualV1 = {
   moonRadiusNorm: number;
   moonClosestOffsetNorm: number;
   moonTravelHalfSpanNorm: number;
+  travelVectorXNorm?: number;
+  travelVectorYNorm?: number;
+  c1ProgressNorm?: number;
+  c2ProgressNorm?: number;
+  maxProgressNorm?: number;
+  c3ProgressNorm?: number;
+  c4ProgressNorm?: number;
 };
 
 export type PreviewRenderPayloadV1 = {
@@ -51,6 +58,13 @@ function clamp01(value: number): number {
     return 0;
   }
   return Math.min(1, Math.max(0, value));
+}
+
+function clampSigned01(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(-1, value));
 }
 
 function getFiniteNumber(value: unknown): number | null {
@@ -140,6 +154,13 @@ export function sanitizePreviewRenderPayloadV1(input: unknown): PreviewRenderPay
   const moonRadiusNorm = getFiniteNumber(input.visual.moonRadiusNorm);
   const moonClosestOffsetNorm = getFiniteNumber(input.visual.moonClosestOffsetNorm);
   const moonTravelHalfSpanNorm = getFiniteNumber(input.visual.moonTravelHalfSpanNorm);
+  const travelVectorXNorm = getFiniteNumber(input.visual.travelVectorXNorm);
+  const travelVectorYNorm = getFiniteNumber(input.visual.travelVectorYNorm);
+  const c1ProgressNorm = getFiniteNumber(input.visual.c1ProgressNorm);
+  const c2ProgressNorm = getFiniteNumber(input.visual.c2ProgressNorm);
+  const maxProgressNorm = getFiniteNumber(input.visual.maxProgressNorm);
+  const c3ProgressNorm = getFiniteNumber(input.visual.c3ProgressNorm);
+  const c4ProgressNorm = getFiniteNumber(input.visual.c4ProgressNorm);
 
   if (
     !previewSessionId ||
@@ -166,8 +187,15 @@ export function sanitizePreviewRenderPayloadV1(input: unknown): PreviewRenderPay
     visual: {
       sunRadiusNorm: clamp01(sunRadiusNorm),
       moonRadiusNorm: clamp01(moonRadiusNorm),
-      moonClosestOffsetNorm: clamp01(moonClosestOffsetNorm),
+      moonClosestOffsetNorm: clampSigned01(moonClosestOffsetNorm),
       moonTravelHalfSpanNorm: clamp01(moonTravelHalfSpanNorm),
+      travelVectorXNorm: travelVectorXNorm === null ? undefined : clampSigned01(travelVectorXNorm),
+      travelVectorYNorm: travelVectorYNorm === null ? undefined : clampSigned01(travelVectorYNorm),
+      c1ProgressNorm: c1ProgressNorm === null ? undefined : clamp01(c1ProgressNorm),
+      c2ProgressNorm: c2ProgressNorm === null ? undefined : clamp01(c2ProgressNorm),
+      maxProgressNorm: maxProgressNorm === null ? undefined : clamp01(maxProgressNorm),
+      c3ProgressNorm: c3ProgressNorm === null ? undefined : clamp01(c3ProgressNorm),
+      c4ProgressNorm: c4ProgressNorm === null ? undefined : clamp01(c4ProgressNorm),
     },
   };
 }

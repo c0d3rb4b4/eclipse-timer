@@ -43,6 +43,22 @@ class WearDataLayerModule(private val reactContext: ReactApplicationContext) :
     )
   }
 
+  @ReactMethod
+  fun sendMessage(path: String, payload: String, promise: Promise) {
+    val normalizedPath = path.trim()
+    if (normalizedPath.isEmpty()) {
+      promise.reject("E_WEAR_SEND_PATH", "Data Layer path cannot be empty.")
+      return
+    }
+
+    WearDataLayerBridge.sendMessageToWatch(
+      path = normalizedPath,
+      payload = payload.toByteArray(Charsets.UTF_8),
+      onSuccess = { promise.resolve(true) },
+      onError = { error -> promise.reject("E_WEAR_SEND", error) },
+    )
+  }
+
   override fun onIncomingMessage(path: String, payload: String, sourceNodeId: String) {
     if (!reactContext.hasActiveReactInstance()) {
       return

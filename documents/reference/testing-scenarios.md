@@ -1,7 +1,7 @@
 # Eclipse Timer - Tester Instructions and Scenarios
 
-Last updated: 2026-02-20
-Target app version: 1.0.0
+Last updated: 2026-02-24
+Target app version: 1.1.25
 
 ## 1. Access and credentials
 
@@ -183,6 +183,42 @@ Expected:
 - Preview failure state is handled gracefully (no crash).
 - Retry recovers once network is restored.
 
+### TS-13: Wear live mode fallback when location permission denied (Android + Wear OS)
+
+1. Launch phone and watch companion apps.
+2. On watch, deny location permission when prompted.
+3. Keep watch app foregrounded for at least 30 seconds.
+
+Expected:
+- Watch stays stable and continues rendering sun-only.
+- Watch shows an error message for denied permission.
+- Phone app remains responsive and does not block.
+
+### TS-14: Wear preview route gating and scrub sync (Android + Wear OS)
+
+1. Open the phone `Preview` screen.
+2. Confirm watch enters preview mode.
+3. Rotate watch crown/bezel; verify phone preview timeline follows.
+4. Scrub on phone; verify watch preview frame follows.
+5. Exit phone `Preview` screen.
+
+Expected:
+- Watch enters preview only while phone route is `Preview`.
+- Watch and phone remain visually aligned for scrub progress.
+- Watch returns to live mode immediately on preview exit.
+
+### TS-15: Wear stale payload fallback after phone disconnect (Android + Wear OS)
+
+1. Start with active phone/watch connection in watch live mode.
+2. Disconnect phone transport (turn off Bluetooth, stop phone app, or unpair emulator link).
+3. Keep watch app open and observe render state for at least 2 minutes.
+
+Expected:
+- Watch keeps last live payload briefly, then falls back to sun-only.
+- Stale fallback threshold is approximately 90 seconds.
+- Fallback check cadence is approximately every 5 seconds.
+- Watch shows an error message when stale fallback is applied.
+
 ## 5. Known issues / limitations to communicate to testers
 
 - No login/account system exists. All data is local to the device.
@@ -200,3 +236,10 @@ Expected:
 - TS-08 (per-eclipse alarm toggles)
 - TS-09 (notification settings + TTS alarm test)
 - TS-11 (persistence)
+
+## 7. Wear reliability constants (current defaults)
+
+- `LIVE_STALE_RENDER_TIMEOUT_MS = 90_000` (90 seconds)
+- `LIVE_STALE_CHECK_INTERVAL_MS = 5_000` (5 seconds)
+- `PREVIEW_SCRUB_MIN_SEND_INTERVAL_MS = 25` (watch -> phone)
+- `MIN_SCRUB_PUBLISH_INTERVAL_MS = 30` (phone -> watch)

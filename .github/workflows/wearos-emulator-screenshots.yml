@@ -62,7 +62,8 @@ jobs:
     permissions:
       contents: write
     env:
-      BUNDLE_ID: com.lallimaven.eclipsetimer.wear
+      BUNDLE_ID: com.lallimaven.eclipsetimer
+      MAIN_ACTIVITY: com.lallimaven.eclipsetimer.wear.MainActivity
       SENTRY_DISABLE_AUTO_UPLOAD: "true"
       SENTRY_ALLOW_FAILURE: "true"
       SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
@@ -441,7 +442,7 @@ jobs:
           mkdir -p "$shots_dir"
           printf "index,url,file\n" > "$shots_dir/manifest.csv"
 
-          adb -s "$emulator_serial" shell am start -W -n "$BUNDLE_ID/.MainActivity" >/dev/null 2>&1 || true
+          adb -s "$emulator_serial" shell am start -W -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 || true
           if ! wait_for_app_foreground "$BUNDLE_ID"; then
             echo "::warning::App did not enter the foreground after initial launch."
           fi

@@ -162,6 +162,9 @@ pnpm test --watch
 
 Use this flow when working on the native watch companion under `apps/mobile/android/wear`.
 
+For a Windows-specific disposable flow (copy to `C:\e`, run phone + watch emulators, then delete the copy), use:
+- [windows-disposable-phone-wear-emulator.md](./windows-disposable-phone-wear-emulator.md)
+
 1. In Android Studio `SDK Manager`, install a Wear OS system image.
 2. In Android Studio `Device Manager`, create and start a Wear OS virtual device.
 3. Build the watch debug APK from the Android project root:
@@ -186,7 +189,7 @@ adb -s <wear-emulator-serial> install -r wear/build/outputs/apk/debug/wear-debug
 5. Launch the watch app:
 
 ```bash
-adb -s <wear-emulator-serial> shell am start -n com.lallimaven.eclipsetimer.wear/com.lallimaven.eclipsetimer.wear.MainActivity
+adb -s <wear-emulator-serial> shell am start -n com.lallimaven.eclipsetimer/com.lallimaven.eclipsetimer.wear.MainActivity
 ```
 
 6. Optional phone/watch bridge check:

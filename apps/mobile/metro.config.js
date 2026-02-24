@@ -7,8 +7,27 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
+function escapePathForRegex(filePath) {
+  return filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // Keep Expo defaults, but add monorepo watch folder
 config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), workspaceRoot]));
+
+const androidBuildExclusionPatterns = [
+  path.resolve(projectRoot, "android", "build"),
+  path.resolve(projectRoot, "android", "app", "build"),
+  path.resolve(projectRoot, "android", "wear", "build"),
+].map((buildDir) => new RegExp(`^${escapePathForRegex(buildDir)}[/\\\\].*`));
+
+const existingBlockList = config.resolver.blockList
+  ? Array.isArray(config.resolver.blockList)
+    ? config.resolver.blockList
+    : [config.resolver.blockList]
+  : [];
+
+const mergedBlockList = [...existingBlockList, ...androidBuildExclusionPatterns];
+config.resolver.blockList = mergedBlockList.length === 1 ? mergedBlockList[0] : mergedBlockList;
 
 // Ensure Metro can resolve modules from both places (Expo defaults + workspace)
 config.resolver.nodeModulesPaths = Array.from(

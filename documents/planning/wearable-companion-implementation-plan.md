@@ -1,7 +1,7 @@
 # Wearable Companion Implementation Plan (Concrete Checklist)
 
-Last updated: 2026-02-21  
-Status: In Progress (Phases 0-1 implemented; hardware verification pending)
+Last updated: 2026-02-24  
+Status: In Progress (PR 1-PR 6 implemented in code and validated on emulator; final hardware QA pending)
 
 ## 1. Purpose
 
@@ -15,6 +15,121 @@ This plan is intentionally strict to MVP scope:
 - Live mode: watch GPS + sun always + moon only when eclipse is active now.
 - Preview mode: available only while phone preview is open, scrubbed by watch rotary input.
 - No other watch features.
+
+## 1A. Pull Request Plan (Execution Order)
+
+This section is the active delivery sequence for the requested behavior:
+
+- default watch screen = live sun render from current watch GPS + current time
+- watch moon overlay only when eclipse is active now
+- watch switches into preview mode while phone preview is open
+- watch rotary scrub controls preview animation
+- watch auto-returns to live mode when phone preview closes
+
+### PR 1: Watch Live-Location Foundation (Start Here)
+
+Status: Implemented in code (2026-02-24), emulator verified; real hardware verification pending
+
+Scope:
+
+- [x] Add watch location permission + runtime permission request.
+- [x] Start fused GPS updates while watch app is foregrounded.
+- [x] Send structured live-location payloads to phone over `/wear/live/location/v1`.
+- [x] Keep watch status/debug text so phone reply payloads are visible during development.
+- [x] Add basic location send throttling (distance + periodic resend fallback).
+
+Files changed:
+
+- [x] `apps/mobile/android/wear/build.gradle`
+- [x] `apps/mobile/android/wear/src/main/AndroidManifest.xml`
+- [x] `apps/mobile/android/wear/src/main/res/values/strings.xml`
+- [x] `apps/mobile/android/wear/src/main/java/com/lallimaven/eclipsetimer/wear/MainActivity.kt`
+
+Exit criteria:
+
+- [x] `./gradlew :wear:assembleDebug` passes.
+- [x] On real watch/emulator, location permission prompt appears and live-location payloads reach phone. *(verified in emulator)*
+
+### PR 2: Phone Live Compute + Live Payload Publisher
+
+Status: Implemented in code (2026-02-24), watch visual verification pending
+
+Scope:
+
+- [x] Parse watch live-location payload in phone bridge.
+- [x] Compute eclipse-active-now using current UTC + watch coordinates.
+- [x] Publish `LiveRenderPayloadV1` on `/wear/live/render/v1`:
+  - [x] sun always implied
+  - [x] moon only when active now (`showMoon=true`)
+- [x] Fallback to safe sun-only payload on compute errors.
+
+Exit criteria:
+
+- [x] With mock watch location input, phone emits expected live payloads for active/inactive cases.
+- [ ] With real watch location input, phone emits expected live payloads for active/inactive cases.
+
+### PR 3: Watch Live Renderer (Sun/Moon)
+
+Status: Implemented in code (2026-02-24), hardware visual verification pending
+
+Scope:
+
+- [x] Replace text placeholder with live renderer surface.
+- [x] Always render centered sun.
+- [x] Render moon overlay only when `showMoon=true` from live payload.
+- [x] Handle stale/invalid payload safely (sun-only fallback).
+
+Exit criteria:
+
+- [ ] Live mode visual behavior matches AC-001/AC-002/AC-003 on paired phone+watch hardware.
+
+### PR 4: Phone Preview Route Sync
+
+Status: Implemented in code (2026-02-24), emulator verified; additional hardware verification pending
+
+Scope:
+
+- [x] Detect phone preview screen open/close state in navigator.
+- [x] Publish preview payload only while preview route is active.
+- [x] Clear/disable preview payload immediately on preview exit.
+
+Exit criteria:
+
+- [x] Watch preview availability is strictly tied to phone preview route state on paired emulator/hardware.
+
+### PR 5: Watch Preview Mode + Rotary Scrub
+
+Status: Implemented in code (2026-02-24), emulator validation complete; hardware rotary verification pending
+
+Scope:
+
+- [x] Enter preview mode only when preview payload is available.
+- [x] Implement rotary input mapping to normalized progress `[0,1]`.
+- [x] Re-render preview moon geometry while scrubbing.
+- [x] Auto-exit preview mode when phone preview payload disappears.
+- [x] Return to live render automatically.
+- [x] Send scrub progress back to phone via `/wear/preview/scrub/v1`.
+- [x] Keep phone/watch preview geometry aligned so identical progress renders identical frame.
+
+Exit criteria:
+
+- [ ] AC-004/AC-005/AC-006 pass on crown/bezel devices.
+
+### PR 6: Reliability + QA Hardening
+
+Status: Implemented in code (2026-02-24), hardware manual QA pending
+
+Scope:
+
+- [x] Add logs for mode switches, payload updates, permission and connectivity failures.
+- [x] Final payload validation/version checks and stale timeout behavior.
+- [x] Optimize preview scrub transport (latest-only coalescing + node-id caching).
+- [x] Resolve preview scrub drift by using shared contact-anchor + travel-vector motion model across phone/watch.
+- [ ] Complete manual test matrix and regression checks. *(automated regression checks pass; remaining work is hardware manual matrix completion)*
+
+Exit criteria:
+
+- [ ] AC-007 and full manual checklist pass reliably.
 
 ## 2. Scope Guardrails (Do Not Expand During MVP)
 
@@ -62,7 +177,7 @@ Phase 0 implementation notes (2026-02-21):
 Exit criteria:
 
 - [x] Phone/watch test-message exchange is implemented in code paths.
-- [ ] Phone and watch can exchange a small test message on paired hardware (manual verification pending).
+- [x] Phone and watch can exchange a small test message on paired emulator/hardware.
 
 ### Phase 1: Shared Contracts and Validation
 
@@ -93,11 +208,11 @@ Phase 1 implementation notes (2026-02-21):
 - Added runtime sanitizers for live/preview payload parsing, including numeric clamps for normalized fields.
 - Exported wearable contracts from shared package entrypoint (`packages/shared/src/index.ts`).
 - Added payload unit tests for mode discrimination, clamp behavior, and invalid payload rejection (`packages/shared/tests/wearable.payload.test.ts`).
-- Gap captured: phone/watch runtime code does not consume these shared contract helpers yet (planned in Phase 2+ integration work).
+- Update (2026-02-24): phone-side live/preview publishers now consume shared wearable contracts; watch remains native Kotlin with runtime validation.
 
 Exit criteria:
 
-- [ ] Phone and watch code compile against shared payload types. *(Gap: adoption is pending in app/wear modules.)*
+- [x] Phone-side wearable publishers compile against shared payload types. *(Watch remains native Kotlin with runtime validation.)*
 - [x] Payload tests pass.
 
 ### Phase 2: Phone Live Compute Pipeline
@@ -113,20 +228,20 @@ Files:
 
 Checklist:
 
-- [ ] Receive watch location updates on phone.
-- [ ] Implement eclipse-active-now evaluator:
-  - [ ] compute `Circumstances` for candidate eclipse(s) near now
-  - [ ] active if `c1Utc <= now <= c4Utc` with valid times
-- [ ] Build `LiveRenderPayloadV1`:
-  - [ ] `showMoon=false` when inactive or invalid compute
-  - [ ] `showMoon=true` + normalized moon geometry when active
-- [ ] Publish live payload on every meaningful watch location update.
-- [ ] Add rate limiting/debounce to avoid excessive compute churn.
-- [ ] Add fallback logic: publish sun-only payload when compute fails.
+- [x] Receive watch location updates on phone. *(implemented via Data Layer subscription in PR 2)*
+- [x] Implement eclipse-active-now evaluator:
+  - [x] compute `Circumstances` for candidate eclipse(s) near now
+  - [x] active if `c1Utc <= now <= c4Utc` with valid times
+- [x] Build `LiveRenderPayloadV1`:
+  - [x] `showMoon=false` when inactive or invalid compute
+  - [x] `showMoon=true` + normalized moon geometry when active
+- [x] Publish live payload on every meaningful watch location update.
+- [x] Add rate limiting/debounce to avoid excessive compute churn.
+- [x] Add fallback logic: publish sun-only payload when compute fails.
 
 Exit criteria:
 
-- [ ] With mock watch location updates, phone emits expected live payloads for active/inactive cases.
+- [x] With mock watch location updates, phone emits expected live payloads for active/inactive cases.
 
 ### Phase 3: Phone Preview Publisher
 
@@ -141,19 +256,19 @@ Files:
 
 Checklist:
 
-- [ ] Detect preview route active/inactive in navigator state.
-- [ ] On preview enter:
-  - [ ] construct `PreviewRenderPayloadV1` from current preview context
-  - [ ] publish payload to watch
-- [ ] On preview updates (if payload fields change), republish.
-- [ ] On preview exit:
-  - [ ] send preview-unavailable state (or clear preview payload path)
-- [ ] Enforce strict gating:
-  - [ ] no preview payload when preview screen is not open
+- [x] Detect preview route active/inactive in navigator state.
+- [x] On preview enter:
+  - [x] construct `PreviewRenderPayloadV1` from current preview context
+  - [x] publish payload to watch
+- [x] On preview updates (if payload fields change), republish.
+- [x] On preview exit:
+  - [x] send preview-unavailable state (or clear preview payload path)
+- [x] Enforce strict gating:
+  - [x] no preview payload when preview screen is not open
 
 Exit criteria:
 
-- [ ] Watch can only enter preview mode when phone preview route is active.
+- [x] Watch can only enter preview mode when phone preview route is active.
 
 ### Phase 4: Watch Live Mode (GPS + Renderer)
 
@@ -165,17 +280,17 @@ Files (watch module):
 
 Checklist:
 
-- [ ] Request and handle watch location permission.
-- [ ] Acquire initial GPS fix and periodic updates.
-- [ ] Send location payload to phone via Data Layer.
-- [ ] Implement render surface:
-  - [ ] sun always centered
-  - [ ] minimal corona
-  - [ ] moon drawn only when `showMoon=true`
-- [ ] Implement disconnected behavior:
-  - [ ] use last valid payload briefly
-  - [ ] revert to sun-only when stale timeout reached
-- [ ] Ensure no-crash behavior for invalid/missing payloads.
+- [x] Request and handle watch location permission. *(watch-side implemented in PR 1)*
+- [x] Acquire initial GPS fix and periodic updates. *(watch-side implemented in PR 1)*
+- [x] Send location payload to phone via Data Layer. *(watch-side implemented in PR 1)*
+- [x] Implement render surface:
+  - [x] sun always centered
+  - [x] minimal corona
+  - [x] moon drawn only when `showMoon=true`
+- [x] Implement disconnected behavior:
+  - [x] use last valid payload briefly
+  - [x] revert to sun-only when stale timeout reached
+- [x] Ensure no-crash behavior for invalid/missing payloads.
 
 Exit criteria:
 
@@ -192,15 +307,16 @@ Files (watch module):
 
 Checklist:
 
-- [ ] Enter preview mode only when preview payload exists.
-- [ ] Implement rotary input handling:
-  - [ ] map delta -> progress update
-  - [ ] clamp progress to `[0,1]`
-  - [ ] tune configurable sensitivity
-- [ ] Re-render moon overlay from scrubbed progress.
-- [ ] Ignore rotary input outside preview mode.
-- [ ] Exit preview mode automatically when preview payload disappears.
-- [ ] (Optional) send scrub progress back to phone via `/wear/preview/scrub/v1`.
+- [x] Enter preview mode only when preview payload exists.
+- [x] Implement rotary input handling:
+  - [x] map delta -> progress update
+  - [x] clamp progress to `[0,1]`
+  - [x] tune configurable sensitivity
+- [x] Re-render moon overlay from scrubbed progress.
+- [x] Ignore rotary input outside preview mode.
+- [x] Exit preview mode automatically when preview payload disappears.
+- [x] (Optional) send scrub progress back to phone via `/wear/preview/scrub/v1`.
+- [x] Keep scrubbed frame alignment consistent between phone and watch motion models.
 
 Exit criteria:
 
@@ -212,15 +328,15 @@ Goal: prevent regressions and make failures diagnosable.
 
 Checklist:
 
-- [ ] Add structured logs for:
-  - [ ] payload publish/receive
-  - [ ] mode switches (`live`/`preview`)
-  - [ ] location permission denial
-  - [ ] stale payload fallback
-- [ ] Add payload version checks and safe downgrade behavior.
-- [ ] Validate render clamps for all geometry values.
-- [ ] Add stale timeout constants and document their values.
-- [ ] Confirm app never blocks on unavailable phone connectivity.
+- [x] Add structured logs for:
+  - [x] payload publish/receive
+  - [x] mode switches (`live`/`preview`)
+  - [x] location permission denial
+  - [x] stale payload fallback
+- [x] Add payload version checks and safe downgrade behavior.
+- [x] Validate render clamps for all geometry values.
+- [x] Add stale timeout constants and document their values.
+- [x] Confirm app never blocks on unavailable phone connectivity.
 
 Exit criteria:
 
@@ -232,18 +348,18 @@ Goal: satisfy functional acceptance criteria and prevent regressions.
 
 Automated checklist:
 
-- [ ] Add phone unit tests for active eclipse detection logic.
-- [ ] Add phone unit tests for live payload construction and sanitization.
-- [ ] Add shared tests for payload guards.
-- [ ] Keep existing repo tests passing.
+- [x] Add phone unit tests for active eclipse detection logic.
+- [x] Add phone unit tests for live payload construction and sanitization.
+- [x] Add shared tests for payload guards.
+- [x] Keep existing repo tests passing.
 
 Manual QA checklist (real devices):
 
 - [ ] GPS allowed + no eclipse now => sun-only.
 - [ ] GPS allowed + eclipse active now => moon overlay appears and updates.
-- [ ] Open phone preview => watch preview mode available quickly.
-- [ ] Rotary scrub changes preview progress smoothly.
-- [ ] Close phone preview => watch exits preview mode.
+- [x] Open phone preview => watch preview mode available quickly. *(verified in emulator)*
+- [x] Rotary scrub changes preview progress smoothly. *(verified in emulator)*
+- [x] Close phone preview => watch exits preview mode. *(verified in emulator)*
 - [ ] Deny location permission => watch still renders sun-only safely.
 - [ ] Disconnect phone => graceful stale fallback then sun-only.
 
@@ -255,12 +371,12 @@ Exit criteria:
 
 Run from repo root unless noted.
 
-- [ ] `pnpm typecheck`
-- [ ] `pnpm lint`
-- [ ] `pnpm test`
+- [x] `pnpm typecheck`
+- [x] `pnpm lint`
+- [x] `pnpm test`
 - [ ] Android compile smoke check from `apps/mobile/android`:
   - [ ] `./gradlew :app:assembleDebug`
-  - [ ] `./gradlew :wear:assembleDebug` (or replace `wear` with actual module name)
+  - [x] `./gradlew :wear:assembleDebug` (or replace `wear` with actual module name)
 
 Phase 0 checks run (2026-02-21):
 
@@ -275,6 +391,42 @@ Phase 1 checks run (2026-02-21):
 - [x] `./gradlew :app:compileDebugKotlin :app:processDebugManifest` (from `apps/mobile/android`)
 - [ ] `./gradlew :app:assembleDebug` is currently blocked by existing external CMake/prefab errors in `react-native-screens` / `expo-modules-core`.
 
+Phase 2 checks run (2026-02-24):
+
+- [x] `pnpm --filter @eclipse-timer/mobile typecheck`
+- [x] `pnpm --filter @eclipse-timer/mobile lint`
+- [x] `pnpm --filter @eclipse-timer/mobile test`
+- [x] `./gradlew :app:compileDebugKotlin :app:processDebugManifest` (from `apps/mobile/android`)
+
+Phase 3 checks run (2026-02-24):
+
+- [x] `./gradlew :wear:assembleDebug` (from `apps/mobile/android`)
+
+Phase 4 checks run (2026-02-24):
+
+- [x] `pnpm --filter @eclipse-timer/mobile typecheck`
+- [x] `pnpm --filter @eclipse-timer/mobile lint`
+- [x] `pnpm --filter @eclipse-timer/mobile test`
+- [x] `./gradlew :app:compileDebugKotlin :app:processDebugManifest` (from `apps/mobile/android`)
+
+Phase 5 checks run (2026-02-24):
+
+- [x] `./gradlew :wear:assembleDebug` (from `apps/mobile/android`)
+
+Phase 5/6 incremental checks run (2026-02-24):
+
+- [x] `pnpm --filter @eclipse-timer/shared test -- tests/wearable.payload.test.ts`
+- [x] `pnpm --filter @eclipse-timer/mobile test -- tests/wear-preview-payload.test.ts tests/wear-preview-scrub-sync.test.ts tests/wear-live-compute.test.ts`
+- [x] `pnpm --filter @eclipse-timer/mobile typecheck`
+- [x] `./gradlew :app:compileDebugKotlin :wear:assembleDebug` (from `apps/mobile/android`)
+
+Phase 6 hardening checks run (2026-02-24):
+
+- [x] `pnpm typecheck`
+- [x] `pnpm lint`
+- [x] `pnpm test`
+- [x] `./gradlew :app:compileDebugKotlin :wear:assembleDebug` (from `apps/mobile/android`)
+
 CI/Pipeline gap (Wear OS):
 
 - [x] Add explicit Wear build step in GitHub Actions (`eas build --profile production-wear --platform android --local`).
@@ -286,13 +438,13 @@ CI/Pipeline gap (Wear OS):
 ## 6. Definition of Done
 
 - [ ] Live mode implemented and verified on watch hardware.
-- [ ] Preview mode implemented with rotary scrub and strict phone-preview gating.
+- [x] Preview mode implemented with rotary scrub and strict phone-preview gating. *(emulator-validated)*
 - [ ] No scope creep beyond MVP non-goals.
-- [ ] Automated tests added for critical logic and passing.
+- [x] Automated tests added for critical logic and passing.
 - [ ] Manual QA checklist completed.
-- [ ] Docs updated for behavior and test scenarios:
-  - [ ] `documents/testing-scenarios.md`
-  - [ ] `documents/low-level/mobile-app-internals.md` (only if mobile integration behavior changes materially)
+- [x] Docs updated for behavior and test scenarios:
+  - [x] `documents/reference/testing-scenarios.md`
+  - [x] `documents/low-level/mobile-app-internals.md` (mobile wear integration behavior documented)
 
 ## 7. Suggested Execution Order (Small Team)
 

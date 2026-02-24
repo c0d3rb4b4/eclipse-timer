@@ -729,7 +729,7 @@ jobs:
       #   uses: r0adkll/upload-google-play@v1
       #   with:
       #     serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-      #     packageName: com.lallimaven.eclipsetimer.wear
+      #     packageName: com.lallimaven.eclipsetimer
       #     releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
       #     track: internal
       #     whatsNewDirectory: ${{ steps.store_notes.outputs.play_whatsnew_dir }}
@@ -739,7 +739,7 @@ jobs:
       #   uses: r0adkll/upload-google-play@v1
       #   with:
       #     serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-      #     packageName: com.lallimaven.eclipsetimer.wear
+      #     packageName: com.lallimaven.eclipsetimer
       #     releaseFiles: artifacts/submission/${{ steps.artifact_names.outputs.wear_aab }}
       #     track: internal
 

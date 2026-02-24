@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">Eclipse Timer Wear</string>
-  <string name="status_starting">Live mode (sun-only placeholder)</string>
+  <string name="status_starting">Starting live mode...</string>
+  <string name="status_requesting_location_permission">Requesting watch location permission...</string>
+  <string name="status_location_permission_denied">Location permission denied. Showing sun-only fallback.</string>
+  <string name="status_acquiring_location">Getting watch GPS...</string>
   <string name="status_no_phone">No phone connection</string>
-  <string name="status_sent_waiting_ack">Sent test message. Waiting for phone...</string>
-  <string name="status_send_failed">Unable to send test message</string>
-  <string name="status_phone_ack">Phone reply: %1$s</string>
+  <string name="status_sent_waiting_ack">Sent live location. Waiting for phone render...</string>
+  <string name="status_send_failed">Unable to send live location</string>
+  <string name="status_location_failed">Unable to read watch location</string>
+  <string name="status_live_location_sent">Live location sent: %1$.4f, %2$.4f</string>
+  <string name="status_phone_ack">Live render updated</string>
+  <string name="status_live_payload_invalid">Invalid live payload; using sun-only fallback</string>
+  <string name="status_live_payload_stale">Live render stale; showing sun-only fallback</string>
+  <string name="status_preview_active">Preview mode active. Rotate crown/bezel to scrub.</string>
+  <string name="status_preview_closed">Phone preview closed. Returning to live mode.</string>
+  <string name="status_preview_payload_invalid">Invalid preview payload; keeping current mode.</string>
   <string name="status_deep_link_active">Deep link: %1$s</string>
 </resources>

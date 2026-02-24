@@ -96,3 +96,30 @@ Key state in `App`:
 - Uses only the first eclipse in catalog (`catalog[0]`).
 - No explicit memoization of computed results by location.
 - Result list is informational and does not persist across app relaunches.
+
+## Wear Companion Internals (Android)
+
+Wear sync is split into three phone-side services plus native Android Data Layer plumbing:
+
+- `apps/mobile/src/services/wearSync.ts`
+  - Subscribes to watch live-location payloads (`/wear/live/location/v1`).
+  - Builds and publishes live render payloads to watch (`/wear/live/render/v1`).
+  - Applies publish throttling by distance and time.
+- `apps/mobile/src/services/wearPreviewPublisher.ts`
+  - Publishes preview payloads only while the phone route is `Preview` (`/wear/preview/render/v1`).
+  - Sends `preview-unavailable` immediately when preview route exits.
+- `apps/mobile/src/services/wearPreviewScrubSync.ts`
+  - Sends phone scrub updates to watch and receives watch scrub updates (`/wear/preview/scrub/v1`).
+  - Uses latest-only coalescing to avoid queue buildup during rapid scrubbing.
+- `apps/mobile/android/app/src/main/java/com/lallimaven/eclipsetimer/wearable/WearDataLayerBridge.kt`
+  - Native message bridge for send/receive and node resolution.
+  - Caches last connected watch node ID and retries via node resolution on failure.
+
+### Wear reliability timing constants
+
+- Watch stale live payload timeout: `LIVE_STALE_RENDER_TIMEOUT_MS = 90_000`.
+- Watch stale check interval: `LIVE_STALE_CHECK_INTERVAL_MS = 5_000`.
+- Watch scrub send interval floor: `PREVIEW_SCRUB_MIN_SEND_INTERVAL_MS = 25`.
+- Phone scrub send interval floor: `MIN_SCRUB_PUBLISH_INTERVAL_MS = 30`.
+
+When watch live payloads stop arriving for longer than the stale timeout, watch UI falls back to sun-only rendering and surfaces an error status.
