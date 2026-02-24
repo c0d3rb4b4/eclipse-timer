@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.25] — 2026-02-24
+
+### Added
+- Added Android and Wear OS screenshot workflow device presets with profile-resolution fallbacks for Samsung, Pixel, and generic Wear form factors.
+- Added iPad simulator targets to the iOS screenshot workflow dispatch input options.
+- Added `supportsTablet: true` in `apps/mobile/app.json` so iOS build metadata explicitly supports iPad.
+
+### Changed
+- Improved Android and Wear screenshot automation to launch the app with `am start`, verify foreground activity before capture, and use safer deep-link iteration handling.
+- Updated the Timer screen eclipse picker modal to auto-scroll to the selected eclipse (or first upcoming option) and recover reliably when `FlatList` index scrolling fails.
+- Bumped `apps/mobile` version to `1.1.25`.
+
 ## [1.1.24] — 2026-02-24
 
 ### Changed

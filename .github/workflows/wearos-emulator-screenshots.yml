@@ -4,10 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       device_profile:
-        description: "AVD device profile id (`avdmanager list device`) or auto"
+        description: "Wear device preset (or auto)"
         required: true
         default: "auto"
-        type: string
+        type: choice
+        options:
+          - auto
+          - google-pixel-watch-3-45mm
+          - google-pixel-watch-3-41mm
+          - google-pixel-watch-2
+          - samsung-galaxy-watch7-44mm
+          - samsung-galaxy-watch7-40mm
+          - wearos-large-round
+          - wearos-round
+          - wearos-small-round
+          - wearos-square
+          - wearos-rect
       api_level:
         description: "Android API level for Wear emulator system image"
         required: true
@@ -261,15 +273,107 @@ jobs:
           [ -z "$device_suffix" ] && device_suffix="auto"
           avd_name="eclipse-timer-wear-${API_LEVEL}-${device_suffix}"
 
-          if ! avdmanager list avd | grep -Fq "Name: $avd_name"; then
-            if [ "${DEVICE_PROFILE:-auto}" = "auto" ]; then
-              echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --force
-            else
-              if ! echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --device "$DEVICE_PROFILE" --force; then
-                echo "::warning::Unable to use device profile '$DEVICE_PROFILE'. Retrying with default profile."
-                echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --force
-              fi
+          list_device_profiles() {
+            avdmanager list device | awk '
+              $1 == "id:" {
+                id = "";
+                if (match($0, /"([^"]+)"/, matches)) {
+                  id = matches[1];
+                }
+                next;
+              }
+              $1 == "Name:" {
+                name = $0;
+                sub(/^[[:space:]]*Name:[[:space:]]*/, "", name);
+                if (id != "") {
+                  printf "%s|%s\n", id, name;
+                }
+              }
+            '
+          }
+
+          select_default_wear_profile() {
+            local profiles
+            local selected
+            profiles="$(list_device_profiles)"
+            selected="$(printf '%s\n' "$profiles" | grep -Ei 'wear|watch' | grep -Ei '^wear|wearos|[|].*(Wear|Watch)' | head -n 1 | cut -d'|' -f1 || true)"
+            if [ -z "$selected" ]; then
+              selected="$(printf '%s\n' "$profiles" | grep -Ei 'wear|watch' | head -n 1 | cut -d'|' -f1 || true)"
             fi
+            printf '%s' "$selected"
+          }
+
+          select_profile_by_patterns() {
+            local profiles
+            local selected
+            local pattern
+            profiles="$(list_device_profiles)"
+            for pattern in "$@"; do
+              selected="$(printf '%s\n' "$profiles" | grep -Ei "$pattern" | head -n 1 | cut -d'|' -f1 || true)"
+              if [ -n "$selected" ]; then
+                printf '%s' "$selected"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          resolve_wear_profile_preset() {
+            local preset="$1"
+            case "$preset" in
+              google-pixel-watch-3-45mm|samsung-galaxy-watch7-44mm|wearos-large-round)
+                select_profile_by_patterns 'pixel[[:space:]]*watch[[:space:]]*3.*45|wear.*large.*round|wearos_large_round' 'wear.*round|wearos_round' || true
+                ;;
+              google-pixel-watch-3-41mm|google-pixel-watch-2|samsung-galaxy-watch7-40mm|wearos-round)
+                select_profile_by_patterns 'pixel[[:space:]]*watch[[:space:]]*(3|2)|wear.*round|wearos_round' 'wear.*small.*round|wearos_small_round' || true
+                ;;
+              wearos-small-round)
+                select_profile_by_patterns 'wear.*small.*round|wearos_small_round' 'wear.*round|wearos_round' || true
+                ;;
+              wearos-square)
+                select_profile_by_patterns 'wear.*square|wearos_square' 'wear.*rect|wearos_rect' || true
+                ;;
+              wearos-rect)
+                select_profile_by_patterns 'wear.*rect|wearos_rect' 'wear.*square|wearos_square' || true
+                ;;
+              *)
+                printf '%s' "$preset"
+                ;;
+            esac
+          }
+
+          create_avd() {
+            local profile="$1"
+            if [ -n "$profile" ]; then
+              if echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --device "$profile" --force; then
+                return 0
+              fi
+              echo "::warning::Unable to use device profile '$profile'. Retrying with default profile."
+            fi
+            echo "no" | avdmanager create avd -n "$avd_name" -k "$system_image" --force
+          }
+
+          selected_device_profile="${DEVICE_PROFILE:-auto}"
+          if [ "$selected_device_profile" = "auto" ]; then
+            selected_device_profile="$(select_default_wear_profile)"
+            if [ -n "$selected_device_profile" ]; then
+              echo "Auto-selected Wear device profile: $selected_device_profile"
+            else
+              echo "::warning::Could not auto-select a Wear device profile. Falling back to SDK default profile."
+            fi
+          else
+            resolved_profile="$(resolve_wear_profile_preset "$selected_device_profile")"
+            if [ -n "$resolved_profile" ]; then
+              selected_device_profile="$resolved_profile"
+              echo "Requested Wear preset '${DEVICE_PROFILE:-auto}' resolved to profile: $selected_device_profile"
+            else
+              echo "::warning::Unable to resolve Wear preset '${DEVICE_PROFILE:-auto}'. Falling back to auto selection."
+              selected_device_profile="$(select_default_wear_profile)"
+            fi
+          fi
+
+          if ! avdmanager list avd | grep -Fq "Name: $avd_name"; then
+            create_avd "$selected_device_profile"
           fi
 
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
@@ -322,11 +426,25 @@ jobs:
 
           adb -s "$emulator_serial" install -r "$APP_PATH"
 
+          wait_for_app_foreground() {
+            local package_name="$1"
+            for _ in {1..30}; do
+              if adb -s "$emulator_serial" shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity|mFocusedApp' | grep -Fq "$package_name"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+
           shots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
           mkdir -p "$shots_dir"
           printf "index,url,file\n" > "$shots_dir/manifest.csv"
 
-          adb -s "$emulator_serial" shell monkey -p "$BUNDLE_ID" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+          adb -s "$emulator_serial" shell am start -W -n "$BUNDLE_ID/.MainActivity" >/dev/null 2>&1 || true
+          if ! wait_for_app_foreground "$BUNDLE_ID"; then
+            echo "::warning::App did not enter the foreground after initial launch."
+          fi
           sleep "$STARTUP_WAIT_SECONDS"
           adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/00-launch.png"
           printf "00,launch,00-launch.png\n" >> "$shots_dir/manifest.csv"
@@ -346,7 +464,8 @@ jobs:
 
           if [ -n "$deep_links" ]; then
             index=1
-            while IFS= read -r url; do
+            mapfile -t deep_link_list <<< "$deep_links"
+            for url in "${deep_link_list[@]}"; do
               [ -z "$url" ] && continue
               slug="$(printf '%s' "$url" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#[^A-Za-z0-9._-]+#-#g; s#-+#-#g; s#^-##; s#-$##')"
               if [ -z "$slug" ]; then
@@ -354,7 +473,12 @@ jobs:
               fi
               filename="$(printf '%02d' "$index")-$slug.png"
 
-              if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" "$BUNDLE_ID" >/dev/null 2>&1; then
+              if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" "$BUNDLE_ID" >/dev/null 2>&1 </dev/null; then
+                if ! wait_for_app_foreground "$BUNDLE_ID"; then
+                  echo "::warning::Deep link opened but app is not foregrounded: $url"
+                  index=$((index + 1))
+                  continue
+                fi
                 sleep "$PER_PAGE_WAIT_SECONDS"
                 adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/$filename"
                 printf "%02d,%s,%s\n" "$index" "$url" "$filename" >> "$shots_dir/manifest.csv"
@@ -363,7 +487,7 @@ jobs:
               fi
 
               index=$((index + 1))
-            done <<< "$deep_links"
+            done
           fi
 
           {

@@ -1,5 +1,5 @@
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -38,6 +38,7 @@ const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 const TIMER_HERO_PREVIEW_SUN_RADIUS = 16;
 const TIMER_HERO_PREVIEW_STAGE_SIZE = 34;
+const ECLIPSE_PICKER_FALLBACK_ROW_HEIGHT = 56;
 
 function localKindLabel(kind: "none" | "partial" | "total" | "annular") {
   if (kind === "total") return "Total";
@@ -213,6 +214,7 @@ export default function TimerScreen({
 }: TimerScreenProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const eclipsePickerListRef = useRef<FlatList<TimerEclipseOption>>(null);
   const [isEclipsePickerOpen, setIsEclipsePickerOpen] = useState(false);
   const [isAddFavoriteModalOpen, setIsAddFavoriteModalOpen] = useState(false);
   const [favoriteModalName, setFavoriteModalName] = useState("");
@@ -224,6 +226,18 @@ export default function TimerScreen({
     () => eclipseOptions.find((option) => option.id === activeEclipseId) ?? null,
     [activeEclipseId, eclipseOptions],
   );
+  const eclipsePickerTargetIndex = useMemo(() => {
+    if (!eclipseOptions.length) return -1;
+
+    if (activeEclipseId) {
+      const selectedIndex = eclipseOptions.findIndex((option) => option.id === activeEclipseId);
+      if (selectedIndex >= 0) return selectedIndex;
+    }
+
+    const firstUpcomingIndex = eclipseOptions.findIndex((option) => !option.isPast);
+    if (firstUpcomingIndex >= 0) return firstUpcomingIndex;
+    return eclipseOptions.length - 1;
+  }, [activeEclipseId, eclipseOptions]);
   const mapHeight = useMemo(
     () => clamp((windowHeight - insets.top - insets.bottom) * 0.4, 260, 420),
     [insets.bottom, insets.top, windowHeight],
@@ -330,6 +344,52 @@ export default function TimerScreen({
       }),
     });
   }, [timer.result]);
+  const scrollEclipsePickerToTarget = useCallback(
+    (animated: boolean) => {
+      if (eclipsePickerTargetIndex < 0) return;
+      eclipsePickerListRef.current?.scrollToIndex({
+        index: eclipsePickerTargetIndex,
+        animated,
+        viewPosition: 0.5,
+      });
+    },
+    [eclipsePickerTargetIndex],
+  );
+
+  useEffect(() => {
+    if (!isEclipsePickerOpen) return;
+
+    const scrollToTarget = () => {
+      scrollEclipsePickerToTarget(false);
+    };
+
+    const rafId = requestAnimationFrame(scrollToTarget);
+    const timeoutId = setTimeout(scrollToTarget, 120);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timeoutId);
+    };
+  }, [isEclipsePickerOpen, scrollEclipsePickerToTarget]);
+
+  const handleEclipsePickerScrollToIndexFailed = useCallback(
+    (info: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
+      const rowLength =
+        info.averageItemLength > 0 ? info.averageItemLength : ECLIPSE_PICKER_FALLBACK_ROW_HEIGHT;
+      eclipsePickerListRef.current?.scrollToOffset({
+        offset: Math.max(0, info.index * rowLength),
+        animated: false,
+      });
+      requestAnimationFrame(() => {
+        if (!isEclipsePickerOpen) return;
+        eclipsePickerListRef.current?.scrollToIndex({
+          index: info.index,
+          animated: false,
+          viewPosition: 0.5,
+        });
+      });
+    },
+    [isEclipsePickerOpen],
+  );
 
   const closeAddFavoriteModal = () => {
     setIsAddFavoriteModalOpen(false);
@@ -647,10 +707,12 @@ export default function TimerScreen({
               Switch eclipses without leaving the timer screen.
             </Text>
             <FlatList
+              ref={eclipsePickerListRef}
               data={eclipseOptions}
               keyExtractor={(item) => item.id}
               style={styles.eclipsePickerList}
               contentContainerStyle={styles.eclipsePickerListContent}
+              onScrollToIndexFailed={handleEclipsePickerScrollToIndexFailed}
               renderItem={({ item }) => {
                 const isSelected = item.id === activeEclipseId;
                 return (

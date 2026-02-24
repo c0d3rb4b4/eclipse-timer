@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: "Simulator device target (includes screen size + target resolution; use auto to pick first available iPhone)"
+        description: "Simulator device target (includes screen size + target resolution; use auto to pick first available iPhone/iPad)"
         required: true
         default: "auto"
         type: choice
@@ -34,6 +34,11 @@ on:
           - iPhone 16 Plus (6.7-inch, 1290x2796)
           - iPhone 16 Pro (6.3-inch, 1206x2622)
           - iPhone 16 Pro Max (6.9-inch, 1320x2868)
+          - iPad (10th generation) (10.9-inch, 1640x2360)
+          - iPad mini (6th generation) (8.3-inch, 1488x2266)
+          - iPad Air (5th generation) (10.9-inch, 1640x2360)
+          - iPad Pro (11-inch) (4th generation) (11-inch, 1668x2388)
+          - iPad Pro (12.9-inch) (6th generation) (12.9-inch, 2048x2732)
       startup_wait_seconds:
         description: "Seconds to wait after first app launch"
         required: true
@@ -271,8 +276,8 @@ jobs:
 
           if ! ensure_requested_simulator "$DEVICE_LABEL" "$DEVICE_NAME"; then
             echo "Could not provision requested simulator '$DEVICE_LABEL'."
-            echo "Available iPhone simulators:"
-            xcrun simctl list devices available | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' || true
+            echo "Available iOS phone/tablet simulators:"
+            xcrun simctl list devices available | grep -E '^[[:space:]]+(iPhone|iPad) .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' || true
             exit 1
           fi
 
@@ -288,16 +293,16 @@ jobs:
           if [ -z "$udid" ]; then
             if [ "$DEVICE_LABEL" != "auto" ]; then
               echo "Requested simulator '$DEVICE_LABEL' is unavailable after provisioning."
-              echo "Available iPhone simulators:"
-              printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' || true
+              echo "Available iOS phone/tablet simulators:"
+              printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+(iPhone|iPad) .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' || true
               exit 1
             fi
-            device_line="$(printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+iPhone .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' | head -n 1 || true)"
+            device_line="$(printf '%s\n' "$available_devices" | grep -E '^[[:space:]]+(iPhone|iPad) .*\([0-9A-F-]+\) \((Shutdown|Booted)\)' | head -n 1 || true)"
             udid="$(printf '%s' "$device_line" | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/' || true)"
           fi
 
           if [ -z "$udid" ]; then
-            echo "No available iPhone simulator found."
+            echo "No available iOS phone/tablet simulator found."
             echo "Available devices:"
             printf '%s\n' "$available_devices"
             exit 1

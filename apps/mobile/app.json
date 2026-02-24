@@ -9,6 +9,7 @@
     "ios": {
       "bundleIdentifier": "com.lallimaven.eclipse-timer",
       "buildNumber": "2",
+      "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Eclipse Timer uses your location to compute precise eclipse contact times for where you are. Your location stays on-device and is never sent to a server.",
         "ITSAppUsesNonExemptEncryption": false
