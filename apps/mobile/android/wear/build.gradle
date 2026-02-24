@@ -24,15 +24,58 @@ if (major > 99 || minor > 99 || patch > 99) {
     throw new GradleException("Wear versionCode mapping requires major/minor/patch <= 99. Found: $mobileVersionName")
 }
 def wearVersionCode = (rootProject.ext.targetSdkVersion as int) * 1_000_000 + major * 10_000 + minor * 100 + patch
-def isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
-    taskName.toLowerCase().contains("release")
+def isWearReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    def normalizedTaskName = taskName.toLowerCase()
+    normalizedTaskName.contains(":wear:") && normalizedTaskName.contains("release")
 }
-def hasInjectedReleaseSigning = project.hasProperty("android.injected.signing.store.file") &&
-        project.hasProperty("android.injected.signing.store.password") &&
-        project.hasProperty("android.injected.signing.key.alias") &&
-        project.hasProperty("android.injected.signing.key.password")
-
-if (isReleaseBuildRequested && !hasInjectedReleaseSigning) {
+def injectedSigningProperty = { String key ->
+    def fromStartParameter = gradle.startParameter.projectProperties?.get(key)
+    if (fromStartParameter != null) {
+        return fromStartParameter.toString()
+    }
+    def fromProject = project.findProperty(key) ?: rootProject.findProperty(key)
+    return fromProject == null ? null : fromProject.toString()
+}
+def injectedStoreFile = injectedSigningProperty("android.injected.signing.store.file")
+def injectedStorePassword = injectedSigningProperty("android.injected.signing.store.password")
+def injectedKeyAlias = injectedSigningProperty("android.injected.signing.key.alias")
+def injectedKeyPassword = injectedSigningProperty("android.injected.signing.key.password")
+def hasInjectedReleaseSigning = [injectedStoreFile, injectedStorePassword, injectedKeyAlias, injectedKeyPassword].every {
+    it != null && it.trim().length() > 0
+}
+def wearReleaseSigning = null
+if (hasInjectedReleaseSigning) {
+    wearReleaseSigning = [
+            storeFile    : file(injectedStoreFile),
+            storePassword: injectedStorePassword,
+            keyAlias     : injectedKeyAlias,
+            keyPassword  : injectedKeyPassword,
+    ]
+}
+if (wearReleaseSigning == null) {
+    def appProject = rootProject.findProject(":app")
+    def appAndroidExtension = appProject?.extensions?.findByName("android")
+    def appReleaseSigningConfig = appAndroidExtension?.signingConfigs?.findByName("release")
+    if (appReleaseSigningConfig != null) {
+        def appStoreFile = appReleaseSigningConfig.storeFile
+        def appStorePassword = appReleaseSigningConfig.storePassword?.toString()
+        def appKeyAlias = appReleaseSigningConfig.keyAlias?.toString()
+        def appKeyPassword = appReleaseSigningConfig.keyPassword?.toString()
+        def hasAppReleaseSigning = appStoreFile != null &&
+                [appStorePassword, appKeyAlias, appKeyPassword].every { it != null && it.trim().length() > 0 }
+        def isDebugLikeSigning = appStoreFile?.toString()?.toLowerCase()?.endsWith("debug.keystore") ||
+                (appKeyAlias == "androiddebugkey" && appStorePassword == "android" && appKeyPassword == "android")
+        if (hasAppReleaseSigning && !isDebugLikeSigning) {
+            wearReleaseSigning = [
+                    storeFile    : appStoreFile,
+                    storePassword: appStorePassword,
+                    keyAlias     : appKeyAlias,
+                    keyPassword  : appKeyPassword,
+            ]
+        }
+    }
+}
+if (isWearReleaseBuildRequested && wearReleaseSigning == null) {
     throw new GradleException("[wear] Missing release signing config. Provide Android signing credentials (for EAS, configure Android credentials for this project) before building :wear release artifacts.")
 }
 
@@ -56,11 +99,11 @@ android {
             keyPassword "android"
         }
         release {
-            if (hasInjectedReleaseSigning) {
-                storeFile file(project.property("android.injected.signing.store.file"))
-                storePassword project.property("android.injected.signing.store.password")
-                keyAlias project.property("android.injected.signing.key.alias")
-                keyPassword project.property("android.injected.signing.key.password")
+            if (wearReleaseSigning != null) {
+                storeFile wearReleaseSigning.storeFile
+                storePassword wearReleaseSigning.storePassword
+                keyAlias wearReleaseSigning.keyAlias
+                keyPassword wearReleaseSigning.keyPassword
             }
         }
     }
