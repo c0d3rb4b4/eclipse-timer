@@ -59,6 +59,8 @@ jobs:
     name: Capture iOS Simulator Screenshots
     runs-on: [self-hosted, macOS, eclipse-timer]
     timeout-minutes: 90
+    permissions:
+      contents: write
     env:
       BUNDLE_ID: com.lallimaven.eclipse-timer
       SENTRY_DISABLE_AUTO_UPLOAD: "true"
@@ -93,6 +95,8 @@ jobs:
         working-directory: apps/mobile
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
+          # Prevent runtime permission prompt from obscuring simulator screenshots.
+          EXPO_PUBLIC_SKIP_NOTIFICATION_PERMISSION_PROMPT: "true"
         run: |
           set -euo pipefail
           pnpm exec eas build --platform ios --profile screenshots --local --non-interactive
@@ -408,3 +412,91 @@ jobs:
           name: ios-simulator-screenshots-${{ github.run_id }}
           path: artifacts/screenshots
           if-no-files-found: error
+
+      - name: Resolve latest GitHub release
+        id: latest_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: release } = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+
+              core.info(`Using latest release: ${release.tag_name} (id: ${release.id})`);
+              core.setOutput("release_id", String(release.id));
+              core.setOutput("tag_name", release.tag_name);
+            } catch (error) {
+              core.setFailed(`Unable to resolve latest release: ${error.message}`);
+            }
+
+      - name: Attach screenshots to latest release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.latest_release.outputs.release_id }}
+          RELEASE_TAG_NAME: ${{ steps.latest_release.outputs.tag_name }}
+          SCREENSHOTS_DIR: ${{ github.workspace }}/artifacts/screenshots
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const releaseId = Number(process.env.RELEASE_ID);
+            const releaseTag = process.env.RELEASE_TAG_NAME || "unknown";
+            const screenshotsDir = process.env.SCREENSHOTS_DIR;
+
+            if (!Number.isFinite(releaseId) || releaseId <= 0) {
+              core.setFailed(`Invalid release id: ${process.env.RELEASE_ID}`);
+              return;
+            }
+
+            if (!fs.existsSync(screenshotsDir)) {
+              core.setFailed(`Screenshots directory not found: ${screenshotsDir}`);
+              return;
+            }
+
+            const files = fs
+              .readdirSync(screenshotsDir)
+              .filter((name) => {
+                const fullPath = path.join(screenshotsDir, name);
+                return fs.statSync(fullPath).isFile();
+              });
+
+            if (!files.length) {
+              core.setFailed(`No screenshot files found in ${screenshotsDir}`);
+              return;
+            }
+
+            const existingAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: releaseId,
+              per_page: 100,
+            });
+            const existingAssetsByName = new Map(existingAssets.map((asset) => [asset.name, asset]));
+
+            for (const fileName of files) {
+              const filePath = path.join(screenshotsDir, fileName);
+              const previous = existingAssetsByName.get(fileName);
+              if (previous) {
+                await github.rest.repos.deleteReleaseAsset({
+                  owner,
+                  repo,
+                  asset_id: previous.id,
+                });
+                core.info(`Deleted existing asset: ${fileName}`);
+              }
+
+              const data = fs.readFileSync(filePath);
+              await github.rest.repos.uploadReleaseAsset({
+                owner,
+                repo,
+                release_id: releaseId,
+                name: fileName,
+                data,
+              });
+              core.info(`Uploaded ${fileName} to release ${releaseTag}`);
+            }
