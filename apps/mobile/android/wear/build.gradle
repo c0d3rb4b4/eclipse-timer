@@ -24,6 +24,17 @@ if (major > 99 || minor > 99 || patch > 99) {
     throw new GradleException("Wear versionCode mapping requires major/minor/patch <= 99. Found: $mobileVersionName")
 }
 def wearVersionCode = (rootProject.ext.targetSdkVersion as int) * 1_000_000 + major * 10_000 + minor * 100 + patch
+def isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("release")
+}
+def hasInjectedReleaseSigning = project.hasProperty("android.injected.signing.store.file") &&
+        project.hasProperty("android.injected.signing.store.password") &&
+        project.hasProperty("android.injected.signing.key.alias") &&
+        project.hasProperty("android.injected.signing.key.password")
+
+if (isReleaseBuildRequested && !hasInjectedReleaseSigning) {
+    throw new GradleException("[wear] Missing release signing config. Provide Android signing credentials (for EAS, configure Android credentials for this project) before building :wear release artifacts.")
+}
 
 android {
     namespace "com.lallimaven.eclipsetimer.wear"
@@ -44,6 +55,14 @@ android {
             keyAlias "androiddebugkey"
             keyPassword "android"
         }
+        release {
+            if (hasInjectedReleaseSigning) {
+                storeFile file(project.property("android.injected.signing.store.file"))
+                storePassword project.property("android.injected.signing.store.password")
+                keyAlias project.property("android.injected.signing.key.alias")
+                keyPassword project.property("android.injected.signing.key.password")
+            }
+        }
     }
 
     buildTypes {
@@ -51,7 +70,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled false
         }
     }
