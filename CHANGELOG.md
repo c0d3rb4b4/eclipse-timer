@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.33] — 2026-02-26
+
+### Added
+- Added a new timer-linked `Photography Guide` flow with a split `Preview` / `Photo Guide` action row on the Timer screen.
+- Added schedule generation helpers for photo timing distribution across eclipse phases (`3/5/7/9` shots), including phase buckets and preview-progress anchors.
+- Added in-guide shot schedule table rows with UTC/local timestamps, phase labels, and generated eclipse preview thumbnails per shot.
+- Added landscape composite simulation modal with 24mm framing, fixed `MAX` anchor placement, clamped edge indicators, and moon rendering only during occlusion windows.
+- Added regression tests for photography guide schedule logic and composite anchor/clamping behavior.
+
+### Changed
+- Updated navigation wiring to include a dedicated `PhotographyGuide` route with timer circumstance payload (including contact bearings for preview direction).
+- Bumped `apps/mobile` version to `1.1.33`.
+
+### Tests
+- Verified mobile checks pass: `pnpm -C apps/mobile typecheck`, `pnpm -C apps/mobile lint`, and `pnpm -C apps/mobile test`.
+
 ## [1.1.32] — 2026-02-26
 
 ### Added

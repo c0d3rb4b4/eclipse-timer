@@ -1,4 +1,4 @@
-import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
+import type { Circumstances, EclipseRecord, Observer } from "@eclipse-timer/shared";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -209,6 +209,7 @@ type TimerScreenProps = {
   onUseFavoriteLocation: (location: FavoriteLocation) => void;
   onOpenMenu: () => void;
   onOpenPreview: (result: Circumstances) => void;
+  onOpenPhotographyGuide: (result: Circumstances, observer: Observer) => void;
 };
 
 export default function TimerScreen({
@@ -225,6 +226,7 @@ export default function TimerScreen({
   onUseFavoriteLocation,
   onOpenMenu,
   onOpenPreview,
+  onOpenPhotographyGuide,
 }: TimerScreenProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -1114,15 +1116,34 @@ export default function TimerScreen({
                 </View>
               ))}
 
-              <Pressable
-                style={styles.previewBtn}
-                onPress={() => {
-                  if (!timer.result) return;
-                  onOpenPreview(timer.result);
-                }}
-              >
-                <Text style={styles.previewBtnText}>Preview</Text>
-              </Pressable>
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={() => {
+                    if (!timer.result) return;
+                    onOpenPreview(timer.result);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open eclipse preview"
+                >
+                  <Text style={styles.actionBtnText}>Preview</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={() => {
+                    if (!timer.result) return;
+                    onOpenPhotographyGuide(timer.result, {
+                      latDeg: timer.pin.lat,
+                      lonDeg: timer.pin.lon,
+                      elevM: timer.pin.elevM,
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open photography guide"
+                >
+                  <Text style={styles.actionBtnText}>Photo Guide</Text>
+                </Pressable>
+              </View>
             </>
           )}
         </Animated.View>
@@ -1553,8 +1574,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       color: colors.textMuted,
       fontSize: 12,
     },
-    previewBtn: {
+    actionRow: {
       marginTop: 4,
+      flexDirection: "row",
+      gap: 8,
+    },
+    actionBtn: {
+      flex: 1,
       paddingVertical: 10,
       borderRadius: 10,
       borderWidth: 1,
@@ -1563,7 +1589,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       alignItems: "center",
       justifyContent: "center",
     },
-    previewBtnText: { color: colors.textPrimary, fontSize: 13, fontWeight: "700" },
+    actionBtnText: { color: colors.textPrimary, fontSize: 13, fontWeight: "700" },
     contactRow: {
       flexDirection: "row",
       alignItems: "center",

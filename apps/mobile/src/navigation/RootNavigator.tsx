@@ -48,6 +48,9 @@ import HelpScreen from "../screens/HelpScreen";
 import LandingScreen from "../screens/LandingScreen";
 import LocationSettingsScreen from "../screens/LocationSettingsScreen";
 import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
+import PhotographyGuideScreen, {
+  type PhotographyGuidePayload,
+} from "../screens/PhotographyGuideScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import ThemeSettingsScreen from "../screens/ThemeSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
@@ -67,6 +70,7 @@ type RootStackParamList = {
   Landing: undefined;
   Timer: undefined;
   Preview: { payload: PreviewPayload };
+  PhotographyGuide: { payload: PhotographyGuidePayload };
   Settings: undefined;
   Help: undefined;
   ThemeSettings: undefined;
@@ -80,6 +84,7 @@ const linking: LinkingOptions<RootStackParamList> = {
     screens: {
       Landing: "landing",
       Timer: "timer",
+      PhotographyGuide: "photography-guide",
       Settings: "settings",
       Help: "settings/help",
       ThemeSettings: "settings/theme",
@@ -102,6 +107,10 @@ type TimerRouteProps = NativeStackScreenProps<RootStackParamList, "Timer"> & {
 };
 
 type PreviewRouteProps = NativeStackScreenProps<RootStackParamList, "Preview"> & {
+  onOpenMenu: () => void;
+};
+
+type PhotographyGuideRouteProps = NativeStackScreenProps<RootStackParamList, "PhotographyGuide"> & {
   onOpenMenu: () => void;
 };
 
@@ -170,7 +179,8 @@ function StartupLoadingScreen({
 }
 
 function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null {
-  if (route === "Landing" || route === "Timer") return route;
+  if (route === "Landing") return "Landing";
+  if (route === "Timer" || route === "PhotographyGuide") return "Timer";
   if (
     route === "Settings" ||
     route === "Help" ||
@@ -410,6 +420,30 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
     },
     [activeEclipse?.dateYmd, activeEclipse?.id, navigation],
   );
+  const openPhotographyGuide = useCallback(
+    (result: Circumstances, observer: Observer) => {
+      const payload: PhotographyGuidePayload = {
+        eclipseId: activeEclipse?.id ?? result.eclipseId,
+        eclipseDateYmd: activeEclipse?.dateYmd ?? "",
+        visible: result.visible,
+        kindAtLocation: result.kindAtLocation,
+        magnitude: result.magnitude,
+        c1Utc: result.c1Utc,
+        c2Utc: result.c2Utc,
+        maxUtc: result.maxUtc,
+        c3Utc: result.c3Utc,
+        c4Utc: result.c4Utc,
+        c1BearingDeg: result.c1BearingDeg,
+        c2BearingDeg: result.c2BearingDeg,
+        c3BearingDeg: result.c3BearingDeg,
+        c4BearingDeg: result.c4BearingDeg,
+        observer,
+      };
+
+      navigation.navigate("PhotographyGuide", { payload });
+    },
+    [activeEclipse?.dateYmd, activeEclipse?.id, navigation],
+  );
 
   const useFavoriteLocation = useCallback(
     (location: FavoriteLocation) => {
@@ -456,6 +490,7 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
       onSelectEclipse={selectEclipse}
       onOpenMenu={onOpenMenu}
       onOpenPreview={openPreview}
+      onOpenPhotographyGuide={openPhotographyGuide}
     />
   );
 }
@@ -463,6 +498,16 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
 function PreviewRoute({ navigation, route, onOpenMenu }: PreviewRouteProps) {
   return (
     <EclipsePreviewScreen
+      payload={route.params.payload}
+      onBack={() => navigation.goBack()}
+      onOpenMenu={onOpenMenu}
+    />
+  );
+}
+
+function PhotographyGuideRoute({ navigation, route, onOpenMenu }: PhotographyGuideRouteProps) {
+  return (
+    <PhotographyGuideScreen
       payload={route.params.payload}
       onBack={() => navigation.goBack()}
       onOpenMenu={onOpenMenu}
@@ -802,6 +847,9 @@ export default function RootNavigator() {
           </Stack.Screen>
           <Stack.Screen name="Preview">
             {(props) => <PreviewRoute {...props} onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="PhotographyGuide">
+            {(props) => <PhotographyGuideRoute {...props} onOpenMenu={openMenu} />}
           </Stack.Screen>
           <Stack.Screen name="Settings">
             {(props) => <SettingsRoute {...props} onOpenMenu={openMenu} />}

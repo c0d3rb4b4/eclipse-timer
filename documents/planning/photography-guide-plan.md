@@ -1,11 +1,25 @@
 # Photography Guide Page Plan
 
 Last updated: 2026-02-26  
-Status: Proposed
+Status: In progress (`Phase 1-3` complete, `Phase 4` partially complete)
 
 ## 1. Goal
 
 Add a new `Photography Guide` page that gives users a shot schedule (time + generated preview) and a landscape composite simulation so they can plan eclipse photos from the timer flow.
+
+## 1.1 Current Implementation Status (2026-02-26)
+
+Completed:
+1. Timer action row now exposes equal-width `Preview` and `Photo Guide` buttons.
+2. New `PhotographyGuide` route is wired from timer with active eclipse + observer context payload.
+3. Guide screen computes schedules for `3/5/7/9` on load/change and shows out-of-eclipse disabled state (`Must be within eclipse area`).
+4. Schedule table is rendered with shot index, UTC/local times, phase bucket, and generated preview thumbnails.
+5. `Show landscape composite` opens a modal rendering a 24mm-style composite with fixed `MAX` anchor, per-shot placement, moon-only occlusion rendering, and clamped-edge indicators.
+6. Unit tests exist for distribution logic, invalid visibility state, and landscape composite anchor/clamp behavior.
+
+Pending:
+1. Dedicated React Native screen/component tests for Photography Guide UI behavior (falls under `ADD-01` test-layer backlog).
+2. Manual verification pass for timer -> photo guide -> schedule -> composite flow on target devices.
 
 ## 2. Entry Point and Navigation
 
@@ -86,7 +100,7 @@ Each row should include:
 
 ## 8. Implementation Phases
 
-### Phase 1: Navigation + UI shell
+### Phase 1: Navigation + UI shell (`Complete`)
 
 1. Add `PhotographyGuide` route.
 2. Add `Photo Guide` button next to `Preview`.
@@ -96,7 +110,7 @@ Exit criteria:
 - Timer screen shows both buttons in equal widths.
 - New route opens with active eclipse context.
 
-### Phase 2: Schedule compute + table
+### Phase 2: Schedule compute + table (`Complete`)
 
 1. Implement distribution helper for total/annular vs partial rules.
 2. Auto-compute with default `5` on mount.
@@ -107,7 +121,7 @@ Exit criteria:
 Exit criteria:
 - All option counts (`3/5/7/9`) produce stable rows with `MAX` centered in order.
 
-### Phase 3: Landscape composite
+### Phase 3: Landscape composite (`Complete`)
 
 1. Add `Show landscape composite` action shown only when table exists.
 2. Render 24mm simulation with horizon and all shot placements.
@@ -116,15 +130,18 @@ Exit criteria:
 Exit criteria:
 - Composite matches schedule count and placement logic.
 
-### Phase 4: Tests and regression checks
+### Phase 4: Tests and regression checks (`Partially complete`)
 
-1. Unit tests for distribution logic (total/annular and partial).
-2. Unit tests for invalid visibility state.
-3. Screen tests for:
+1. Unit tests for distribution logic (total/annular and partial). (`Complete`)
+2. Unit tests for invalid visibility state. (`Complete`)
+3. Unit tests for landscape composite anchor/clamp behavior. (`Complete`)
+4. Screen tests for:
    - default `5` computed on entry
    - recalc on dropdown change
    - disabled dropdown + info text when out of eclipse area
-4. Manual verification on timer -> guide -> preview/composite flow.
+   Status: `Pending`
+5. Manual verification on timer -> guide -> preview/composite flow.
+   Status: `Pending`
 
 ## 9. Assumptions
 
