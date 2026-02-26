@@ -495,6 +495,10 @@ jobs:
           ${{ github.event.inputs.deep_links }}
           EOF
           )"
+          echo "=== DEBUG: Raw input ==="
+          echo "$DEEP_LINKS_INPUT"
+          echo "=== END Raw input ==="
+          
           deep_links="$(
             printf '%s\n' "$DEEP_LINKS_INPUT" \
               | tr -d '\r' \
@@ -503,12 +507,28 @@ jobs:
               | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
               | sed '/^[[:space:]]*$/d'
           )"
+          
+          echo "=== DEBUG: Parsed links ==="
+          printf '%s' "$deep_links" | cat -A
+          echo ""
+          echo "=== END Parsed links ==="
+          
+          link_count="$(printf '%s\n' "$deep_links" | grep -c '://' || echo 0)"
+          echo "DEBUG: Link count by grep: $link_count"
 
           if [ -n "$deep_links" ]; then
             index=1
-            echo "Processing $(echo "$deep_links" | sed '/^$/d' | wc -l | tr -d ' ') deep link(s)..."
+            echo "Processing $link_count deep link(s)..."
+            echo "=== Starting while loop ==="
             while IFS= read -r url; do
-              [ -z "$url" ] && continue
+              echo "DEBUG: Loop iteration started, index=$index"
+              echo "DEBUG: Read url='$url'"
+              echo "DEBUG: URL length=${#url}"
+              
+              if [ -z "$url" ]; then
+                echo "DEBUG: Empty url, skipping"
+                continue
+              fi
 
               echo "[$index] Processing: $url"
 
@@ -548,8 +568,11 @@ jobs:
                 echo "::warning::Failed to open deep link: $url"
               fi
 
+              echo "DEBUG: End of loop iteration $index, incrementing..."
               index=$((index + 1))
+              echo "DEBUG: New index=$index"
             done <<< "$deep_links"
+            echo "=== While loop completed ==="
             echo "Completed processing deep links"
           else
             echo "::warning::No deep links to process"
