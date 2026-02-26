@@ -4,8 +4,14 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -45,12 +51,49 @@ class EclipseRenderView @JvmOverloads constructor(
     style = Paint.Style.STROKE
     color = Color.rgb(230, 243, 255)
   }
+  private val debugPanelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.FILL
+    color = Color.parseColor("#8A000000")
+  }
+  private val debugPanelStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.STROKE
+    color = Color.parseColor("#66FFFFFF")
+  }
+  private val debugTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.FILL
+    color = Color.WHITE
+    textAlign = Paint.Align.CENTER
+    typeface = Typeface.MONOSPACE
+  }
 
   private var showMoon = false
   private var sunRadiusNorm = DEFAULT_SUN_RADIUS_NORM
   private var moonRadiusNorm = 0f
   private var moonCenterXNorm = DEFAULT_CENTER_NORM
   private var moonCenterYNorm = DEFAULT_CENTER_NORM
+  private var debugOverlayEnabled = false
+  private var debugLatitudeDeg: Double? = null
+  private var debugLongitudeDeg: Double? = null
+  private var debugEpochMillis: Long = System.currentTimeMillis()
+
+  fun setDebugOverlayEnabled(enabled: Boolean) {
+    if (debugOverlayEnabled == enabled) {
+      return
+    }
+    debugOverlayEnabled = enabled
+    invalidate()
+  }
+
+  fun updateDebugOverlay(
+    latitudeDeg: Double?,
+    longitudeDeg: Double?,
+    epochMillis: Long,
+  ) {
+    debugLatitudeDeg = latitudeDeg
+    debugLongitudeDeg = longitudeDeg
+    debugEpochMillis = epochMillis
+    invalidate()
+  }
 
   fun renderSunOnly(sunRadiusNorm: Float = DEFAULT_SUN_RADIUS_NORM) {
     showMoon = false
@@ -126,6 +169,7 @@ class EclipseRenderView @JvmOverloads constructor(
     canvas.drawCircle(centerX, centerY, max(1f, sunRadius - 1.5f), sunRingPaint)
 
     if (!showMoon) {
+      drawDebugOverlay(canvas, centerX, centerY, minDimension)
       return
     }
 
@@ -154,6 +198,8 @@ class EclipseRenderView @JvmOverloads constructor(
         (moonRadius + minDimension * TOTALITY_RING_OFFSET_NORM) * totalityRingScale
       canvas.drawCircle(moonCenterX, moonCenterY, totalityRingRadius, totalityRingPaint)
     }
+
+    drawDebugOverlay(canvas, centerX, centerY, minDimension)
   }
 
   private fun calculateTotalityBlend(
@@ -182,7 +228,61 @@ class EclipseRenderView @JvmOverloads constructor(
     return t * t * (3f - 2f * t)
   }
 
+  private fun drawDebugOverlay(
+    canvas: Canvas,
+    centerX: Float,
+    centerY: Float,
+    minDimension: Float,
+  ) {
+    if (!debugOverlayEnabled) {
+      return
+    }
+
+    val coordinateText = if (debugLatitudeDeg != null && debugLongitudeDeg != null) {
+      String.format(
+        Locale.US,
+        "LAT %.4f  LON %.4f",
+        debugLatitudeDeg,
+        debugLongitudeDeg,
+      )
+    } else {
+      "LAT --.--  LON --.--"
+    }
+    val utcText = "UTC ${DEBUG_TIME_FORMATTER.format(Instant.ofEpochMilli(debugEpochMillis))}"
+
+    val textSize = max(9f, minDimension * DEBUG_TEXT_SIZE_RATIO)
+    debugTextPaint.textSize = textSize
+    val lineHeight = textSize * DEBUG_LINE_HEIGHT_MULTIPLIER
+    val panelPaddingX = textSize * 0.7f
+    val panelPaddingY = textSize * 0.5f
+    val panelWidth = max(
+      debugTextPaint.measureText(coordinateText),
+      debugTextPaint.measureText(utcText),
+    ) + panelPaddingX * 2f
+    val panelHeight = lineHeight * 2f + panelPaddingY * 2f
+    val panelRect = RectF(
+      centerX - panelWidth / 2f,
+      centerY - panelHeight / 2f,
+      centerX + panelWidth / 2f,
+      centerY + panelHeight / 2f,
+    )
+    val cornerRadius = max(8f, textSize * 0.7f)
+    debugPanelStrokePaint.strokeWidth = max(1f, textSize * 0.08f)
+
+    canvas.drawRoundRect(panelRect, cornerRadius, cornerRadius, debugPanelPaint)
+    canvas.drawRoundRect(panelRect, cornerRadius, cornerRadius, debugPanelStrokePaint)
+
+    val firstLineBaseline =
+      panelRect.top + panelPaddingY - debugTextPaint.fontMetrics.ascent
+    val secondLineBaseline = firstLineBaseline + lineHeight
+
+    canvas.drawText(coordinateText, centerX, firstLineBaseline, debugTextPaint)
+    canvas.drawText(utcText, centerX, secondLineBaseline, debugTextPaint)
+  }
+
   companion object {
+    private val DEBUG_TIME_FORMATTER: DateTimeFormatter =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
     private const val DEFAULT_SUN_RADIUS_NORM = 0.24f
     private const val SUN_GLOW_MULTIPLIER = 1.65f
     private const val RENDER_ZOOM_MULTIPLIER = 1.9f
@@ -199,5 +299,7 @@ class EclipseRenderView @JvmOverloads constructor(
     private const val TOTALITY_RING_STROKE_NORM = 4f / 300f
     private const val TOTALITY_CORONA_STROKE_NORM = 16f / 300f
     private const val MIN_VISIBLE_TOTALITY_BLEND = 0.002f
+    private const val DEBUG_TEXT_SIZE_RATIO = 0.041f
+    private const val DEBUG_LINE_HEIGHT_MULTIPLIER = 1.2f
   }
 }

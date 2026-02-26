@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
   private var activePreviewPayload: PreviewRenderPayload? = null
   private var activePreviewSessionId: String? = null
   private var previewProgressNorm = 0f
+  private var debugOverlayEnabled = false
   private var connectedPhoneNodeId: String? = null
   private var lastSentPreviewScrubProgressNorm = Float.NaN
   private var lastSentPreviewScrubElapsedRealtimeMs = 0L
@@ -122,6 +123,12 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     setContentView(R.layout.activity_main)
     eclipseRenderView = findViewById(R.id.eclipse_render_view)
     statusText = findViewById(R.id.status_text)
+    eclipseRenderView.setDebugOverlayEnabled(debugOverlayEnabled)
+    eclipseRenderView.updateDebugOverlay(
+      latitudeDeg = null,
+      longitudeDeg = null,
+      epochMillis = System.currentTimeMillis(),
+    )
     eclipseRenderView.renderSunOnly()
     showErrorStatus(R.string.status_acquiring_location)
     applyDeepLink(intent)
@@ -354,17 +361,28 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
       return
     }
 
+    val nowMs = System.currentTimeMillis()
     val location = latestObservedLocation
     if (location == null) {
+      eclipseRenderView.updateDebugOverlay(
+        latitudeDeg = null,
+        longitudeDeg = null,
+        epochMillis = nowMs,
+      )
       eclipseRenderView.renderSunOnly()
       showErrorStatus(R.string.status_acquiring_location)
       return
     }
 
+    eclipseRenderView.updateDebugOverlay(
+      latitudeDeg = location.latitude,
+      longitudeDeg = location.longitude,
+      epochMillis = nowMs,
+    )
     val localGeometry = LocalSunMoonCalculator.calculateLiveGeometry(
       latitudeDeg = location.latitude,
       longitudeDeg = location.longitude,
-      epochMillis = System.currentTimeMillis(),
+      epochMillis = nowMs,
     )
     val payload = LiveRenderPayload(
       showMoon = localGeometry.showMoon,
@@ -489,6 +507,13 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
 
   private fun renderPreviewFrame() {
     val payload = activePreviewPayload ?: return
+    val nowMs = System.currentTimeMillis()
+    val location = latestObservedLocation
+    eclipseRenderView.updateDebugOverlay(
+      latitudeDeg = location?.latitude,
+      longitudeDeg = location?.longitude,
+      epochMillis = nowMs,
+    )
 
     val axisOffsetNorm = interpolatePreviewAxisOffset(
       progressNorm = previewProgressNorm,
@@ -847,8 +872,63 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
       return
     }
 
+    parseDebugOverlayEnabled(data)?.let { enabled ->
+      setDebugOverlayEnabled(
+        enabled = enabled,
+        source = "deep_link",
+      )
+    }
+
     val label = formatDeepLinkLabel(data)
     activeDeepLinkLabel = label
+  }
+
+  private fun setDebugOverlayEnabled(
+    enabled: Boolean,
+    source: String,
+  ) {
+    if (debugOverlayEnabled == enabled) {
+      return
+    }
+    debugOverlayEnabled = enabled
+    eclipseRenderView.setDebugOverlayEnabled(enabled)
+    logInfo(
+      "debug_overlay_toggled",
+      "enabled" to enabled,
+      "source" to source,
+    )
+  }
+
+  private fun parseDebugOverlayEnabled(uri: Uri): Boolean? {
+    val keyCandidates = listOf("debugOverlay", "overlay", "debug", "enabled")
+    for (key in keyCandidates) {
+      val rawValue = uri.getQueryParameter(key) ?: continue
+      parseBooleanToggle(rawValue)?.let { return it }
+    }
+
+    val normalizedPath = uri.path.orEmpty().lowercase()
+    if (
+      normalizedPath.endsWith("/debug-overlay/on") ||
+      normalizedPath.endsWith("/overlay/on")
+    ) {
+      return true
+    }
+    if (
+      normalizedPath.endsWith("/debug-overlay/off") ||
+      normalizedPath.endsWith("/overlay/off")
+    ) {
+      return false
+    }
+
+    return null
+  }
+
+  private fun parseBooleanToggle(rawValue: String): Boolean? {
+    return when (rawValue.trim().lowercase()) {
+      "1", "true", "on", "yes", "enabled" -> true
+      "0", "false", "off", "no", "disabled" -> false
+      else -> null
+    }
   }
 
   private fun showErrorStatus(messageResId: Int, vararg formatArgs: Any) {
