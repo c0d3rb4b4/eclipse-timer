@@ -338,6 +338,7 @@ pnpm -C apps/mobile web
 ### Option 5: Wear OS emulator (native watch module)
 
 The Wear OS companion app is a separate native module (`apps/mobile/android/wear`) and is not launched by Expo commands above.
+Live mode now computes sun/moon geometry on-watch from watch GPS + UTC time, so it works without a connected phone. Phone connectivity is only needed for preview sync mode.
 
 Use the local simulator build/install/run guide in:
 - [documents/guides/setup-and-development.md#wear-os-companion-on-local-emulator](documents/guides/setup-and-development.md#wear-os-companion-on-local-emulator)

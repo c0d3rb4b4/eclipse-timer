@@ -30,7 +30,6 @@ import com.google.android.gms.wearable.Wearable
 import org.json.JSONObject
 import java.time.Instant
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.sqrt
 
 class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListener {
@@ -77,24 +76,24 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
   private lateinit var statusText: TextView
   private var activeDeepLinkLabel: String? = null
   private var locationCallback: LocationCallback? = null
+  private var latestObservedLocation: Location? = null
   private var lastSentLocation: Location? = null
   private var lastSentElapsedRealtimeMs: Long = 0L
   private var renderMode = RenderMode.LIVE
-  private var hasSeenLiveRenderPayload = false
-  private var lastLiveRenderElapsedRealtimeMs: Long = 0L
-  private var hasAppliedStaleFallback = false
-  private var latestLivePayload: LiveRenderPayload? = null
+  private var latestLocalLivePayload: LiveRenderPayload? = null
   private var activePreviewPayload: PreviewRenderPayload? = null
   private var activePreviewSessionId: String? = null
   private var previewProgressNorm = 0f
   private var connectedPhoneNodeId: String? = null
   private var lastSentPreviewScrubProgressNorm = Float.NaN
   private var lastSentPreviewScrubElapsedRealtimeMs = 0L
-  private val staleCheckHandler = Handler(Looper.getMainLooper())
-  private val staleCheckRunnable = object : Runnable {
+  private val liveRenderHandler = Handler(Looper.getMainLooper())
+  private val liveRenderRunnable = object : Runnable {
     override fun run() {
-      applyStaleRenderFallbackIfNeeded()
-      staleCheckHandler.postDelayed(this, LIVE_STALE_CHECK_INTERVAL_MS)
+      if (renderMode == RenderMode.LIVE) {
+        renderLocalLivePayloadIfPossible()
+      }
+      liveRenderHandler.postDelayed(this, LOCAL_RENDER_UPDATE_INTERVAL_MS)
     }
   }
 
@@ -123,20 +122,20 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     setContentView(R.layout.activity_main)
     eclipseRenderView = findViewById(R.id.eclipse_render_view)
     statusText = findViewById(R.id.status_text)
-    clearStatusMessage()
     eclipseRenderView.renderSunOnly()
+    showErrorStatus(R.string.status_acquiring_location)
     applyDeepLink(intent)
   }
 
   override fun onStart() {
     super.onStart()
     messageClient.addListener(this)
-    staleCheckHandler.postDelayed(staleCheckRunnable, LIVE_STALE_CHECK_INTERVAL_MS)
+    liveRenderHandler.post(liveRenderRunnable)
     ensureLocationPermissionAndStartSync()
   }
 
   override fun onStop() {
-    staleCheckHandler.removeCallbacks(staleCheckRunnable)
+    liveRenderHandler.removeCallbacks(liveRenderRunnable)
     stopLocationSync()
     messageClient.removeListener(this)
     super.onStop()
@@ -154,34 +153,12 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     }
 
     if (messageEvent.path == WearPaths.LIVE_RENDER) {
-      val payload = messageEvent.data.toString(Charsets.UTF_8)
       logInfo(
-        "payload_received",
+        "payload_ignored",
         "path" to WearPaths.LIVE_RENDER,
         "sourceNodeId" to messageEvent.sourceNodeId,
+        "reason" to "watch_local_live_compute",
       )
-      val parsed = parseLiveRenderPayload(payload)
-      if (parsed == null) {
-        logWarn(
-          "payload_invalid",
-          "path" to WearPaths.LIVE_RENDER,
-        )
-        if (renderMode != RenderMode.PREVIEW) {
-          eclipseRenderView.renderSunOnly()
-          showErrorStatus(R.string.status_live_payload_invalid)
-          hasAppliedStaleFallback = true
-        }
-        return
-      }
-
-      latestLivePayload = parsed
-      hasSeenLiveRenderPayload = true
-      hasAppliedStaleFallback = false
-      lastLiveRenderElapsedRealtimeMs = SystemClock.elapsedRealtime()
-      if (renderMode != RenderMode.PREVIEW) {
-        renderLivePayload(parsed)
-      }
-      clearStatusMessage()
       return
     }
 
@@ -260,6 +237,8 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     val callback = object : LocationCallback() {
       override fun onLocationResult(locationResult: LocationResult) {
         val location = locationResult.lastLocation ?: return
+        latestObservedLocation = Location(location)
+        renderLocalLivePayloadIfPossible()
         if (shouldSendLocation(location)) {
           sendLocationToPhone(location)
         }
@@ -287,7 +266,12 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     }
     fusedLocationClient.lastLocation
       .addOnSuccessListener { location ->
-        if (location != null && shouldSendLocation(location)) {
+        if (location == null) {
+          return@addOnSuccessListener
+        }
+        latestObservedLocation = Location(location)
+        renderLocalLivePayloadIfPossible()
+        if (shouldSendLocation(location)) {
           sendLocationToPhone(location)
         }
       }
@@ -324,11 +308,10 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
       .addOnSuccessListener { nodes ->
         val targetNode = nodes.firstOrNull()
         if (targetNode == null) {
-          logWarn(
+          logInfo(
             "connectivity_no_phone_node",
             "path" to WearPaths.LIVE_LOCATION,
           )
-          showErrorStatus(R.string.status_no_phone)
           return@addOnSuccessListener
         }
 
@@ -342,7 +325,6 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
           .addOnSuccessListener {
             lastSentLocation = Location(location)
             lastSentElapsedRealtimeMs = SystemClock.elapsedRealtime()
-            clearStatusMessage()
             logInfo(
               "payload_send_success",
               "path" to WearPaths.LIVE_LOCATION,
@@ -356,7 +338,6 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
               "path" to WearPaths.LIVE_LOCATION,
               "targetNodeId" to targetNode.id,
             )
-            showErrorStatus(R.string.status_send_failed)
           }
       }
       .addOnFailureListener { error ->
@@ -365,8 +346,35 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
           error,
           "path" to WearPaths.LIVE_LOCATION,
         )
-        showErrorStatus(R.string.status_send_failed)
       }
+  }
+
+  private fun renderLocalLivePayloadIfPossible() {
+    if (renderMode == RenderMode.PREVIEW) {
+      return
+    }
+
+    val location = latestObservedLocation
+    if (location == null) {
+      eclipseRenderView.renderSunOnly()
+      showErrorStatus(R.string.status_acquiring_location)
+      return
+    }
+
+    val localGeometry = LocalSunMoonCalculator.calculateLiveGeometry(
+      latitudeDeg = location.latitude,
+      longitudeDeg = location.longitude,
+      epochMillis = System.currentTimeMillis(),
+    )
+    val payload = LiveRenderPayload(
+      showMoon = localGeometry.showMoon,
+      moonRadiusNorm = localGeometry.moonRadiusNorm,
+      moonCenterXNorm = localGeometry.moonCenterXNorm,
+      moonCenterYNorm = localGeometry.moonCenterYNorm,
+    )
+    latestLocalLivePayload = payload
+    renderLivePayload(payload)
+    clearStatusMessage()
   }
 
   private fun renderLivePayload(payload: LiveRenderPayload) {
@@ -461,13 +469,12 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     activePreviewSessionId = null
     renderMode = RenderMode.LIVE
 
-    val livePayload = latestLivePayload
+    val livePayload = latestLocalLivePayload
     if (livePayload != null) {
       renderLivePayload(livePayload)
     } else {
-      eclipseRenderView.renderSunOnly()
+      renderLocalLivePayloadIfPossible()
     }
-    applyStaleRenderFallbackIfNeeded()
 
     if (wasPreviewMode) {
       logInfo(
@@ -715,26 +722,6 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     return elapsedMs >= PREVIEW_SCRUB_MIN_SEND_INTERVAL_MS
   }
 
-  private fun applyStaleRenderFallbackIfNeeded() {
-    if (renderMode == RenderMode.PREVIEW || !hasSeenLiveRenderPayload || hasAppliedStaleFallback) {
-      return
-    }
-
-    val elapsedSinceLiveRenderMs = SystemClock.elapsedRealtime() - lastLiveRenderElapsedRealtimeMs
-    if (elapsedSinceLiveRenderMs < LIVE_STALE_RENDER_TIMEOUT_MS) {
-      return
-    }
-
-    eclipseRenderView.renderSunOnly()
-    hasAppliedStaleFallback = true
-    logWarn(
-      "live_payload_stale_fallback",
-      "staleMs" to elapsedSinceLiveRenderMs,
-      "timeoutMs" to LIVE_STALE_RENDER_TIMEOUT_MS,
-    )
-    showErrorStatus(R.string.status_live_payload_stale)
-  }
-
   private fun logInfo(event: String, vararg fields: Pair<String, Any?>) {
     Log.i(TAG, buildLogMessage(event, fields))
   }
@@ -761,38 +748,6 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
       }
     }
     return payload.toString()
-  }
-
-  private fun parseLiveRenderPayload(rawPayload: String): LiveRenderPayload? {
-    val parsed = runCatching { JSONObject(rawPayload) }.getOrNull() ?: return null
-    if (parsed.optInt("version", -1) != 1 || parsed.optString("mode") != "live") {
-      return null
-    }
-
-    val showMoon = parsed.optBoolean("showMoon", false)
-    if (!showMoon) {
-      return LiveRenderPayload(
-        showMoon = false,
-        moonRadiusNorm = 0f,
-        moonCenterXNorm = 0.5f,
-        moonCenterYNorm = 0.5f,
-      )
-    }
-
-    val moon = parsed.optJSONObject("moon") ?: return null
-    val radiusNorm = moon.optDouble("radiusNorm", Double.NaN)
-    val centerXNorm = moon.optDouble("centerXNorm", Double.NaN)
-    val centerYNorm = moon.optDouble("centerYNorm", Double.NaN)
-    if (!radiusNorm.isFinite() || !centerXNorm.isFinite() || !centerYNorm.isFinite()) {
-      return null
-    }
-
-    return LiveRenderPayload(
-      showMoon = true,
-      moonRadiusNorm = radiusNorm.toFloat().coerceIn(0f, 1f),
-      moonCenterXNorm = centerXNorm.toFloat().coerceIn(0f, 1f),
-      moonCenterYNorm = centerYNorm.toFloat().coerceIn(0f, 1f),
-    )
   }
 
   private fun parsePreviewRenderPayload(parsed: JSONObject): PreviewRenderPayload? {
@@ -928,10 +883,9 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     private const val TAG = "WearMainActivity"
     private const val LOCATION_UPDATE_INTERVAL_MS = 15_000L
     private const val MIN_LOCATION_UPDATE_INTERVAL_MS = 5_000L
+    private const val LOCAL_RENDER_UPDATE_INTERVAL_MS = 5_000L
     private const val MIN_LOCATION_DISTANCE_METERS = 25f
     private const val FORCE_LOCATION_SEND_INTERVAL_MS = 60_000L
-    private const val LIVE_STALE_RENDER_TIMEOUT_MS = 90_000L
-    private const val LIVE_STALE_CHECK_INTERVAL_MS = 5_000L
     private const val PREVIEW_ROTARY_SENSITIVITY = 0.025f
     private const val PREVIEW_SCRUB_MIN_SEND_INTERVAL_MS = 25L
     private const val PREVIEW_PROGRESS_EPSILON = 0.001f
