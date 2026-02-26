@@ -44,6 +44,7 @@ import { useLandingScroll } from "../hooks/useLandingScroll";
 import { useNotificationScheduler } from "../hooks/useNotificationScheduler";
 import { useTimerState } from "../hooks/useTimerState";
 import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePreviewScreen";
+import HelpScreen from "../screens/HelpScreen";
 import LandingScreen from "../screens/LandingScreen";
 import LocationSettingsScreen from "../screens/LocationSettingsScreen";
 import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
@@ -56,6 +57,8 @@ import { type FavoriteLocation, useAppState } from "../state/appState";
 import { useAppTheme } from "../theme/useAppTheme";
 import { localYmdNow } from "../utils/date";
 import { kindCodeForRecord, kindLabelFromCode } from "../utils/eclipse";
+import FirstRunOnboardingOverlay from "./FirstRunOnboardingOverlay";
+import { ONBOARDING_WALKTHROUGH_STEPS, type OnboardingRouteName } from "./onboardingWalkthrough";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
 
 enableScreens();
@@ -65,6 +68,7 @@ type RootStackParamList = {
   Timer: undefined;
   Preview: { payload: PreviewPayload };
   Settings: undefined;
+  Help: undefined;
   ThemeSettings: undefined;
   NotificationSettings: undefined;
   LocationSettings: undefined;
@@ -77,6 +81,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Landing: "landing",
       Timer: "timer",
       Settings: "settings",
+      Help: "settings/help",
       ThemeSettings: "settings/theme",
       NotificationSettings: "notifications",
       LocationSettings: "locations",
@@ -168,6 +173,7 @@ function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null 
   if (route === "Landing" || route === "Timer") return route;
   if (
     route === "Settings" ||
+    route === "Help" ||
     route === "ThemeSettings" ||
     route === "NotificationSettings" ||
     route === "LocationSettings"
@@ -468,11 +474,16 @@ function SettingsRoute({ navigation, onOpenMenu }: SettingsRouteProps) {
   return (
     <SettingsScreen
       onOpenMenu={onOpenMenu}
+      onOpenHelp={() => navigation.navigate("Help")}
       onOpenThemeSettings={() => navigation.navigate("ThemeSettings")}
       onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
       onOpenLocationSettings={() => navigation.navigate("LocationSettings")}
     />
   );
+}
+
+function HelpRoute({ onOpenMenu }: RouteWithMenuProps) {
+  return <HelpScreen onOpenMenu={onOpenMenu} />;
 }
 
 function ThemeSettingsRoute({ onOpenMenu }: ThemeSettingsRouteProps) {
@@ -517,12 +528,13 @@ function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
 }
 
 export default function RootNavigator() {
-  const { state: appState, actions } = useAppState();
+  const { state: appState, hasHydratedPreferences, actions } = useAppState();
   const { colors, resolvedTheme } = useAppTheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const pendingFeaturedDeepLinkActionRef = useRef<FeaturedEclipseDeepLinkAction | null>(null);
   const [catalog, setCatalog] = useState<EclipseRecord[] | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [onboardingStepIndex, setOnboardingStepIndex] = useState(0);
   const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
   const navigationTheme = useMemo<NavigationTheme>(() => {
     const base = resolvedTheme === "light" ? NavigationLightTheme : NavigationDarkTheme;
@@ -665,6 +677,48 @@ export default function RootNavigator() {
   );
 
   const activeMenuRoute = useMemo(() => toMenuRouteName(currentRouteName), [currentRouteName]);
+  const onboardingStepCount = ONBOARDING_WALKTHROUGH_STEPS.length;
+  const onboardingStep = ONBOARDING_WALKTHROUGH_STEPS[onboardingStepIndex] ?? null;
+  const isFirstRunOnboardingVisible =
+    hasHydratedPreferences && !appState.hasCompletedOnboarding && onboardingStepCount > 0;
+  const isOnboardingStepRouteActive = onboardingStep
+    ? currentRouteName === onboardingStep.route
+    : false;
+
+  const completeOnboarding = useCallback(() => {
+    closeMenu();
+    setOnboardingStepIndex(0);
+    actions.setOnboardingCompleted(true);
+  }, [actions, closeMenu]);
+
+  const goToOnboardingStepRoute = useCallback(
+    (route: OnboardingRouteName) => {
+      closeMenu();
+      if (!navigationRef.isReady()) return;
+      const currentRoute = navigationRef.getCurrentRoute()?.name;
+      if (currentRoute === route) return;
+      navigationRef.navigate(route);
+    },
+    [closeMenu, navigationRef],
+  );
+
+  const goToNextOnboardingStep = useCallback(() => {
+    if (!onboardingStepCount) {
+      completeOnboarding();
+      return;
+    }
+    if (onboardingStepIndex >= onboardingStepCount - 1) {
+      completeOnboarding();
+      return;
+    }
+
+    const nextStepIndex = onboardingStepIndex + 1;
+    setOnboardingStepIndex(nextStepIndex);
+
+    const nextStep = ONBOARDING_WALKTHROUGH_STEPS[nextStepIndex];
+    if (!nextStep) return;
+    goToOnboardingStepRoute(nextStep.route);
+  }, [completeOnboarding, goToOnboardingStepRoute, onboardingStepCount, onboardingStepIndex]);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -674,6 +728,21 @@ export default function RootNavigator() {
     });
     return () => subscription.remove();
   }, [closeMenu, isMenuOpen]);
+
+  useEffect(() => {
+    if (!isFirstRunOnboardingVisible) {
+      setOnboardingStepIndex(0);
+      return;
+    }
+    if (onboardingStepIndex >= onboardingStepCount) {
+      setOnboardingStepIndex(Math.max(0, onboardingStepCount - 1));
+    }
+  }, [isFirstRunOnboardingVisible, onboardingStepCount, onboardingStepIndex]);
+
+  useEffect(() => {
+    if (!isFirstRunOnboardingVisible || !isMenuOpen) return;
+    closeMenu();
+  }, [closeMenu, isFirstRunOnboardingVisible, isMenuOpen]);
 
   useEffect(() => {
     let didCancel = false;
@@ -737,6 +806,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Settings">
             {(props) => <SettingsRoute {...props} onOpenMenu={openMenu} />}
           </Stack.Screen>
+          <Stack.Screen name="Help">{() => <HelpRoute onOpenMenu={openMenu} />}</Stack.Screen>
           <Stack.Screen name="ThemeSettings">
             {(props) => <ThemeSettingsRoute {...props} onOpenMenu={openMenu} />}
           </Stack.Screen>
@@ -752,6 +822,16 @@ export default function RootNavigator() {
           activeRoute={activeMenuRoute}
           onClose={closeMenu}
           onNavigate={onNavigateFromMenu}
+        />
+        <FirstRunOnboardingOverlay
+          visible={isFirstRunOnboardingVisible}
+          step={onboardingStep}
+          stepIndex={onboardingStepIndex}
+          stepCount={onboardingStepCount}
+          isStepRouteActive={isOnboardingStepRouteActive}
+          onGoToStepRoute={goToOnboardingStepRoute}
+          onNext={goToNextOnboardingStep}
+          onSkip={completeOnboarding}
         />
       </View>
     </NavigationContainer>

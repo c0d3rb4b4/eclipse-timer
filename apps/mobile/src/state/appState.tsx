@@ -81,6 +81,7 @@ export function eclipseReminderAnchorId(eclipseId: string) {
 type AppState = {
   selectedLandingId: string | null;
   activeEclipseId: string | null;
+  hasCompletedOnboarding: boolean;
   themePreference: AppThemePreference;
   notificationSettings: NotificationSettings;
   notificationMockTimeline: NotificationMockTimeline;
@@ -92,6 +93,7 @@ type AppState = {
 
 type PersistedPreferences = Pick<
   AppState,
+  | "hasCompletedOnboarding"
   | "themePreference"
   | "notificationSettings"
   | "notificationMockTimeline"
@@ -105,6 +107,7 @@ type AppAction =
   | { type: "SELECT_LANDING"; id: string }
   | { type: "ACTIVATE_SELECTED" }
   | { type: "HYDRATE_PREFERENCES"; preferences: PersistedPreferences }
+  | { type: "SET_ONBOARDING_COMPLETED"; value: boolean }
   | { type: "SET_THEME_PREFERENCE"; preference: AppThemePreference }
   | {
       type: "SET_NOTIFICATION_SETTING";
@@ -140,6 +143,7 @@ type AppAction =
 const initialState: AppState = {
   selectedLandingId: null,
   activeEclipseId: null,
+  hasCompletedOnboarding: false,
   themePreference: "system",
   notificationSettings: {
     eclipseAlerts: true,
@@ -261,6 +265,10 @@ function parseNotificationSettings(raw: unknown): NotificationSettings {
 function parseThemePreference(raw: unknown): AppThemePreference {
   if (raw === "light" || raw === "dark" || raw === "system") return raw;
   return initialState.themePreference;
+}
+
+function parseOnboardingCompleted(raw: unknown): boolean {
+  return typeof raw === "boolean" ? raw : initialState.hasCompletedOnboarding;
 }
 
 function parseNotificationMockTimeline(raw: unknown): NotificationMockTimeline {
@@ -422,6 +430,7 @@ function parsePersistedPreferences(raw: string): PersistedPreferences | null {
     if (!isRecord(parsed)) return null;
 
     return {
+      hasCompletedOnboarding: parseOnboardingCompleted(parsed.hasCompletedOnboarding),
       themePreference: parseThemePreference(parsed.themePreference),
       notificationSettings: parseNotificationSettings(parsed.notificationSettings),
       notificationMockTimeline: parseNotificationMockTimeline(parsed.notificationMockTimeline),
@@ -448,6 +457,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "HYDRATE_PREFERENCES":
       return {
         ...state,
+        hasCompletedOnboarding: action.preferences.hasCompletedOnboarding,
         themePreference: action.preferences.themePreference,
         notificationSettings: action.preferences.notificationSettings,
         notificationMockTimeline: action.preferences.notificationMockTimeline,
@@ -455,6 +465,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
         notificationEntries: action.preferences.notificationEntries,
         disabledEclipseAlarmIds: action.preferences.disabledEclipseAlarmIds,
         eclipseReminderAnchors: action.preferences.eclipseReminderAnchors,
+      };
+    case "SET_ONBOARDING_COMPLETED":
+      if (state.hasCompletedOnboarding === action.value) return state;
+      return {
+        ...state,
+        hasCompletedOnboarding: action.value,
       };
     case "SET_THEME_PREFERENCE":
       if (state.themePreference === action.preference) return state;
@@ -631,9 +647,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
 type AppStateContextValue = {
   state: AppState;
+  hasHydratedPreferences: boolean;
   actions: {
     selectLanding: (id: string) => void;
     activateSelected: () => void;
+    setOnboardingCompleted: (value: boolean) => void;
     setThemePreference: (preference: AppThemePreference) => void;
     setNotificationSetting: (key: NotificationSettingToggleKey, value: boolean) => void;
     setAlarmTiming: (alarmLeadSecondsA1: number, alarmCountdownStartSecondsA2: number) => void;
@@ -686,6 +704,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (!hasHydratedPreferences) return;
 
     const payload: PersistedPreferences = {
+      hasCompletedOnboarding: state.hasCompletedOnboarding,
       themePreference: state.themePreference,
       notificationSettings: state.notificationSettings,
       notificationMockTimeline: state.notificationMockTimeline,
@@ -705,6 +724,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     state.disabledEclipseAlarmIds,
     state.eclipseReminderAnchors,
     state.favoriteLocations,
+    state.hasCompletedOnboarding,
     state.notificationEntries,
     state.notificationMockTimeline,
     state.notificationSettings,
@@ -715,6 +735,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => ({
       selectLanding: (id: string) => dispatch({ type: "SELECT_LANDING", id }),
       activateSelected: () => dispatch({ type: "ACTIVATE_SELECTED" }),
+      setOnboardingCompleted: (value: boolean) =>
+        dispatch({ type: "SET_ONBOARDING_COMPLETED", value }),
       setThemePreference: (preference: AppThemePreference) =>
         dispatch({ type: "SET_THEME_PREFERENCE", preference }),
       setNotificationSetting: (key: NotificationSettingToggleKey, value: boolean) =>
@@ -799,7 +821,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  return <AppStateContext.Provider value={{ state, actions }}>{children}</AppStateContext.Provider>;
+  return (
+    <AppStateContext.Provider value={{ state, hasHydratedPreferences, actions }}>
+      {children}
+    </AppStateContext.Provider>
+  );
 }
 
 export function useAppState() {

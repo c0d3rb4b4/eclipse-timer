@@ -30,6 +30,8 @@
 - Timer compute loop, contact timeline, alarm toggles, and preview route are implemented.
 - Observer altitude is propagated into compute (`Observer.elevM`).
 - `ADD-12` is complete: user-selectable theme preference (`system`/`light`/`dark`) is implemented, persisted, and wired across main app surfaces (`Landing`, `Timer`, `Preview`, `Settings`, and settings sub-screens).
+- `ADD-11` is complete: first-launch guided walkthrough is implemented with route-aware onboarding steps, persisted completion state, and an explicit skip path.
+- `ADD-13` is complete: an in-app `Help & FAQ` screen is available from `Settings`, with concise FAQ/troubleshooting entries and deep links to full docs.
 
 ### Wear companion implementation
 - Phone-side Data Layer bridge and listener service are implemented.
@@ -67,8 +69,6 @@ These are not implemented yet and would add net-new capability.
 | ADD-08 | Medium | No PR native release-smoke step | TS/lint/tests can pass while native release build fails | Add PR smoke gate (`:app:assembleRelease` or EAS local dry-run for changed native/mobile code) |
 | ADD-09 | Medium | No dependency maintenance automation | Security and update drift accumulates silently | Add Dependabot/Renovate with grouped Expo/React Native update policy |
 | ADD-10 | Medium | No docs command-validity automation | Docs drift is currently manual and recurring | Add docs CI check that validates referenced root scripts and key file paths |
-| ADD-11 | High | No first-run onboarding walkthrough | New users must infer navigation and key flows manually | Add first-launch guided walkthrough (tooltips/highlights), persisted completion state, and skip option |
-| ADD-13 | Medium | No in-app Help/FAQ surface | Troubleshooting and feature explanations are scattered across external docs | Add a Help screen with concise FAQ, troubleshooting entries, and deep links to full docs |
 | ADD-14 | Medium | No in-app feedback/report-issue path | Feedback intake is ad hoc and detached from app context/device metadata | Add "Send feedback / Report issue" flow with prefilled app/device/version context |
 | ADD-15 | Medium | Store listing assets under-leverage product value | Generic screenshots reduce conversion clarity on Play listing | Upgrade screenshot pipeline with feature-focused captions and short demo clip support |
 
@@ -171,12 +171,10 @@ These are not implemented yet and would add net-new capability.
 6. ADD-10 docs validation automation
 
 ### Phase E: UX and adoption enhancements (from internal testing)
-1. ADD-11 first-run onboarding walkthrough
-2. IMP-28 accessibility audit + regression checks
-3. ADD-13 in-app Help/FAQ surface
-4. ADD-14 in-app feedback/report issue flow
-5. ADD-15 Play listing screenshot/demo upgrade
-6. IMP-29 low-end performance baseline and budgets
+1. IMP-28 accessibility audit + regression checks
+2. ADD-14 in-app feedback/report issue flow
+3. ADD-15 Play listing screenshot/demo upgrade
+4. IMP-29 low-end performance baseline and budgets
 
 ---
 
@@ -187,7 +185,7 @@ These are not implemented yet and would add net-new capability.
 - Outdated scan on 2026-02-25 shows significant major-version lag in Expo/React Native/tooling.
 - Root script validation confirms `pnpm build`, `pnpm dev`, `pnpm test:watch`, and `pnpm clean` currently fail.
 - Markdown link targets are mostly intact; remaining path drift is primarily in plain-text path references and duplicated docs sources.
-- Internal tester report intake on 2026-02-26 confirms no crashes/critical defects and adds UX-focused backlog items (`ADD-11`..`ADD-15`, `IMP-28`..`IMP-29`).
+- Internal tester report intake on 2026-02-26 confirms no crashes/critical defects and adds UX-focused backlog items (`ADD-11`..`ADD-15`, `IMP-28`..`IMP-29`); `ADD-11` and `ADD-13` are now completed.
 - `ADD-12` moved to completed on 2026-02-26 after theme preference + token migration work landed in main app surfaces.
 
 ---
@@ -196,10 +194,10 @@ These are not implemented yet and would add net-new capability.
 
 | Feedback theme from report | Tracker mapping |
 |---|---|
-| Dynamic walkthrough for new users | Added `ADD-11` |
+| Dynamic walkthrough for new users | `ADD-11` completed on 2026-02-26 |
 | Theme toggle (`dark`/`light`/`system`) | `ADD-12` completed on 2026-02-26 |
 | Better Play Store screenshots/demo | Added `ADD-15` |
-| In-app FAQ/help section | Added `ADD-13` |
+| In-app FAQ/help section | `ADD-13` completed on 2026-02-26 |
 | In-app feedback mechanism | Added `ADD-14` |
 | Accessibility audit recommendation | Added `IMP-28` |
 | Performance optimization recommendation | Added `IMP-29` |

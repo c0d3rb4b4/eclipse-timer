@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.31] — 2026-02-26
+
+### Added
+- Added first-run onboarding walkthrough for new users with step-by-step guidance across `Landing`, `Timer`, and `Settings`.
+- Added persisted onboarding completion state in app preferences with an explicit `Skip` option.
+- Added an in-app `Help & FAQ` screen under `Settings` with concise FAQ/troubleshooting content and deep links to full documentation.
+- Added regression tests for onboarding walkthrough configuration and Help content/doc-link validation.
+
+### Changed
+- Updated `RootNavigator` to wire onboarding overlay behavior and Help route deep-link path (`eclipsetimer://settings/help`).
+- Updated `documents/planning/tech-debt.md` to mark `ADD-11` and `ADD-13` as completed and remove them from pending execution order.
+- Bumped `apps/mobile` version to `1.1.31`.
+
+### Tests
+- Verified mobile checks pass: `pnpm -C apps/mobile typecheck`, `pnpm -C apps/mobile lint`, and `pnpm -C apps/mobile test`.
+
 ## [1.1.30] — 2026-02-26
 
 ### Changed

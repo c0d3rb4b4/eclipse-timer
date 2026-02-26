@@ -10,6 +10,7 @@ type SettingsScreenProps = {
   onOpenNotificationSettings: () => void;
   onOpenLocationSettings: () => void;
   onOpenThemeSettings: () => void;
+  onOpenHelp: () => void;
 };
 
 type SettingsActionCardProps = {
@@ -41,6 +42,7 @@ export default function SettingsScreen({
   onOpenNotificationSettings,
   onOpenLocationSettings,
   onOpenThemeSettings,
+  onOpenHelp,
 }: SettingsScreenProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -72,6 +74,11 @@ export default function SettingsScreen({
           title="Location Settings"
           subtitle="Add and manage favorite observing locations."
           onPress={onOpenLocationSettings}
+        />
+        <SettingsActionCard
+          title="Help & FAQ"
+          subtitle="Read quick answers, troubleshooting tips, and full docs."
+          onPress={onOpenHelp}
         />
       </View>
     </SafeAreaView>
