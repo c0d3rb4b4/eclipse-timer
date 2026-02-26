@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.34] — 2026-02-26
+
+### Added
+- Added a local sun/moon horizontal-position utility for mobile (`apps/mobile/src/utils/sunMoonPosition.ts`) that computes per-time azimuth, altitude, RA/Dec, distance, and apparent angular size for an observer.
+- Added regression tests validating Gibraltar 2027-08-02 sun/moon azimuth-altitude samples and angular-size ranges for 24mm framing.
+
+### Fixed
+- Corrected `Photography Guide` landscape composite geometry to use real observer-based sun/moon alt-az offsets per scheduled shot instead of synthetic hourly drift.
+- Fixed composite horizon placement to derive from actual MAX sun altitude, preventing above-horizon shots from being rendered below the horizon for the tested Gibraltar scenario.
+- Fixed composite body sizing to use angular-size-to-frame scaling so sun/moon disks render smaller and more physically plausible for the 24mm simulation.
+- Fixed moon rendering in the composite to display only when the moon disk is actually occluding the sun at that shot.
+
+### Changed
+- Updated landscape composite layout payload to carry per-shot sun radius and dynamic horizon line values consumed by `PhotographyGuideScreen`.
+- Updated total-eclipse landscape composite visuals to use a very dark-blue sky theme with a thin pink horizon glow, moon disk styled to match the sky, and a MAX-only corona ring; partial/annular visuals remain unchanged.
+- Bumped `apps/mobile` version to `1.1.34`.
+
 ## [1.1.33] — 2026-02-26
 
 ### Added

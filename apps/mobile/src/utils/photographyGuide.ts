@@ -1,10 +1,11 @@
-import type { EclipseKindAtLocation } from "@eclipse-timer/shared";
+import type { EclipseKindAtLocation, Observer } from "@eclipse-timer/shared";
 
 import {
   calculatePreviewMoonGeometry,
   type PreviewMotionContacts,
   type PreviewTravelVector,
 } from "./previewGeometry";
+import { calculateSunMoonHorizontalPosition } from "./sunMoonPosition";
 
 export const PHOTOGRAPHY_GUIDE_PICTURE_OPTIONS = [3, 5, 7, 9] as const;
 export type PhotographyGuidePictureCount = (typeof PHOTOGRAPHY_GUIDE_PICTURE_OPTIONS)[number];
@@ -50,11 +51,11 @@ type BuildPhotographyGuideScheduleInput = {
 const PHASE_MAX_TOLERANCE_MS = 500;
 const LANDSCAPE_HORIZONTAL_FOV_DEG_24MM = 74;
 const LANDSCAPE_VERTICAL_FOV_DEG_24MM = 53;
-const SOLAR_DRIFT_DEG_PER_HOUR = 15;
 const LANDSCAPE_MAX_ANCHOR_Y_RATIO = 2 / 3;
-const LANDSCAPE_MIN_SUN_RADIUS = 8;
-const LANDSCAPE_MAX_SUN_RADIUS = 16;
-const LANDSCAPE_SUN_RADIUS_WIDTH_RATIO = 0.032;
+const LANDSCAPE_HORIZON_FALLBACK_Y_RATIO = 0.7;
+const LANDSCAPE_MIN_BODY_RADIUS_PX = 1.5;
+const LANDSCAPE_MAX_BODY_RADIUS_PX = 8;
+const LANDSCAPE_FALLBACK_SUN_RADIUS_WIDTH_RATIO = 0.028;
 const LANDSCAPE_MOON_GEOMETRY_STAGE_FACTOR = 8;
 const DEFAULT_LANDSCAPE_TRAVEL_VECTOR: PreviewTravelVector = {
   x: 1,
@@ -67,6 +68,7 @@ export type LandscapeCompositePlacement = {
   phaseBucket: PhotographyGuidePhaseBucket;
   x: number;
   y: number;
+  sunRadius: number;
   clamped: boolean;
   showMoon: boolean;
   moon?: {
@@ -80,6 +82,7 @@ export type LandscapeCompositeLayout = {
   anchorX: number;
   anchorY: number;
   sunRadius: number;
+  horizonY: number;
   placements: LandscapeCompositePlacement[];
 };
 
@@ -90,6 +93,7 @@ type BuildLandscapeCompositeLayoutInput = {
   maxUtc?: string;
   frameWidth: number;
   frameHeight: number;
+  observer?: Pick<Observer, "latDeg" | "lonDeg">;
   travelVector?: PreviewTravelVector;
 };
 
@@ -107,6 +111,25 @@ function clamp01(value: number) {
 function clampRange(value: number, min: number, max: number) {
   if (max < min) return (min + max) / 2;
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeSignedDeltaDeg(fromDeg: number, toDeg: number) {
+  const delta = ((toDeg - fromDeg + 540) % 360) - 180;
+  return delta === -180 ? 180 : delta;
+}
+
+function bodyAngularRadiusDegToPixels(
+  angularRadiusDeg: number,
+  frameWidth: number,
+  frameHeight: number,
+) {
+  if (!Number.isFinite(angularRadiusDeg) || angularRadiusDeg <= 0) {
+    return LANDSCAPE_MIN_BODY_RADIUS_PX;
+  }
+  const horizontalPx = (angularRadiusDeg / LANDSCAPE_HORIZONTAL_FOV_DEG_24MM) * frameWidth;
+  const verticalPx = (angularRadiusDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight;
+  const rawPx = (horizontalPx + verticalPx) / 2;
+  return clampRange(rawPx, LANDSCAPE_MIN_BODY_RADIUS_PX, LANDSCAPE_MAX_BODY_RADIUS_PX);
 }
 
 function isTotalLike(kindAtLocation: EclipseKindAtLocation) {
@@ -175,6 +198,86 @@ function resolveLandscapeMaxMs(schedule: PhotographyGuideSchedule, maxUtc?: stri
   const midpointRow = schedule.rows[Math.floor(schedule.rows.length / 2)];
   if (midpointRow) return midpointRow.utcMs;
   return Math.round(schedule.startMs + (schedule.endMs - schedule.startMs) / 2);
+}
+
+function buildLandscapeCompositeLayoutFallback(
+  input: BuildLandscapeCompositeLayoutInput,
+): LandscapeCompositeLayout {
+  const frameWidth = Math.max(1, input.frameWidth);
+  const frameHeight = Math.max(1, input.frameHeight);
+  const anchorX = frameWidth / 2;
+  const anchorY = frameHeight * LANDSCAPE_MAX_ANCHOR_Y_RATIO;
+  const sunRadius = clampRange(
+    frameWidth * LANDSCAPE_FALLBACK_SUN_RADIUS_WIDTH_RATIO,
+    LANDSCAPE_MIN_BODY_RADIUS_PX * 2,
+    LANDSCAPE_MAX_BODY_RADIUS_PX,
+  );
+  const minX = sunRadius;
+  const maxX = Math.max(sunRadius, frameWidth - sunRadius);
+  const minY = sunRadius;
+  const maxY = Math.max(sunRadius, frameHeight - sunRadius);
+  const maxMs = resolveLandscapeMaxMs(input.schedule, input.maxUtc);
+  const travelVector = normalizeTravelVector(input.travelVector);
+  const moonGeometryStageSize = Math.max(64, sunRadius * LANDSCAPE_MOON_GEOMETRY_STAGE_FACTOR);
+
+  const placements = input.schedule.rows.map((row) => {
+    const offsetHours = (row.utcMs - maxMs) / 3_600_000;
+    const offsetDegrees = offsetHours * 15;
+    const horizontalNormalized = offsetDegrees / (LANDSCAPE_HORIZONTAL_FOV_DEG_24MM / 2);
+    const verticalNormalized = offsetDegrees / (LANDSCAPE_VERTICAL_FOV_DEG_24MM / 2);
+
+    const rawX = anchorX + horizontalNormalized * (frameWidth / 2) * travelVector.x;
+    const rawY = anchorY + verticalNormalized * (frameHeight / 2) * travelVector.y;
+    const clampedX = clampRange(rawX, minX, maxX);
+    const clampedY = clampRange(rawY, minY, maxY);
+    const clamped = Math.abs(clampedX - rawX) > 0.01 || Math.abs(clampedY - rawY) > 0.01;
+
+    let moon:
+      | {
+          x: number;
+          y: number;
+          radius: number;
+        }
+      | undefined;
+    if (row.showMoon) {
+      const moonGeometry = calculatePreviewMoonGeometry({
+        progress: row.progress,
+        kindAtLocation: input.kindAtLocation,
+        magnitude: input.magnitude,
+        contacts: input.schedule.contacts,
+        stageSize: moonGeometryStageSize,
+        sunRadius,
+        travelVector,
+      });
+      const moonOffsetX = moonGeometry.moonCenterX - moonGeometryStageSize / 2;
+      const moonOffsetY = moonGeometry.moonCenterY - moonGeometryStageSize / 2;
+      moon = {
+        x: clampedX + moonOffsetX,
+        y: clampedY + moonOffsetY,
+        radius: moonGeometry.moonRadius,
+      };
+    }
+
+    return {
+      index: row.index,
+      iso: row.iso,
+      phaseBucket: row.phaseBucket,
+      x: clampedX,
+      y: clampedY,
+      sunRadius,
+      clamped,
+      showMoon: row.showMoon,
+      moon,
+    };
+  });
+
+  return {
+    anchorX,
+    anchorY,
+    sunRadius,
+    horizonY: frameHeight * LANDSCAPE_HORIZON_FALLBACK_Y_RATIO,
+    placements,
+  };
 }
 
 export function buildPhotographyGuideSchedule(
@@ -344,33 +447,58 @@ export function buildPhotographyGuideSchedule(
 export function buildLandscapeCompositeLayout(
   input: BuildLandscapeCompositeLayoutInput,
 ): LandscapeCompositeLayout {
+  if (
+    !input.observer ||
+    !Number.isFinite(input.observer.latDeg) ||
+    !Number.isFinite(input.observer.lonDeg)
+  ) {
+    return buildLandscapeCompositeLayoutFallback(input);
+  }
+  const observer = input.observer;
+
   const frameWidth = Math.max(1, input.frameWidth);
   const frameHeight = Math.max(1, input.frameHeight);
   const anchorX = frameWidth / 2;
   const anchorY = frameHeight * LANDSCAPE_MAX_ANCHOR_Y_RATIO;
-  const sunRadius = clampRange(
-    frameWidth * LANDSCAPE_SUN_RADIUS_WIDTH_RATIO,
-    LANDSCAPE_MIN_SUN_RADIUS,
-    LANDSCAPE_MAX_SUN_RADIUS,
-  );
-  const minX = sunRadius;
-  const maxX = Math.max(sunRadius, frameWidth - sunRadius);
-  const minY = sunRadius;
-  const maxY = Math.max(sunRadius, frameHeight - sunRadius);
   const maxMs = resolveLandscapeMaxMs(input.schedule, input.maxUtc);
-  const travelVector = normalizeTravelVector(input.travelVector);
-  const moonGeometryStageSize = Math.max(64, sunRadius * LANDSCAPE_MOON_GEOMETRY_STAGE_FACTOR);
+  const maxSample = calculateSunMoonHorizontalPosition({
+    latitudeDeg: observer.latDeg,
+    longitudeDeg: observer.lonDeg,
+    epochMs: maxMs,
+  });
+  const maxSunAzimuthDeg = maxSample.sun.azimuthDeg;
+  const maxSunAltitudeDeg = maxSample.sun.altitudeDeg;
+  const maxSunRadius = bodyAngularRadiusDegToPixels(
+    maxSample.sun.angularRadiusDeg,
+    frameWidth,
+    frameHeight,
+  );
+  const rawHorizonY = anchorY + (maxSunAltitudeDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight;
+  const horizonY = clampRange(rawHorizonY, 0, frameHeight);
 
   const placements = input.schedule.rows.map((row) => {
-    const offsetHours = (row.utcMs - maxMs) / 3_600_000;
-    const offsetDegrees = offsetHours * SOLAR_DRIFT_DEG_PER_HOUR;
-    const horizontalNormalized = offsetDegrees / (LANDSCAPE_HORIZONTAL_FOV_DEG_24MM / 2);
-    const verticalNormalized = offsetDegrees / (LANDSCAPE_VERTICAL_FOV_DEG_24MM / 2);
-
-    const rawX = anchorX + horizontalNormalized * (frameWidth / 2) * travelVector.x;
-    const rawY = anchorY + verticalNormalized * (frameHeight / 2) * travelVector.y;
+    const sample = calculateSunMoonHorizontalPosition({
+      latitudeDeg: observer.latDeg,
+      longitudeDeg: observer.lonDeg,
+      epochMs: row.utcMs,
+    });
+    const sunRadius = bodyAngularRadiusDegToPixels(
+      sample.sun.angularRadiusDeg,
+      frameWidth,
+      frameHeight,
+    );
+    const minX = sunRadius;
+    const maxX = Math.max(sunRadius, frameWidth - sunRadius);
+    const minY = sunRadius;
+    const maxY = Math.max(sunRadius, frameHeight - sunRadius);
+    const azimuthDeltaDeg = normalizeSignedDeltaDeg(maxSunAzimuthDeg, sample.sun.azimuthDeg);
+    const altitudeDeltaDeg = sample.sun.altitudeDeg - maxSunAltitudeDeg;
+    const rawX = anchorX + (azimuthDeltaDeg / LANDSCAPE_HORIZONTAL_FOV_DEG_24MM) * frameWidth;
+    const rawY = anchorY - (altitudeDeltaDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight;
     const clampedX = clampRange(rawX, minX, maxX);
     const clampedY = clampRange(rawY, minY, maxY);
+    const clampedDeltaX = clampedX - rawX;
+    const clampedDeltaY = clampedY - rawY;
     const clamped = Math.abs(clampedX - rawX) > 0.01 || Math.abs(clampedY - rawY) > 0.01;
 
     let moon:
@@ -381,22 +509,30 @@ export function buildLandscapeCompositeLayout(
         }
       | undefined;
     if (row.showMoon) {
-      const moonGeometry = calculatePreviewMoonGeometry({
-        progress: row.progress,
-        kindAtLocation: input.kindAtLocation,
-        magnitude: input.magnitude,
-        contacts: input.schedule.contacts,
-        stageSize: moonGeometryStageSize,
-        sunRadius,
-        travelVector,
-      });
-      const moonOffsetX = moonGeometry.moonCenterX - moonGeometryStageSize / 2;
-      const moonOffsetY = moonGeometry.moonCenterY - moonGeometryStageSize / 2;
-      moon = {
-        x: clampedX + moonOffsetX,
-        y: clampedY + moonOffsetY,
-        radius: moonGeometry.moonRadius,
-      };
+      const moonRadius = bodyAngularRadiusDegToPixels(
+        sample.moon.angularRadiusDeg,
+        frameWidth,
+        frameHeight,
+      );
+      const moonAzimuthDeltaDeg = normalizeSignedDeltaDeg(maxSunAzimuthDeg, sample.moon.azimuthDeg);
+      const moonAltitudeDeltaDeg = sample.moon.altitudeDeg - maxSunAltitudeDeg;
+      const moonX =
+        anchorX +
+        (moonAzimuthDeltaDeg / LANDSCAPE_HORIZONTAL_FOV_DEG_24MM) * frameWidth +
+        clampedDeltaX;
+      const moonY =
+        anchorY -
+        (moonAltitudeDeltaDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight +
+        clampedDeltaY;
+      const centerDistance = Math.hypot(moonX - clampedX, moonY - clampedY);
+      const isOccluding = centerDistance <= sunRadius + moonRadius + 0.25;
+      if (isOccluding) {
+        moon = {
+          x: moonX,
+          y: moonY,
+          radius: moonRadius,
+        };
+      }
     }
 
     return {
@@ -405,8 +541,9 @@ export function buildLandscapeCompositeLayout(
       phaseBucket: row.phaseBucket,
       x: clampedX,
       y: clampedY,
+      sunRadius,
       clamped,
-      showMoon: row.showMoon,
+      showMoon: row.showMoon && Boolean(moon),
       moon,
     };
   });
@@ -414,7 +551,8 @@ export function buildLandscapeCompositeLayout(
   return {
     anchorX,
     anchorY,
-    sunRadius,
+    sunRadius: maxSunRadius,
+    horizonY,
     placements,
   };
 }

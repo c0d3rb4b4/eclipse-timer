@@ -184,4 +184,79 @@ describe("photography guide schedule", () => {
     expect(maxShot?.moon).toBeDefined();
     expect(lastShot?.moon).toBeUndefined();
   });
+
+  it("uses observer solar/lunar geometry so Gibraltar 2027 shots stay above horizon and small at 24mm", () => {
+    const rowsIsoLocal = [
+      "2027-08-02T08:39:01+01:00",
+      "2027-08-02T09:13:30+01:00",
+      "2027-08-02T09:48:00+01:00",
+      "2027-08-02T10:25:55+01:00",
+      "2027-08-02T11:03:51+01:00",
+    ] as const;
+    const rowUtcMs = rowsIsoLocal.map((iso) => Date.parse(iso));
+    const startMs = rowUtcMs[0];
+    const endMs = rowUtcMs[rowUtcMs.length - 1];
+    expect(typeof startMs).toBe("number");
+    expect(typeof endMs).toBe("number");
+    if (typeof startMs !== "number" || typeof endMs !== "number") return;
+
+    const schedule = {
+      rows: rowUtcMs.map((utcMs, index) => {
+        const progress = (utcMs - startMs) / (endMs - startMs);
+        return {
+          index: index + 1,
+          iso: new Date(utcMs).toISOString(),
+          utcMs,
+          phaseBucket:
+            index < 2
+              ? ("pre-MAX" as const)
+              : index === 2
+                ? ("MAX" as const)
+                : ("post-MAX" as const),
+          progress,
+          showMoon: true,
+        };
+      }),
+      contacts: {
+        c1: 0,
+        c2: 0.25,
+        max: 0.5,
+        c3: 0.75,
+        c4: 1,
+      },
+      startMs,
+      endMs,
+    };
+
+    const layout = buildLandscapeCompositeLayout({
+      schedule,
+      kindAtLocation: "total",
+      maxUtc: "2027-08-02T09:48:00+01:00",
+      frameWidth: 360,
+      frameHeight: 216,
+      observer: {
+        latDeg: 36.13173,
+        lonDeg: -5.34095,
+      },
+      travelVector: { x: 1, y: 0 },
+    });
+
+    expect(layout.anchorX).toBeCloseTo(180, 6);
+    expect(layout.anchorY).toBeCloseTo(144, 6);
+    expect(layout.horizonY).toBeCloseTo(216, 1);
+
+    const ys = layout.placements.map((placement) => placement.y);
+    const xs = layout.placements.map((placement) => placement.x);
+    for (let index = 1; index < ys.length; index += 1) {
+      expect(ys[index]).toBeLessThan(ys[index - 1] ?? Number.POSITIVE_INFINITY);
+      expect(xs[index]).toBeGreaterThan(xs[index - 1] ?? Number.NEGATIVE_INFINITY);
+    }
+
+    for (const placement of layout.placements) {
+      expect(placement.clamped).toBe(false);
+      expect(placement.sunRadius).toBeLessThan(4);
+      expect(placement.sunRadius).toBeGreaterThan(1);
+      expect(placement.y + placement.sunRadius).toBeLessThanOrEqual(layout.horizonY);
+    }
+  });
 });

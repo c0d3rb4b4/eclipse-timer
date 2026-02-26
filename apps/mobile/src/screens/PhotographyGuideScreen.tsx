@@ -28,6 +28,12 @@ import {
 const PHOTO_COUNT_OPTIONS: readonly PhotographyGuidePictureCount[] = [3, 5, 7, 9];
 const TABLE_THUMB_STAGE_SIZE = 40;
 const TABLE_THUMB_SUN_RADIUS = 18;
+const TOTALITY_SKY_COLOR = "#050d24";
+const TOTALITY_GROUND_COLOR = "#111827";
+const TOTALITY_MOON_COLOR = TOTALITY_SKY_COLOR;
+const TOTALITY_MOON_BORDER_COLOR = "#1f2c47";
+const TOTALITY_HORIZON_LINE_COLOR = "rgba(255, 174, 205, 0.75)";
+const TOTALITY_HORIZON_GLOW_COLOR = "rgba(255, 136, 182, 0.42)";
 
 export type PhotographyGuidePayload = {
   eclipseId: string;
@@ -87,6 +93,7 @@ export default function PhotographyGuideScreen({
     width: 0,
     height: 0,
   });
+  const isTotalCompositeTheme = payload.kindAtLocation === "total";
   const isWithinEclipseArea = payload.visible && payload.kindAtLocation !== "none";
   const scheduleResult = useMemo(
     () =>
@@ -151,6 +158,10 @@ export default function PhotographyGuideScreen({
       maxUtc: payload.maxUtc,
       frameWidth: compositeStageSize.width,
       frameHeight: compositeStageSize.height,
+      observer: {
+        latDeg: payload.observer.latDeg,
+        lonDeg: payload.observer.lonDeg,
+      },
       travelVector: previewTravelVector,
     });
   }, [
@@ -159,9 +170,20 @@ export default function PhotographyGuideScreen({
     payload.kindAtLocation,
     payload.magnitude,
     payload.maxUtc,
+    payload.observer.latDeg,
+    payload.observer.lonDeg,
     previewTravelVector,
     scheduleResult,
   ]);
+  const activeCompositeHorizonY = useMemo(() => {
+    const fallback = compositeStageSize.height > 0 ? compositeStageSize.height * 0.76 : undefined;
+    if (!compositeLayout) return fallback;
+    return compositeLayout.horizonY;
+  }, [compositeLayout, compositeStageSize.height]);
+  const compositeGroundHeight = useMemo(() => {
+    if (typeof activeCompositeHorizonY !== "number") return undefined;
+    return Math.max(0, compositeStageSize.height - activeCompositeHorizonY);
+  }, [activeCompositeHorizonY, compositeStageSize.height]);
   const handleCompositeStageLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.round(event.nativeEvent.layout.width);
     const nextHeight = Math.round(event.nativeEvent.layout.height);
@@ -342,9 +364,44 @@ export default function PhotographyGuideScreen({
           <View style={styles.compositeModal}>
             <Text style={styles.compositeModalTitle}>Landscape composite</Text>
             <View style={styles.compositeFrame} onLayout={handleCompositeStageLayout}>
-              <View style={styles.compositeSky} />
-              <View style={styles.compositeGround} />
-              <View style={styles.compositeHorizon} />
+              <View
+                style={[
+                  styles.compositeSky,
+                  isTotalCompositeTheme ? { backgroundColor: TOTALITY_SKY_COLOR } : null,
+                ]}
+              />
+              <View
+                style={[
+                  styles.compositeGround,
+                  isTotalCompositeTheme ? { backgroundColor: TOTALITY_GROUND_COLOR } : null,
+                  typeof activeCompositeHorizonY === "number" &&
+                  typeof compositeGroundHeight === "number"
+                    ? {
+                        top: activeCompositeHorizonY,
+                        height: compositeGroundHeight,
+                      }
+                    : null,
+                ]}
+              />
+              {isTotalCompositeTheme ? (
+                <View
+                  style={[
+                    styles.compositeHorizonGlow,
+                    typeof activeCompositeHorizonY === "number"
+                      ? { top: Math.max(0, activeCompositeHorizonY - 2.5) }
+                      : null,
+                  ]}
+                />
+              ) : null}
+              <View
+                style={[
+                  styles.compositeHorizon,
+                  isTotalCompositeTheme ? { backgroundColor: TOTALITY_HORIZON_LINE_COLOR } : null,
+                  typeof activeCompositeHorizonY === "number"
+                    ? { top: activeCompositeHorizonY }
+                    : null,
+                ]}
+              />
               {compositeLayout ? (
                 <>
                   <View
@@ -358,15 +415,46 @@ export default function PhotographyGuideScreen({
                   />
                   {compositeLayout.placements.map((placement) => (
                     <View key={placement.index}>
+                      {isTotalCompositeTheme &&
+                      placement.phaseBucket === "MAX" &&
+                      placement.showMoon &&
+                      placement.moon ? (
+                        <>
+                          <View
+                            style={[
+                              styles.compositeCoronaGlow,
+                              {
+                                width: Math.max(placement.sunRadius * 9, 16),
+                                height: Math.max(placement.sunRadius * 9, 16),
+                                borderRadius: Math.max(placement.sunRadius * 4.5, 8),
+                                left: placement.x - Math.max(placement.sunRadius * 4.5, 8),
+                                top: placement.y - Math.max(placement.sunRadius * 4.5, 8),
+                              },
+                            ]}
+                          />
+                          <View
+                            style={[
+                              styles.compositeCoronaRing,
+                              {
+                                width: Math.max(placement.sunRadius * 6, 10),
+                                height: Math.max(placement.sunRadius * 6, 10),
+                                borderRadius: Math.max(placement.sunRadius * 3, 5),
+                                left: placement.x - Math.max(placement.sunRadius * 3, 5),
+                                top: placement.y - Math.max(placement.sunRadius * 3, 5),
+                              },
+                            ]}
+                          />
+                        </>
+                      ) : null}
                       <View
                         style={[
                           styles.compositeSun,
                           {
-                            width: compositeLayout.sunRadius * 2,
-                            height: compositeLayout.sunRadius * 2,
-                            borderRadius: compositeLayout.sunRadius,
-                            left: placement.x - compositeLayout.sunRadius,
-                            top: placement.y - compositeLayout.sunRadius,
+                            width: placement.sunRadius * 2,
+                            height: placement.sunRadius * 2,
+                            borderRadius: placement.sunRadius,
+                            left: placement.x - placement.sunRadius,
+                            top: placement.y - placement.sunRadius,
                           },
                         ]}
                       />
@@ -374,6 +462,12 @@ export default function PhotographyGuideScreen({
                         <View
                           style={[
                             styles.compositeMoon,
+                            isTotalCompositeTheme
+                              ? {
+                                  backgroundColor: TOTALITY_MOON_COLOR,
+                                  borderColor: TOTALITY_MOON_BORDER_COLOR,
+                                }
+                              : null,
                             {
                               width: placement.moon.radius * 2,
                               height: placement.moon.radius * 2,
@@ -389,7 +483,7 @@ export default function PhotographyGuideScreen({
                           styles.compositeShotIndexTag,
                           {
                             left: placement.x - 9,
-                            top: placement.y + compositeLayout.sunRadius + 3,
+                            top: placement.y + placement.sunRadius + 3,
                           },
                           placement.clamped ? styles.compositeShotIndexTagClamped : null,
                         ]}
@@ -401,8 +495,8 @@ export default function PhotographyGuideScreen({
                           style={[
                             styles.compositeClampIndicator,
                             {
-                              left: placement.x + compositeLayout.sunRadius - 4,
-                              top: placement.y - compositeLayout.sunRadius - 4,
+                              left: placement.x + placement.sunRadius - 4,
+                              top: placement.y - placement.sunRadius - 4,
                             },
                           ]}
                         />
@@ -725,7 +819,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       position: "absolute",
       left: 0,
       right: 0,
-      bottom: 0,
+      top: "76%",
       height: "24%",
       backgroundColor: "#314451",
     },
@@ -736,6 +830,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       top: "76%",
       height: 1,
       backgroundColor: "rgba(255,255,255,0.45)",
+    },
+    compositeHorizonGlow: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      height: 5,
+      backgroundColor: TOTALITY_HORIZON_GLOW_COLOR,
+      opacity: 0.95,
     },
     compositeMaxAnchor: {
       position: "absolute",
@@ -757,6 +859,17 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       backgroundColor: "#0d1020",
       borderWidth: 1,
       borderColor: "#3d4267",
+    },
+    compositeCoronaGlow: {
+      position: "absolute",
+      backgroundColor: "rgba(198, 228, 255, 0.20)",
+      borderWidth: 0,
+    },
+    compositeCoronaRing: {
+      position: "absolute",
+      borderWidth: 1,
+      borderColor: "rgba(236, 248, 255, 0.92)",
+      backgroundColor: "transparent",
     },
     compositeShotIndexTag: {
       position: "absolute",
