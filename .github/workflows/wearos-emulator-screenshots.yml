@@ -247,6 +247,10 @@ jobs:
             exit 1
           fi
 
+          # Extra settle time so the Wear app picks up emulator geo changes
+          # before we deep-link and capture the first screenshot.
+          LOCATION_SETTLE_SECONDS=12
+
           sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           if [ -z "$sdk_root" ] || [ ! -d "$sdk_root" ]; then
             echo "ANDROID_SDK_ROOT/ANDROID_HOME is not configured."
@@ -529,8 +533,8 @@ jobs:
           }
 
           set_emulator_geo_gibraltar() {
-            local lat="36.1408"
-            local lon="-5.3536"
+            local lat="36.1319"
+            local lon="-5.3409"
             echo "Setting emulator GPS to Gibraltar: lat=$lat, lon=$lon"
             
             # Use emulator console command
@@ -655,16 +659,20 @@ jobs:
               case "$url" in
                 *gibraltar-between-c1-c3*)
                   echo "Detected gibraltar-between-c1-c3 scenario"
-                  set_emulator_time_utc "2027-08-02T08:23:09Z"
                   set_emulator_geo_gibraltar
-                  echo "Waiting 2 seconds for time/GPS changes to propagate..."
+                  echo "Waiting ${LOCATION_SETTLE_SECONDS}s for GPS changes to propagate..."
+                  sleep "$LOCATION_SETTLE_SECONDS"
+                  set_emulator_time_utc "2027-08-02T08:18:36Z"
+                  echo "Waiting 2 seconds for UTC time change to propagate..."
                   sleep 2
                   ;;
                 *gibraltar-max*)
                   echo "Detected gibraltar-max scenario"
-                  set_emulator_time_utc "2027-08-02T08:47:59Z"
                   set_emulator_geo_gibraltar
-                  echo "Waiting 2 seconds for time/GPS changes to propagate..."
+                  echo "Waiting ${LOCATION_SETTLE_SECONDS}s for GPS changes to propagate..."
+                  sleep "$LOCATION_SETTLE_SECONDS"
+                  set_emulator_time_utc "2027-08-02T08:48:00Z"
+                  echo "Waiting 2 seconds for UTC time change to propagate..."
                   sleep 2
                   ;;
               esac
