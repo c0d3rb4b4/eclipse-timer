@@ -459,17 +459,24 @@ jobs:
               local timestamp_ms="${timestamp_sec}000"
               echo "Using emulator console to set time (timestamp ms: $timestamp_ms)"
               
-              # Use telnet to emulator console - format: <unixtime in ms>
-              # Port is typically 5554 for first emulator
-              local emu_port="$(adb -s "$emulator_serial" emu avd status 2>&1 | grep -o 'console on port [0-9]*' | grep -o '[0-9]*' || echo '5554')"
-              echo "Emulator console port: $emu_port"
-              
-              # Try using adb shell date command with formatted time
+              # Prefer emulator console clock command first.
+              if adb -s "$emulator_serial" emu avd setclock "$timestamp_ms" </dev/null >/dev/null 2>&1; then
+                echo "Time set via emulator console clock"
+              else
+                echo "::warning::Emulator console clock command failed; falling back to shell date command."
+              fi
+
+              # Try using adb shell date command with formatted time.
               local date_format
               date_format="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso_utc" "+%m%d%H%M%Y.%S" 2>/dev/null)"
               echo "Trying to set date to: $date_format"
-              
-              adb -s "$emulator_serial" shell "settings put global auto_time 0; date -u $date_format" </dev/null 2>&1 | head -5
+
+              if shell_date_output="$(adb -s "$emulator_serial" shell "settings put global auto_time 0; date -u $date_format" </dev/null 2>&1)"; then
+                printf '%s\n' "$shell_date_output" | head -5
+              else
+                printf '%s\n' "$shell_date_output" | head -5
+                echo "::warning::Shell date command failed. Continuing with emulator-provided clock."
+              fi
             else
               echo "::warning::Failed to parse timestamp from $iso_utc"
             fi
