@@ -257,6 +257,14 @@ describe("photography guide schedule", () => {
       expect(placement.sunRadius).toBeLessThan(4);
       expect(placement.sunRadius).toBeGreaterThan(1);
       expect(placement.y + placement.sunRadius).toBeLessThanOrEqual(layout.horizonY);
+      expect(placement.showMoon).toBe(true);
+      expect(placement.moon).toBeDefined();
+      if (!placement.moon) continue;
+      const centerDistance = Math.hypot(
+        placement.moon.x - placement.x,
+        placement.moon.y - placement.y,
+      );
+      expect(centerDistance).toBeLessThan(placement.sunRadius * 2.5);
     }
   });
 });
