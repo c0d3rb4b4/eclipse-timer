@@ -123,7 +123,7 @@ describe("photography guide schedule", () => {
     expect(result.reason).toBe("Must be within eclipse area.");
   });
 
-  it("anchors MAX at horizontal center and 2/3 vertical in landscape composite", () => {
+  it("anchors MAX at frame center in landscape composite", () => {
     const scheduleResult = buildPhotographyGuideSchedule({
       visible: true,
       totalPictures: 5,
@@ -146,7 +146,7 @@ describe("photography guide schedule", () => {
     const maxPlacement = layout.placements.find((placement) => placement.phaseBucket === "MAX");
 
     expect(layout.anchorX).toBeCloseTo(180, 6);
-    expect(layout.anchorY).toBeCloseTo(144, 6);
+    expect(layout.anchorY).toBeCloseTo(108, 6);
     expect(maxPlacement).toBeDefined();
     expect(maxPlacement?.x).toBeCloseTo(layout.anchorX, 6);
     expect(maxPlacement?.y).toBeCloseTo(layout.anchorY, 6);
@@ -242,7 +242,7 @@ describe("photography guide schedule", () => {
     });
 
     expect(layout.anchorX).toBeCloseTo(180, 6);
-    expect(layout.anchorY).toBeCloseTo(144, 6);
+    expect(layout.anchorY).toBeCloseTo(108, 6);
     expect(layout.horizonY).toBeCloseTo(216, 1);
 
     const ys = layout.placements.map((placement) => placement.y);

@@ -507,7 +507,7 @@ export default function PhotographyGuideScreen({
               ) : null}
             </View>
             <Text style={styles.compositeModalBody}>
-              24mm framing simulation with MAX anchored at center / 2/3 vertical in frame.
+              24mm framing simulation with MAX anchored at frame center.
             </Text>
             <Text style={styles.compositeLegendText}>
               Numbers are shot indices. Amber dots mark edge-clamped shots.
