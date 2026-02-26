@@ -31,22 +31,29 @@ Add a new `Photography Guide` page that gives users a shot schedule (time + gene
 
 ## 4. Distribution Rules
 
-Given selected `n` in `{3,5,7,9}`:
+Given selected `n` in `{3,5,7,9,11}`:
 
 1. `n` is odd and always includes one photo at `MAX`.
-2. Let `k = (n - 1) / 2`.
-3. Total/annular case:
-   - `k` times evenly distributed in interval `C1 -> C2`
-   - `k` times evenly distributed in interval `C3 -> C4`
-4. Partial case:
-   - `k` times evenly distributed in interval `C1 -> MAX`
-   - `k` times evenly distributed in interval `MAX -> C4`
-5. Distribution formula for any interval `[start, end]` with `k` points:
+2. Let `k = (n - 3) / 2`.
+3. Place `k` photos on each side of `MAX`:
+   - left interval:
+     - total/annular: between `C1 -> C2`
+     - partial: between `C1 -> MAX`
+   - right interval:
+     - total/annular: between `C3 -> C4`
+     - partial: between `MAX -> C4`
+4. Distribution formula for any interval `[start, end]` with `k` points:
    - point `i` (1-based): `start + (i / (k + 1)) * (end - start)`
+5. Add one extra photo before `C1` and one extra photo after `C4`:
+   - if the first two scheduled times are `t1 < t2`, pre-`C1` photo is `t1 - (t2 - t1)`
+   - if the last two scheduled times are `t(n-1) < tn`, post-`C4` photo is `tn + (tn - t(n-1))`
+   - this keeps the outer gap equal to the adjacent inner gap
 6. Final table order:
+   - pre-`C1` photo
    - left interval times (chronological)
    - `MAX`
    - right interval times (chronological)
+   - post-`C4` photo
 
 ## 5. Table Content
 
@@ -63,9 +70,9 @@ Each row should include:
 1. Button label: `Show landscape composite`.
 2. Opens a full-width visualization panel/modal.
 3. Simulate a `24mm` landscape composition:
-   - horizon line near lower fourth (`~75%` vertical position)
-   - sky above horizon, ground below horizon
-4. Place all scheduled sun positions in one frame, centered horizontally on `MAX`.
+   - framing does not depend on horizon position
+   - place `MAX` at horizontal center and at the `2/3` vertical point in the frame
+4. Place all scheduled sun positions in one frame relative to the fixed `MAX` anchor.
 5. Only show moon disk when it occludes sun at that shot time.
 6. If a shot falls outside the simulated frame bounds, clamp to edge and flag with subtle indicator.
 
