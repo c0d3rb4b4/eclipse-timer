@@ -408,6 +408,13 @@ jobs:
 
           adb -s "$emulator_serial" wait-for-device
 
+          echo "Attempting adb root for emulator clock control (best-effort)..."
+          adb_root_output="$(adb -s "$emulator_serial" root </dev/null 2>&1 || true)"
+          printf '%s\n' "$adb_root_output" | head -5
+          adb -s "$emulator_serial" wait-for-device || true
+          echo "adbd identity:"
+          adb -s "$emulator_serial" shell id </dev/null 2>&1 | head -3 || true
+
           boot_completed=""
           for _ in {1..180}; do
             boot_completed="$(adb -s "$emulator_serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
@@ -445,10 +452,27 @@ jobs:
           adb -s "$emulator_serial" shell input keyevent KEYCODE_WAKEUP || true
           sleep 1
 
+          log_emulator_time_state() {
+            local label="$1"
+            local current_epoch
+            local current_utc
+            local auto_time_setting
+            local timezone_value
+            current_epoch="$(adb -s "$emulator_serial" shell date +%s </dev/null 2>/dev/null | tr -d '\r' || true)"
+            current_utc="$(adb -s "$emulator_serial" shell date -u </dev/null 2>/dev/null | tr -d '\r' || true)"
+            auto_time_setting="$(adb -s "$emulator_serial" shell settings get global auto_time </dev/null 2>/dev/null | tr -d '\r' || true)"
+            timezone_value="$(adb -s "$emulator_serial" shell getprop persist.sys.timezone </dev/null 2>/dev/null | tr -d '\r' || true)"
+            echo "$label: epoch=$current_epoch utc='$current_utc' auto_time=$auto_time_setting timezone=$timezone_value"
+          }
+
+          echo "Emulator console help snapshot:"
+          adb -s "$emulator_serial" emu help </dev/null 2>&1 | head -40 || true
+
           set_emulator_time_utc() {
             local iso_utc="$1"
             
             echo "Setting emulator time to: $iso_utc"
+            log_emulator_time_state "Clock state before set"
             
             # Convert to Unix timestamp (seconds since epoch)
             local timestamp_sec
@@ -460,9 +484,11 @@ jobs:
               echo "Using emulator console to set time (timestamp ms: $timestamp_ms)"
               
               # Prefer emulator console clock command first.
-              if adb -s "$emulator_serial" emu avd setclock "$timestamp_ms" </dev/null >/dev/null 2>&1; then
+              if setclock_output="$(adb -s "$emulator_serial" emu avd setclock "$timestamp_ms" </dev/null 2>&1)"; then
+                printf '%s\n' "$setclock_output" | head -5
                 echo "Time set via emulator console clock"
               else
+                printf '%s\n' "$setclock_output" | head -5
                 echo "::warning::Emulator console clock command failed; falling back to shell date command."
               fi
 
@@ -477,6 +503,9 @@ jobs:
                 printf '%s\n' "$shell_date_output" | head -5
                 echo "::warning::Shell date command failed. Continuing with emulator-provided clock."
               fi
+
+              # Broadcast time-set change in case framework listeners need a nudge.
+              adb -s "$emulator_serial" shell am broadcast -a android.intent.action.TIME_SET </dev/null >/dev/null 2>&1 || true
             else
               echo "::warning::Failed to parse timestamp from $iso_utc"
             fi
@@ -484,8 +513,19 @@ jobs:
             sleep 2
             
             # Verify time was set
-            current_time="$(adb -s "$emulator_serial" shell "date -u" </dev/null 2>/dev/null | tr -d '\r')"
-            echo "Emulator time is now: $current_time"
+            current_time="$(adb -s "$emulator_serial" shell date -u </dev/null 2>/dev/null | tr -d '\r')"
+            current_epoch="$(adb -s "$emulator_serial" shell date +%s </dev/null 2>/dev/null | tr -d '\r')"
+            echo "Emulator time is now: $current_time (epoch=$current_epoch, target_epoch=$timestamp_sec)"
+            if [[ "$current_epoch" =~ ^[0-9]+$ ]] && [[ "$timestamp_sec" =~ ^[0-9]+$ ]]; then
+              delta_sec="$((current_epoch - timestamp_sec))"
+              if [ "$delta_sec" -lt 0 ]; then
+                delta_sec=$(( -delta_sec ))
+              fi
+              if [ "$delta_sec" -gt 120 ]; then
+                echo "::warning::Emulator clock did not move close to requested UTC time (delta=${delta_sec}s)."
+              fi
+            fi
+            log_emulator_time_state "Clock state after set"
           }
 
           set_emulator_geo_gibraltar() {
@@ -521,12 +561,14 @@ jobs:
           open_deep_link() {
             local url="$1"
             local tmpout="/tmp/deeplink_output_$$.txt"
+            local escaped_url
+            escaped_url="$(printf '%s' "$url" | sed "s/'/'\\\\''/g")"
 
             adb -s "$emulator_serial" shell am force-stop "$BUNDLE_ID" </dev/null >/dev/null 2>&1 || true
             sleep 1
 
             echo "Attempting to open deep link: $url"
-            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" -p "$BUNDLE_ID" </dev/null >"$tmpout" 2>&1; then
+            if adb -s "$emulator_serial" shell "am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d '$escaped_url' -p '$BUNDLE_ID'" </dev/null >"$tmpout" 2>&1; then
               echo "Deep link opened successfully (method 1)"
               rm -f "$tmpout"
               return 0
@@ -534,8 +576,13 @@ jobs:
             
             echo "Method 1 failed, output:"
             cat "$tmpout" 2>/dev/null | head -10
+            if grep -Fq "Status: ok" "$tmpout"; then
+              echo "::warning::Method 1 returned non-zero but am start reported Status: ok. Treating as success."
+              rm -f "$tmpout"
+              return 0
+            fi
 
-            if adb -s "$emulator_serial" shell am start -S -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" </dev/null >"$tmpout" 2>&1; then
+            if adb -s "$emulator_serial" shell "am start -S -W -a android.intent.action.VIEW -d '$escaped_url' -n '$BUNDLE_ID/$MAIN_ACTIVITY'" </dev/null >"$tmpout" 2>&1; then
               echo "Deep link opened successfully (method 2)"
               rm -f "$tmpout"
               return 0
@@ -543,6 +590,11 @@ jobs:
             
             echo "Method 2 failed, output:"
             cat "$tmpout" 2>/dev/null | head -10
+            if grep -Fq "Status: ok" "$tmpout"; then
+              echo "::warning::Method 2 returned non-zero but am start reported Status: ok. Treating as success."
+              rm -f "$tmpout"
+              return 0
+            fi
             rm -f "$tmpout"
 
             return 1
