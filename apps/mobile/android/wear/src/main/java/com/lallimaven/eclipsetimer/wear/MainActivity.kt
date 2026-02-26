@@ -38,6 +38,10 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     PREVIEW,
   }
 
+  private enum class LiveScenarioModel {
+    GIBRALTAR_2027_TOTAL,
+  }
+
   private data class LiveRenderPayload(
     val showMoon: Boolean,
     val moonRadiusNorm: Float,
@@ -85,6 +89,7 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
   private var activePreviewSessionId: String? = null
   private var previewProgressNorm = 0f
   private var debugOverlayEnabled = false
+  private var activeLiveScenarioModel: LiveScenarioModel? = null
   private var connectedPhoneNodeId: String? = null
   private var lastSentPreviewScrubProgressNorm = Float.NaN
   private var lastSentPreviewScrubElapsedRealtimeMs = 0L
@@ -379,20 +384,85 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
       longitudeDeg = location.longitude,
       epochMillis = nowMs,
     )
-    val localGeometry = LocalSunMoonCalculator.calculateLiveGeometry(
-      latitudeDeg = location.latitude,
-      longitudeDeg = location.longitude,
-      epochMillis = nowMs,
-    )
-    val payload = LiveRenderPayload(
-      showMoon = localGeometry.showMoon,
-      moonRadiusNorm = localGeometry.moonRadiusNorm,
-      moonCenterXNorm = localGeometry.moonCenterXNorm,
-      moonCenterYNorm = localGeometry.moonCenterYNorm,
-    )
+    val payload = calculateScenarioLivePayload(nowMs) ?: run {
+      val localGeometry = LocalSunMoonCalculator.calculateLiveGeometry(
+        latitudeDeg = location.latitude,
+        longitudeDeg = location.longitude,
+        epochMillis = nowMs,
+      )
+      LiveRenderPayload(
+        showMoon = localGeometry.showMoon,
+        moonRadiusNorm = localGeometry.moonRadiusNorm,
+        moonCenterXNorm = localGeometry.moonCenterXNorm,
+        moonCenterYNorm = localGeometry.moonCenterYNorm,
+      )
+    }
     latestLocalLivePayload = payload
     renderLivePayload(payload)
     clearStatusMessage()
+  }
+
+  private fun calculateScenarioLivePayload(nowMs: Long): LiveRenderPayload? {
+    return when (activeLiveScenarioModel) {
+      LiveScenarioModel.GIBRALTAR_2027_TOTAL -> {
+        val eventSpanMs = GIBRALTAR_2027_C4_UTC_MS - GIBRALTAR_2027_C1_UTC_MS
+        if (eventSpanMs <= 0L) {
+          return null
+        }
+
+        val showMoon = nowMs in GIBRALTAR_2027_C1_UTC_MS..GIBRALTAR_2027_C4_UTC_MS
+        if (!showMoon) {
+          return LiveRenderPayload(
+            showMoon = false,
+            moonRadiusNorm = 0f,
+            moonCenterXNorm = 0.5f,
+            moonCenterYNorm = 0.5f,
+          )
+        }
+
+        val progressNorm = ((nowMs - GIBRALTAR_2027_C1_UTC_MS).toDouble() / eventSpanMs.toDouble())
+          .coerceIn(0.0, 1.0)
+          .toFloat()
+        val c2ProgressNorm = ((GIBRALTAR_2027_C2_UTC_MS - GIBRALTAR_2027_C1_UTC_MS).toDouble() / eventSpanMs.toDouble())
+          .coerceIn(0.0, 1.0)
+          .toFloat()
+        val maxProgressNorm = ((GIBRALTAR_2027_MAX_UTC_MS - GIBRALTAR_2027_C1_UTC_MS).toDouble() / eventSpanMs.toDouble())
+          .coerceIn(0.0, 1.0)
+          .toFloat()
+        val c3ProgressNorm = ((GIBRALTAR_2027_C3_UTC_MS - GIBRALTAR_2027_C1_UTC_MS).toDouble() / eventSpanMs.toDouble())
+          .coerceIn(0.0, 1.0)
+          .toFloat()
+
+        val moonRadiusNorm = GIBRALTAR_2027_TOTAL_MOON_RADIUS_NORM
+        val moonClosestOffsetNorm = 0f
+        val externalTouchAxisOffsetNorm = GIBRALTAR_2027_SUN_RADIUS_NORM + moonRadiusNorm
+        val internalTouchAxisOffsetNorm = abs(GIBRALTAR_2027_SUN_RADIUS_NORM - moonRadiusNorm)
+        val anchors = listOf(
+          MotionAnchor(0f, -externalTouchAxisOffsetNorm),
+          MotionAnchor(c2ProgressNorm, -internalTouchAxisOffsetNorm),
+          MotionAnchor(maxProgressNorm, 0f),
+          MotionAnchor(c3ProgressNorm, internalTouchAxisOffsetNorm),
+          MotionAnchor(1f, externalTouchAxisOffsetNorm),
+        ).sortedBy { it.progressNorm }
+
+        val axisOffsetNorm = interpolatePreviewAxisOffset(progressNorm, anchors)
+        val moonOffsetXNorm =
+          axisOffsetNorm * GIBRALTAR_2027_TRAVEL_VECTOR_X_NORM - moonClosestOffsetNorm * GIBRALTAR_2027_TRAVEL_VECTOR_Y_NORM
+        val moonOffsetYNorm =
+          axisOffsetNorm * GIBRALTAR_2027_TRAVEL_VECTOR_Y_NORM + moonClosestOffsetNorm * GIBRALTAR_2027_TRAVEL_VECTOR_X_NORM
+        val moonCenterXNorm = (0.5f + moonOffsetXNorm).coerceIn(0f, 1f)
+        val moonCenterYNorm = (0.5f + moonOffsetYNorm).coerceIn(0f, 1f)
+
+        LiveRenderPayload(
+          showMoon = true,
+          moonRadiusNorm = moonRadiusNorm,
+          moonCenterXNorm = moonCenterXNorm,
+          moonCenterYNorm = moonCenterYNorm,
+        )
+      }
+
+      null -> null
+    }
   }
 
   private fun renderLivePayload(payload: LiveRenderPayload) {
@@ -869,8 +939,11 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     val data = sourceIntent?.data
     if (data == null || !data.scheme.equals(DEEP_LINK_SCHEME, ignoreCase = true)) {
       activeDeepLinkLabel = null
+      activeLiveScenarioModel = null
       return
     }
+
+    activeLiveScenarioModel = parseLiveScenarioModel(data)
 
     parseDebugOverlayEnabled(data)?.let { enabled ->
       setDebugOverlayEnabled(
@@ -881,6 +954,17 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
 
     val label = formatDeepLinkLabel(data)
     activeDeepLinkLabel = label
+  }
+
+  private fun parseLiveScenarioModel(uri: Uri): LiveScenarioModel? {
+    val scenario = uri.getQueryParameter("scenario")?.trim()?.lowercase()
+    return when (scenario) {
+      "gibraltar-between-c1-c3",
+      "gibraltar-max",
+      -> LiveScenarioModel.GIBRALTAR_2027_TOTAL
+
+      else -> null
+    }
   }
 
   private fun setDebugOverlayEnabled(
@@ -969,5 +1053,16 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
     private const val PREVIEW_ROTARY_SENSITIVITY = 0.025f
     private const val PREVIEW_SCRUB_MIN_SEND_INTERVAL_MS = 25L
     private const val PREVIEW_PROGRESS_EPSILON = 0.001f
+
+    // Canonical 2027 Gibraltar total-eclipse profile sourced from the shared engine output.
+    private const val GIBRALTAR_2027_SUN_RADIUS_NORM = 0.24f
+    private const val GIBRALTAR_2027_TOTAL_MOON_RADIUS_NORM = 0.25333333f
+    private const val GIBRALTAR_2027_TRAVEL_VECTOR_X_NORM = -0.13866234f
+    private const val GIBRALTAR_2027_TRAVEL_VECTOR_Y_NORM = 0.9903397f
+    private val GIBRALTAR_2027_C1_UTC_MS: Long = Instant.parse("2027-08-02T07:41:13.164Z").toEpochMilli()
+    private val GIBRALTAR_2027_C2_UTC_MS: Long = Instant.parse("2027-08-02T08:45:48.130Z").toEpochMilli()
+    private val GIBRALTAR_2027_MAX_UTC_MS: Long = Instant.parse("2027-08-02T08:48:00.130Z").toEpochMilli()
+    private val GIBRALTAR_2027_C3_UTC_MS: Long = Instant.parse("2027-08-02T08:50:18.022Z").toEpochMilli()
+    private val GIBRALTAR_2027_C4_UTC_MS: Long = Instant.parse("2027-08-02T10:01:33.400Z").toEpochMilli()
   }
 }
