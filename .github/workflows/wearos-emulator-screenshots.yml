@@ -48,7 +48,7 @@ on:
         description: "Deep links separated by comma or newline"
         required: false
         type: string
-        default: "eclipsetimer://wear/landing,eclipsetimer://wear/live,eclipsetimer://wear/preview,eclipsetimer://wear/diagnostics"
+        default: "eclipsetimer://wear/live?scenario=gibraltar-between-c1-c3,eclipsetimer://wear/live?scenario=gibraltar-max"
 
 concurrency:
   group: wearos-screenshots-${{ github.ref }}
@@ -430,6 +430,30 @@ jobs:
 
           adb -s "$emulator_serial" install -r "$APP_PATH"
 
+          adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.ACCESS_FINE_LOCATION || true
+          adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.ACCESS_COARSE_LOCATION || true
+
+          adb -s "$emulator_serial" shell settings put global auto_time 0 || true
+          adb -s "$emulator_serial" shell settings put global auto_time_zone 0 || true
+
+          set_emulator_time_utc() {
+            local iso_utc="$1"
+            local compact_utc
+            compact_utc="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso_utc" "+%Y%m%d.%H%M%S" 2>/dev/null || true)"
+            if [ -z "$compact_utc" ]; then
+              compact_utc="$(printf '%s' "$iso_utc" | tr -d ':-' | sed -E 's/T/./; s/Z$//')"
+            fi
+
+            adb -s "$emulator_serial" shell "date -u $compact_utc" >/dev/null 2>&1 || true
+            adb -s "$emulator_serial" emu avd host-time-scale 1 >/dev/null 2>&1 || true
+          }
+
+          set_emulator_geo_gibraltar() {
+            local lat="36.1408"
+            local lon="-5.3536"
+            adb -s "$emulator_serial" emu geo fix "$lon" "$lat" >/dev/null 2>&1 || true
+          }
+
           wait_for_app_foreground() {
             local package_name="$1"
             for _ in {1..30}; do
@@ -450,8 +474,6 @@ jobs:
             echo "::warning::App did not enter the foreground after initial launch."
           fi
           sleep "$STARTUP_WAIT_SECONDS"
-          adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/00-launch.png"
-          printf "00,launch,00-launch.png\n" >> "$shots_dir/manifest.csv"
 
           DEEP_LINKS_INPUT="$(cat <<'EOF'
           ${{ github.event.inputs.deep_links }}
@@ -470,13 +492,25 @@ jobs:
             index=1
             while IFS= read -r url; do
               [ -z "$url" ] && continue
+
+              case "$url" in
+                *gibraltar-between-c1-c3*)
+                  set_emulator_time_utc "2027-08-02T08:23:09Z"
+                  set_emulator_geo_gibraltar
+                  ;;
+                *gibraltar-max*)
+                  set_emulator_time_utc "2027-08-02T08:47:59Z"
+                  set_emulator_geo_gibraltar
+                  ;;
+              esac
+
               slug="$(printf '%s' "$url" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#[^A-Za-z0-9._-]+#-#g; s#-+#-#g; s#^-##; s#-$##')"
               if [ -z "$slug" ]; then
                 slug="screen-$index"
               fi
               filename="$(printf '%02d' "$index")-$slug.png"
 
-              if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" "$BUNDLE_ID" >/dev/null 2>&1 </dev/null; then
+              if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 </dev/null; then
                 if ! wait_for_app_foreground "$BUNDLE_ID"; then
                   echo "::warning::Deep link opened but app is not foregrounded: $url"
                   index=$((index + 1))
