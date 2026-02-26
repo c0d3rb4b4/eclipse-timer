@@ -10,11 +10,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
-import type { LandingScrollState } from "../hooks/useLandingScroll";
 import { APP_LOGO } from "../assets/branding";
 import BurgerButton from "../components/BurgerButton";
+import type { LandingEclipseItem } from "../hooks/useLandingEclipses";
+import type { LandingScrollState } from "../hooks/useLandingScroll";
+import { useAppTheme } from "../theme/useAppTheme";
 
 type LandingScreenProps = {
   eclipses: LandingEclipseItem[];
@@ -41,6 +41,8 @@ export default function LandingScreen({
   onOpenMenu,
   scroll,
 }: LandingScreenProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const selectedLanding = useMemo(
     () => eclipses.find((e) => e.id === selectedId) ?? null,
     [eclipses, selectedId],
@@ -105,7 +107,9 @@ export default function LandingScreen({
           <BurgerButton onPress={onOpenMenu} />
           <View style={styles.brandRow}>
             <Image source={APP_LOGO} style={styles.brandLogo} resizeMode="contain" />
-            <Text style={styles.landingTitle} accessibilityRole="header">Eclipse Timer</Text>
+            <Text style={styles.landingTitle} accessibilityRole="header">
+              Eclipse Timer
+            </Text>
           </View>
         </View>
         <View style={styles.searchWrap}>
@@ -114,7 +118,7 @@ export default function LandingScreen({
             onChangeText={onSearchQueryChange}
             style={styles.searchInput}
             placeholder="Search by year, date, kind, or ID"
-            placeholderTextColor="#6f6f6f"
+            placeholderTextColor={colors.inputPlaceholder}
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"
@@ -180,7 +184,9 @@ export default function LandingScreen({
               {previewState === "error" ? (
                 <View style={styles.previewOverlay}>
                   <Text style={styles.previewOverlayText}>Preview unavailable right now.</Text>
-                  <Pressable style={styles.previewRetryBtn} onPress={retryPreview}
+                  <Pressable
+                    style={styles.previewRetryBtn}
+                    onPress={retryPreview}
                     accessibilityRole="button"
                     accessibilityLabel="Retry loading preview"
                   >
@@ -207,154 +213,156 @@ export default function LandingScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0b0b0b" },
-  landingWrap: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingTop: 24,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  brandLogo: {
-    width: 30,
-    height: 30,
-  },
-  landingTitle: { color: "white", fontSize: 26, fontWeight: "800" },
-  searchWrap: {
-    backgroundColor: "#121212",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2b2b2b",
-    padding: 10,
-    gap: 8,
-  },
-  searchInput: {
-    color: "white",
-    backgroundColor: "#1a1a1a",
-    borderWidth: 1,
-    borderColor: "#313131",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  searchMeta: {
-    color: "#9b9b9b",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  landingListBox: {
-    flex: 1,
-    minHeight: 220,
-    backgroundColor: "#121212",
-    borderRadius: 12,
-    padding: 8,
-  },
-  landingListScroll: {
-    flex: 1,
-  },
-  landingListScrollContent: {
-    paddingBottom: 2,
-  },
-  landingListItem: {
-    height: 68,
-    backgroundColor: "#1f1f1f",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2b2b2b",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-  },
-  landingListItemSelected: {
-    borderColor: "#2c3cff",
-    backgroundColor: "#1a2056",
-  },
-  landingListItemPast: {
-    backgroundColor: "#171717",
-    borderColor: "#272727",
-  },
-  landingListItemTitle: { color: "white", fontSize: 14, fontWeight: "700" },
-  landingListItemTitlePast: { color: "#9b9b9b" },
-  landingListItemMeta: { color: "#bdbdbd", fontSize: 12, marginTop: 4 },
-  landingListItemMetaPast: { color: "#7f7f7f" },
-  emptyWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 36,
-    gap: 6,
-  },
-  emptyTitle: { color: "#dedede", fontSize: 14, fontWeight: "700" },
-  emptyMeta: { color: "#8d8d8d", fontSize: 12 },
-  previewCard: {
-    backgroundColor: "#121212",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2b2b2b",
-    padding: 8,
-  },
-  previewMedia: {
-    width: "100%",
-    height: 220,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: "#0b0b0b",
-  },
-  previewGif: {
-    width: "100%",
-    height: "100%",
-  },
-  previewOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "rgba(11, 11, 11, 0.85)",
-    paddingHorizontal: 16,
-  },
-  previewOverlayText: {
-    color: "#d8d8d8",
-    fontSize: 12,
-    textAlign: "center",
-  },
-  previewRetryBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#2c3cff",
-  },
-  previewRetryText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  goBtn: {
-    marginTop: 4,
-    width: "100%",
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#2c3cff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  goBtnDisabled: {
-    backgroundColor: "#26306f",
-    opacity: 0.55,
-  },
-  goBtnText: {
-    color: "white",
-    fontWeight: "800",
-    fontSize: 16,
-  },
-});
+function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: colors.background },
+    landingWrap: {
+      flex: 1,
+      paddingHorizontal: 12,
+      paddingTop: 24,
+      paddingBottom: 24,
+      gap: 12,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    brandRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    brandLogo: {
+      width: 30,
+      height: 30,
+    },
+    landingTitle: { color: colors.textPrimary, fontSize: 26, fontWeight: "800" },
+    searchWrap: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 10,
+      gap: 8,
+    },
+    searchInput: {
+      color: colors.textPrimary,
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+    },
+    searchMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    landingListBox: {
+      flex: 1,
+      minHeight: 220,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 8,
+    },
+    landingListScroll: {
+      flex: 1,
+    },
+    landingListScrollContent: {
+      paddingBottom: 2,
+    },
+    landingListItem: {
+      height: 68,
+      backgroundColor: colors.surfaceMuted,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      justifyContent: "center",
+    },
+    landingListItemSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primaryMuted,
+    },
+    landingListItemPast: {
+      backgroundColor: colors.surfaceElevated,
+      borderColor: colors.border,
+    },
+    landingListItemTitle: { color: colors.textPrimary, fontSize: 14, fontWeight: "700" },
+    landingListItemTitlePast: { color: colors.textMuted },
+    landingListItemMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 4 },
+    landingListItemMetaPast: { color: colors.textMuted },
+    emptyWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 36,
+      gap: 6,
+    },
+    emptyTitle: { color: colors.textSecondary, fontSize: 14, fontWeight: "700" },
+    emptyMeta: { color: colors.textMuted, fontSize: 12 },
+    previewCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 8,
+    },
+    previewMedia: {
+      width: "100%",
+      height: 220,
+      borderRadius: 8,
+      overflow: "hidden",
+      backgroundColor: colors.background,
+    },
+    previewGif: {
+      width: "100%",
+      height: "100%",
+    },
+    previewOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.overlay,
+      paddingHorizontal: 16,
+    },
+    previewOverlayText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      textAlign: "center",
+    },
+    previewRetryBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.primary,
+    },
+    previewRetryText: {
+      color: colors.primaryText,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    goBtn: {
+      marginTop: 4,
+      width: "100%",
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    goBtnDisabled: {
+      backgroundColor: colors.primaryMuted,
+      opacity: 0.55,
+    },
+    goBtnText: {
+      color: colors.primaryText,
+      fontWeight: "800",
+      fontSize: 16,
+    },
+  });
+}

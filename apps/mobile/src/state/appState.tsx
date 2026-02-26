@@ -43,6 +43,8 @@ export type NotificationMockTimeline = {
   subsequentContactGapMinutes: number;
 };
 
+export type AppThemePreference = "system" | "light" | "dark";
+
 export type NotificationEntry = {
   id: string;
   eclipseId: string;
@@ -79,6 +81,7 @@ export function eclipseReminderAnchorId(eclipseId: string) {
 type AppState = {
   selectedLandingId: string | null;
   activeEclipseId: string | null;
+  themePreference: AppThemePreference;
   notificationSettings: NotificationSettings;
   notificationMockTimeline: NotificationMockTimeline;
   favoriteLocations: FavoriteLocation[];
@@ -89,6 +92,7 @@ type AppState = {
 
 type PersistedPreferences = Pick<
   AppState,
+  | "themePreference"
   | "notificationSettings"
   | "notificationMockTimeline"
   | "favoriteLocations"
@@ -101,6 +105,7 @@ type AppAction =
   | { type: "SELECT_LANDING"; id: string }
   | { type: "ACTIVATE_SELECTED" }
   | { type: "HYDRATE_PREFERENCES"; preferences: PersistedPreferences }
+  | { type: "SET_THEME_PREFERENCE"; preference: AppThemePreference }
   | {
       type: "SET_NOTIFICATION_SETTING";
       key: NotificationSettingToggleKey;
@@ -135,6 +140,7 @@ type AppAction =
 const initialState: AppState = {
   selectedLandingId: null,
   activeEclipseId: null,
+  themePreference: "system",
   notificationSettings: {
     eclipseAlerts: true,
     countdownAlerts: true,
@@ -250,6 +256,11 @@ function parseNotificationSettings(raw: unknown): NotificationSettings {
     alarmLeadSecondsA1,
     alarmCountdownStartSecondsA2,
   };
+}
+
+function parseThemePreference(raw: unknown): AppThemePreference {
+  if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  return initialState.themePreference;
 }
 
 function parseNotificationMockTimeline(raw: unknown): NotificationMockTimeline {
@@ -411,6 +422,7 @@ function parsePersistedPreferences(raw: string): PersistedPreferences | null {
     if (!isRecord(parsed)) return null;
 
     return {
+      themePreference: parseThemePreference(parsed.themePreference),
       notificationSettings: parseNotificationSettings(parsed.notificationSettings),
       notificationMockTimeline: parseNotificationMockTimeline(parsed.notificationMockTimeline),
       favoriteLocations: parseFavoriteLocations(parsed.favoriteLocations),
@@ -436,12 +448,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "HYDRATE_PREFERENCES":
       return {
         ...state,
+        themePreference: action.preferences.themePreference,
         notificationSettings: action.preferences.notificationSettings,
         notificationMockTimeline: action.preferences.notificationMockTimeline,
         favoriteLocations: action.preferences.favoriteLocations,
         notificationEntries: action.preferences.notificationEntries,
         disabledEclipseAlarmIds: action.preferences.disabledEclipseAlarmIds,
         eclipseReminderAnchors: action.preferences.eclipseReminderAnchors,
+      };
+    case "SET_THEME_PREFERENCE":
+      if (state.themePreference === action.preference) return state;
+      return {
+        ...state,
+        themePreference: action.preference,
       };
     case "SET_NOTIFICATION_SETTING": {
       const nextSettings: NotificationSettings = {
@@ -615,6 +634,7 @@ type AppStateContextValue = {
   actions: {
     selectLanding: (id: string) => void;
     activateSelected: () => void;
+    setThemePreference: (preference: AppThemePreference) => void;
     setNotificationSetting: (key: NotificationSettingToggleKey, value: boolean) => void;
     setAlarmTiming: (alarmLeadSecondsA1: number, alarmCountdownStartSecondsA2: number) => void;
     setEclipseAlarmEnabled: (eclipseId: string, enabled: boolean) => void;
@@ -666,6 +686,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (!hasHydratedPreferences) return;
 
     const payload: PersistedPreferences = {
+      themePreference: state.themePreference,
       notificationSettings: state.notificationSettings,
       notificationMockTimeline: state.notificationMockTimeline,
       favoriteLocations: state.favoriteLocations,
@@ -687,12 +708,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     state.notificationEntries,
     state.notificationMockTimeline,
     state.notificationSettings,
+    state.themePreference,
   ]);
 
   const actions = useMemo(
     () => ({
       selectLanding: (id: string) => dispatch({ type: "SELECT_LANDING", id }),
       activateSelected: () => dispatch({ type: "ACTIVATE_SELECTED" }),
+      setThemePreference: (preference: AppThemePreference) =>
+        dispatch({ type: "SET_THEME_PREFERENCE", preference }),
       setNotificationSetting: (key: NotificationSettingToggleKey, value: boolean) =>
         dispatch({
           type: "SET_NOTIFICATION_SETTING",

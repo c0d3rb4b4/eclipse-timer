@@ -1,5 +1,5 @@
 import * as Speech from "expo-speech";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -26,6 +26,7 @@ import {
   type NotificationSettings,
   type NotificationSettingToggleKey,
 } from "../state/appState";
+import { useAppTheme } from "../theme/useAppTheme";
 
 type NotificationSettingsScreenProps = {
   onOpenMenu: () => void;
@@ -46,6 +47,7 @@ type SettingRowProps = {
   value: boolean;
   disabled?: boolean;
   onValueChange: (nextValue: boolean) => void;
+  styles: ReturnType<typeof createStyles>;
 };
 
 function SettingRow({
@@ -54,6 +56,7 @@ function SettingRow({
   value,
   disabled = false,
   onValueChange,
+  styles,
 }: SettingRowProps) {
   return (
     <View
@@ -86,6 +89,8 @@ export default function NotificationSettingsScreen({
   onSetMockTimelineEnabled,
   onSetMockTimelineOffsets,
 }: NotificationSettingsScreenProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isPlayingTestTts, setIsPlayingTestTts] = useState(false);
   const [mockFirstOffsetText, setMockFirstOffsetText] = useState(
     String(mockTimeline.firstContactOffsetMinutes),
@@ -245,24 +250,28 @@ export default function NotificationSettingsScreen({
           title="Vibration"
           description="Vibrate when a background eclipse reminder is delivered."
           value={settings.vibrationEnabled}
+          styles={styles}
           onValueChange={(nextValue) => onSetSetting("vibrationEnabled", nextValue)}
         />
         <SettingRow
           title="Sound"
           description="Play default system notification sound for background reminders."
           value={settings.soundEnabled}
+          styles={styles}
           onValueChange={(nextValue) => onSetSetting("soundEnabled", nextValue)}
         />
         <SettingRow
           title="1 Hour Reminder"
           description="Send one background reminder at T-1h for each enabled eclipse."
           value={settings.remindOneHourBefore}
+          styles={styles}
           onValueChange={(nextValue) => onSetSetting("remindOneHourBefore", nextValue)}
         />
         <SettingRow
           title="10 Minute Reminder"
           description="Send one background reminder at T-10m for each enabled eclipse."
           value={settings.remindTenMinutesBefore}
+          styles={styles}
           onValueChange={(nextValue) => onSetSetting("remindTenMinutesBefore", nextValue)}
         />
         <View style={styles.alarmTimingCard}>
@@ -279,7 +288,7 @@ export default function NotificationSettingsScreen({
                 onEndEditing={commitAlarmTiming}
                 onSubmitEditing={commitAlarmTiming}
                 placeholder="10"
-                placeholderTextColor="#6f6f6f"
+                placeholderTextColor={colors.inputPlaceholder}
                 style={styles.mockInput}
                 keyboardType="numbers-and-punctuation"
                 autoCapitalize="none"
@@ -294,7 +303,7 @@ export default function NotificationSettingsScreen({
                 onEndEditing={commitAlarmTiming}
                 onSubmitEditing={commitAlarmTiming}
                 placeholder="5"
-                placeholderTextColor="#6f6f6f"
+                placeholderTextColor={colors.inputPlaceholder}
                 style={styles.mockInput}
                 keyboardType="numbers-and-punctuation"
                 autoCapitalize="none"
@@ -349,7 +358,7 @@ export default function NotificationSettingsScreen({
                 onEndEditing={commitMockTimelineOffsets}
                 onSubmitEditing={commitMockTimelineOffsets}
                 placeholder="5"
-                placeholderTextColor="#6f6f6f"
+                placeholderTextColor={colors.inputPlaceholder}
                 style={[styles.mockInput, !mockTimeline.enabled ? styles.mockInputDisabled : null]}
                 keyboardType="numbers-and-punctuation"
                 autoCapitalize="none"
@@ -365,7 +374,7 @@ export default function NotificationSettingsScreen({
                 onEndEditing={commitMockTimelineOffsets}
                 onSubmitEditing={commitMockTimelineOffsets}
                 placeholder="1"
-                placeholderTextColor="#6f6f6f"
+                placeholderTextColor={colors.inputPlaceholder}
                 style={[styles.mockInput, !mockTimeline.enabled ? styles.mockInputDisabled : null]}
                 keyboardType="numbers-and-punctuation"
                 autoCapitalize="none"
@@ -410,199 +419,201 @@ export default function NotificationSettingsScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#0b0b0b",
-  },
-  headerRow: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  headerMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    color: "white",
-    fontSize: 21,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#b7b7b7",
-    fontSize: 12,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 24,
-    gap: 10,
-  },
-  rowCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2a2a2a",
-    backgroundColor: "#141414",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rowCardDisabled: {
-    opacity: 0.6,
-  },
-  rowMain: {
-    flex: 1,
-    gap: 4,
-  },
-  rowTitle: {
-    color: "#f7f7f7",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  rowDescription: {
-    color: "#a8a8a8",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  alarmTimingCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2a2a2a",
-    backgroundColor: "#141414",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  alarmTimingTitle: {
-    color: "#f7f7f7",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  alarmTimingDescription: {
-    color: "#a8a8a8",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  alarmTimingPreview: {
-    color: "#d7d7d7",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  testCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2a2a2a",
-    backgroundColor: "#141414",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  testTitle: {
-    color: "#f7f7f7",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  testDescription: {
-    color: "#a8a8a8",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  testButton: {
-    marginTop: 2,
-    borderRadius: 10,
-    backgroundColor: "#2c3cff",
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  testButtonDisabled: {
-    opacity: 0.7,
-  },
-  testButtonText: {
-    color: "white",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  testHint: {
-    color: "#b6b6b6",
-    fontSize: 12,
-  },
-  mockCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2a2a2a",
-    backgroundColor: "#141414",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  mockHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  mockHeaderMain: {
-    flex: 1,
-    gap: 4,
-  },
-  mockTitle: {
-    color: "#f7f7f7",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  mockDescription: {
-    color: "#a8a8a8",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  mockInputRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  mockInputGroup: {
-    flex: 1,
-    gap: 4,
-  },
-  mockInputLabel: {
-    color: "#d3d3d3",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  mockInput: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2f2f2f",
-    backgroundColor: "#1b1b1b",
-    color: "white",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-  },
-  mockInputDisabled: {
-    opacity: 0.55,
-  },
-  mockStatus: {
-    color: "#d7d7d7",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  mockHint: {
-    color: "#b6b6b6",
-    fontSize: 12,
-  },
-  mockError: {
-    color: "#ff8c8c",
-    fontSize: 12,
-  },
-});
+function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    headerRow: {
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    headerMeta: {
+      flex: 1,
+      gap: 2,
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: 21,
+      fontWeight: "800",
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    content: {
+      flex: 1,
+    },
+    contentInner: {
+      paddingHorizontal: 12,
+      paddingTop: 14,
+      paddingBottom: 24,
+      gap: 10,
+    },
+    rowCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    rowCardDisabled: {
+      opacity: 0.6,
+    },
+    rowMain: {
+      flex: 1,
+      gap: 4,
+    },
+    rowTitle: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    rowDescription: {
+      color: colors.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    alarmTimingCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      gap: 10,
+    },
+    alarmTimingTitle: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    alarmTimingDescription: {
+      color: colors.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    alarmTimingPreview: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    testCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      gap: 8,
+    },
+    testTitle: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    testDescription: {
+      color: colors.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    testButton: {
+      marginTop: 2,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    testButtonDisabled: {
+      opacity: 0.7,
+    },
+    testButtonText: {
+      color: colors.primaryText,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    testHint: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    mockCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      gap: 10,
+    },
+    mockHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    mockHeaderMain: {
+      flex: 1,
+      gap: 4,
+    },
+    mockTitle: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    mockDescription: {
+      color: colors.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    mockInputRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    mockInputGroup: {
+      flex: 1,
+      gap: 4,
+    },
+    mockInputLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "uppercase",
+    },
+    mockInput: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBackground,
+      color: colors.textPrimary,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      fontSize: 14,
+    },
+    mockInputDisabled: {
+      opacity: 0.55,
+    },
+    mockStatus: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    mockHint: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    mockError: {
+      color: colors.dangerText,
+      fontSize: 12,
+    },
+  });
+}

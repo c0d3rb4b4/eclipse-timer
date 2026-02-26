@@ -8,6 +8,7 @@
 > - dependency/security checks: `pnpm -r outdated`, `pnpm audit --prod --audit-level=high`
 > - docs command validation: ran `pnpm build`, `pnpm dev`, `pnpm test:watch`, `pnpm clean` (all fail at root)
 > - markdown link sweep: relative markdown links resolve; drift remains in plain-text path references
+> - internal testing feedback intake: `documents/com.lallimaven.eclipsetimer_feedback.pdf` (2026-02-26)
 
 ---
 
@@ -61,10 +62,15 @@ These are not implemented yet and would add net-new capability.
 | ADD-04 | Medium | No runtime schema validation of catalog JSON | Type assertions currently hide runtime payload corruption risks | Add runtime decode/validation for `EclipseRecord` in catalog loader |
 | ADD-05 | Medium | No geocoding/address search UX | Location selection is GPS/map only | Add geocoding search field with pin placement |
 | ADD-06 | Medium | No share/export of computed eclipse summary | Users cannot share contact timing results | Add share-sheet + copy/export for contact timeline summary |
-| ADD-07 | Medium | No offline-first preview media strategy | NASA GIF fetch remains network dependent | Add local fallback assets/cache policy for preview thumbnails |
+| ADD-07 | Medium | No offline-first network resilience strategy | Preview/media and other network-dependent surfaces have limited outage UX | Add fallback assets/cache policy plus explicit offline messaging for network-dependent screens |
 | ADD-08 | Medium | No PR native release-smoke step | TS/lint/tests can pass while native release build fails | Add PR smoke gate (`:app:assembleRelease` or EAS local dry-run for changed native/mobile code) |
 | ADD-09 | Medium | No dependency maintenance automation | Security and update drift accumulates silently | Add Dependabot/Renovate with grouped Expo/React Native update policy |
 | ADD-10 | Medium | No docs command-validity automation | Docs drift is currently manual and recurring | Add docs CI check that validates referenced root scripts and key file paths |
+| ADD-11 | High | No first-run onboarding walkthrough | New users must infer navigation and key flows manually | Add first-launch guided walkthrough (tooltips/highlights), persisted completion state, and skip option |
+| ADD-12 | High | No user-selectable theme mode | UI is effectively dark-only and does not expose `light`/`system` preference controls | Add app theme tokens + settings option for `system`, `light`, and `dark` |
+| ADD-13 | Medium | No in-app Help/FAQ surface | Troubleshooting and feature explanations are scattered across external docs | Add a Help screen with concise FAQ, troubleshooting entries, and deep links to full docs |
+| ADD-14 | Medium | No in-app feedback/report-issue path | Feedback intake is ad hoc and detached from app context/device metadata | Add "Send feedback / Report issue" flow with prefilled app/device/version context |
+| ADD-15 | Medium | Store listing assets under-leverage product value | Generic screenshots reduce conversion clarity on Play listing | Upgrade screenshot pipeline with feature-focused captions and short demo clip support |
 
 ---
 
@@ -122,6 +128,13 @@ These are not implemented yet and would add net-new capability.
 | IMP-26 | Low | Dependency cleanup | `packages/engine` still includes `ts-node` in devDependencies without active usage | Remove unused dev dependency if no longer required |
 | IMP-27 | Low | Test gating semantics | Global Vitest config uses `passWithNoTests: true`, allowing empty-scope test passes | Tighten policy or scope this behavior to explicit packages only |
 
+### 3.6 UX quality from internal testing feedback
+
+| ID | Priority | Area | Current state | Improvement |
+|---|---|---|---|---|
+| IMP-28 | High | Accessibility validation coverage | No recurring accessibility audit cadence or automated accessibility checks in CI | Run an accessibility audit (contrast, labels, touch targets, dynamic type) and add lightweight accessibility regression checks |
+| IMP-29 | Medium | Performance baselining | Performance quality is validated manually, with no explicit low-end device baseline | Define startup/render interaction budgets and capture repeatable baseline measurements on a low-end Android profile |
+
 ---
 
 ## 4. Suggested Execution Order
@@ -157,6 +170,15 @@ These are not implemented yet and would add net-new capability.
 5. ADD-09 dependency automation
 6. ADD-10 docs validation automation
 
+### Phase E: UX and adoption enhancements (from internal testing)
+1. ADD-11 first-run onboarding walkthrough
+2. ADD-12 theme mode support (`system`/`light`/`dark`)
+3. IMP-28 accessibility audit + regression checks
+4. ADD-13 in-app Help/FAQ surface
+5. ADD-14 in-app feedback/report issue flow
+6. ADD-15 Play listing screenshot/demo upgrade
+7. IMP-29 low-end performance baseline and budgets
+
 ---
 
 ## 5. Audit Notes
@@ -166,3 +188,19 @@ These are not implemented yet and would add net-new capability.
 - Outdated scan on 2026-02-25 shows significant major-version lag in Expo/React Native/tooling.
 - Root script validation confirms `pnpm build`, `pnpm dev`, `pnpm test:watch`, and `pnpm clean` currently fail.
 - Markdown link targets are mostly intact; remaining path drift is primarily in plain-text path references and duplicated docs sources.
+- Internal tester report intake on 2026-02-26 confirms no crashes/critical defects and adds UX-focused backlog items (`ADD-11`..`ADD-15`, `IMP-28`..`IMP-29`).
+
+---
+
+## 6. Internal Testing Feedback Mapping (2026-02-26)
+
+| Feedback theme from report | Tracker mapping |
+|---|---|
+| Dynamic walkthrough for new users | Added `ADD-11` |
+| Theme toggle (`dark`/`light`/`system`) | Added `ADD-12` |
+| Better Play Store screenshots/demo | Added `ADD-15` |
+| In-app FAQ/help section | Added `ADD-13` |
+| In-app feedback mechanism | Added `ADD-14` |
+| Accessibility audit recommendation | Added `IMP-28` |
+| Performance optimization recommendation | Added `IMP-29` |
+| Offline functionality recommendation | Expanded scope of `ADD-07` |

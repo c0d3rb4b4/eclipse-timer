@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { APP_LOGO } from "../assets/branding";
+import { useAppTheme } from "../theme/useAppTheme";
 
-export type MenuRouteName = "Landing" | "Timer" | "NotificationSettings" | "LocationSettings";
+export type MenuRouteName = "Landing" | "Timer" | "Settings";
 
 type SideMenuProps = {
   visible: boolean;
@@ -22,6 +23,8 @@ type MenuItemProps = {
 };
 
 function MenuItem({ label, route, activeRoute, onNavigate }: MenuItemProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isActive = activeRoute === route;
   return (
     <Pressable
@@ -36,6 +39,8 @@ function MenuItem({ label, route, activeRoute, onNavigate }: MenuItemProps) {
 }
 
 export default function SideMenu({ visible, activeRoute, onClose, onNavigate }: SideMenuProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const translateX = useRef(new Animated.Value(-MENU_WIDTH)).current;
 
   useEffect(() => {
@@ -75,16 +80,9 @@ export default function SideMenu({ visible, activeRoute, onClose, onNavigate }: 
           />
           <MenuItem label="Timer" route="Timer" activeRoute={activeRoute} onNavigate={onNavigate} />
 
-          <Text style={styles.sectionTitle}>Settings</Text>
           <MenuItem
-            label="Notification/Alarm Settings"
-            route="NotificationSettings"
-            activeRoute={activeRoute}
-            onNavigate={onNavigate}
-          />
-          <MenuItem
-            label="Location Settings"
-            route="LocationSettings"
+            label="Settings"
+            route="Settings"
             activeRoute={activeRoute}
             onNavigate={onNavigate}
           />
@@ -94,77 +92,70 @@ export default function SideMenu({ visible, activeRoute, onClose, onNavigate }: 
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  menuPanel: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: MENU_WIDTH,
-    backgroundColor: "#0f0f11",
-    borderRightWidth: 1,
-    borderRightColor: "#2a2a2f",
-  },
-  menuSafe: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  menuHeader: {
-    marginBottom: 10,
-    paddingVertical: 6,
-    gap: 4,
-  },
-  menuBrandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  menuLogo: {
-    width: 22,
-    height: 22,
-  },
-  menuTitle: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  menuSubtitle: {
-    color: "#a5a5a8",
-    fontSize: 12,
-  },
-  sectionTitle: {
-    marginTop: 10,
-    marginBottom: 6,
-    color: "#83838a",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  menuItem: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2f2f34",
-    backgroundColor: "#17171b",
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  menuItemActive: {
-    borderColor: "#2c3cff",
-    backgroundColor: "#1a2057",
-  },
-  menuItemText: {
-    color: "#f3f3f3",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  menuItemTextActive: {
-    color: "white",
-  },
-});
+function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
+  return StyleSheet.create({
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.overlay,
+    },
+    menuPanel: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: MENU_WIDTH,
+      backgroundColor: colors.surface,
+      borderRightWidth: 1,
+      borderRightColor: colors.border,
+    },
+    menuSafe: {
+      flex: 1,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    menuHeader: {
+      marginBottom: 10,
+      paddingVertical: 6,
+      gap: 4,
+    },
+    menuBrandRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    menuLogo: {
+      width: 22,
+      height: 22,
+    },
+    menuTitle: {
+      color: colors.textPrimary,
+      fontSize: 20,
+      fontWeight: "800",
+    },
+    menuSubtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    menuItem: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.surfaceMuted,
+      paddingVertical: 11,
+      paddingHorizontal: 12,
+      marginBottom: 8,
+    },
+    menuItemActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primaryMuted,
+    },
+    menuItemText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    menuItemTextActive: {
+      color: colors.textPrimary,
+    },
+  });
+}

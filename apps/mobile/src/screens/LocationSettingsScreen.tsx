@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import BurgerButton from "../components/BurgerButton";
 import type { FavoriteLocation } from "../state/appState";
+import { useAppTheme } from "../theme/useAppTheme";
 
 type LocationSettingsScreenProps = {
   onOpenMenu: () => void;
@@ -22,6 +23,8 @@ export default function LocationSettingsScreen({
   onAddFavoriteLocation,
   onRemoveFavoriteLocation,
 }: LocationSettingsScreenProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [name, setName] = useState("");
   const [latitudeText, setLatitudeText] = useState("");
   const [longitudeText, setLongitudeText] = useState("");
@@ -79,7 +82,7 @@ export default function LocationSettingsScreen({
             value={name}
             onChangeText={setName}
             placeholder="Name (e.g. Austin Home)"
-            placeholderTextColor="#6f6f6f"
+            placeholderTextColor={colors.inputPlaceholder}
             style={styles.input}
             autoCapitalize="words"
             autoCorrect={false}
@@ -89,7 +92,7 @@ export default function LocationSettingsScreen({
               value={latitudeText}
               onChangeText={setLatitudeText}
               placeholder="Latitude"
-              placeholderTextColor="#6f6f6f"
+              placeholderTextColor={colors.inputPlaceholder}
               style={[styles.input, styles.coordInput]}
               keyboardType="numbers-and-punctuation"
               autoCapitalize="none"
@@ -99,7 +102,7 @@ export default function LocationSettingsScreen({
               value={longitudeText}
               onChangeText={setLongitudeText}
               placeholder="Longitude"
-              placeholderTextColor="#6f6f6f"
+              placeholderTextColor={colors.inputPlaceholder}
               style={[styles.input, styles.coordInput]}
               keyboardType="numbers-and-punctuation"
               autoCapitalize="none"
@@ -140,127 +143,129 @@ export default function LocationSettingsScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#0b0b0b",
-  },
-  headerRow: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  headerMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    color: "white",
-    fontSize: 21,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#b7b7b7",
-    fontSize: 12,
-  },
-  content: {
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 24,
-    gap: 14,
-  },
-  formCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2a2a2a",
-    backgroundColor: "#141414",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  formTitle: {
-    color: "#f6f6f6",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  input: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2f2f2f",
-    backgroundColor: "#1b1b1b",
-    color: "white",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-  },
-  coordRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  coordInput: {
-    flex: 1,
-  },
-  errorText: {
-    color: "#ff8c8c",
-    fontSize: 12,
-  },
-  addBtn: {
-    borderRadius: 10,
-    backgroundColor: "#2c3cff",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 11,
-  },
-  addBtnText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  listSection: {
-    gap: 8,
-  },
-  locationCard: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2f2f2f",
-    backgroundColor: "#171717",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  locationMain: {
-    flex: 1,
-    gap: 3,
-  },
-  locationName: {
-    color: "#f2f2f2",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  locationCoords: {
-    color: "#a8a8a8",
-    fontSize: 12,
-  },
-  removeBtn: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: "#7b2d2d",
-    backgroundColor: "#351515",
-  },
-  removeBtnText: {
-    color: "#ffb8b8",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  emptyText: {
-    color: "#a8a8a8",
-    fontSize: 12,
-  },
-});
+function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    headerRow: {
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    headerMeta: {
+      flex: 1,
+      gap: 2,
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: 21,
+      fontWeight: "800",
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    content: {
+      paddingHorizontal: 12,
+      paddingTop: 14,
+      paddingBottom: 24,
+      gap: 14,
+    },
+    formCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      gap: 10,
+    },
+    formTitle: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    input: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBackground,
+      color: colors.textPrimary,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      fontSize: 14,
+    },
+    coordRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    coordInput: {
+      flex: 1,
+    },
+    errorText: {
+      color: colors.dangerText,
+      fontSize: 12,
+    },
+    addBtn: {
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 11,
+    },
+    addBtnText: {
+      color: colors.primaryText,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    listSection: {
+      gap: 8,
+    },
+    locationCard: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.surfaceMuted,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    locationMain: {
+      flex: 1,
+      gap: 3,
+    },
+    locationName: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    locationCoords: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+    removeBtn: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: colors.dangerBorder,
+      backgroundColor: colors.dangerBackground,
+    },
+    removeBtnText: {
+      color: colors.dangerText,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    emptyText: {
+      color: colors.textMuted,
+      fontSize: 12,
+    },
+  });
+}

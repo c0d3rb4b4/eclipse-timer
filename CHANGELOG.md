@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.28] — 2026-02-26
+
+### Added
+- Added a new `Settings` parent screen that links to `Theme Settings`, `Notification/Alarm Settings`, and `Location Settings`.
+- Added a dedicated `Theme Settings` screen with persisted `System`, `Light`, and `Dark` appearance options.
+- Added centralized mobile theme infrastructure (`apps/mobile/src/theme/colors.ts`, `apps/mobile/src/theme/resolveAppTheme.ts`, `apps/mobile/src/theme/useAppTheme.ts`) and app-state support for storing theme preference.
+- Added a theme-resolution regression test (`apps/mobile/tests/theme-resolution.test.ts`).
+- Added archived internal testing feedback report at `documents/reports/testing-feedback_2026-02-26.pdf`.
+
+### Changed
+- Reorganized side-menu navigation to expose a single `Settings` destination, with notification/location settings moved under the parent settings flow.
+- Wired React Navigation container theming to app preference + system appearance and updated shared/shell styling (`BurgerButton`, `Landing`, `Timer`, `Notification/Alarm Settings`, `Location Settings`) to use theme tokens for light/dark support.
+- Updated Timer favorite empty-state guidance path to `Menu > Settings > Location Settings`.
+- Updated `documents/planning/tech-debt.md` with internal testing feedback mapping and new tracked backlog items (`ADD-11`..`ADD-15`, `IMP-28`..`IMP-29`).
+- Bumped `apps/mobile` version to `1.1.28`.
+
+### Tests
+- Verified mobile checks pass after these changes: `pnpm -C apps/mobile typecheck`, `pnpm -C apps/mobile test`, and `pnpm -C apps/mobile lint`.
+
 ## [1.1.27] — 2026-02-24
 
 ### Fixed

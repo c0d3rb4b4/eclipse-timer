@@ -13,6 +13,9 @@ import type {
 import {
   type LinkingOptions,
   NavigationContainer,
+  DarkTheme as NavigationDarkTheme,
+  DefaultTheme as NavigationLightTheme,
+  type Theme as NavigationTheme,
   useFocusEffect,
   useIsFocused,
   useNavigationContainerRef,
@@ -44,10 +47,13 @@ import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePre
 import LandingScreen from "../screens/LandingScreen";
 import LocationSettingsScreen from "../screens/LocationSettingsScreen";
 import NotificationSettingsScreen from "../screens/NotificationSettingsScreen";
+import SettingsScreen from "../screens/SettingsScreen";
+import ThemeSettingsScreen from "../screens/ThemeSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
 import { syncWearPreviewRouteState } from "../services/wearPreviewPublisher";
 import { startWearLiveSync } from "../services/wearSync";
 import { type FavoriteLocation, useAppState } from "../state/appState";
+import { useAppTheme } from "../theme/useAppTheme";
 import { localYmdNow } from "../utils/date";
 import { kindCodeForRecord, kindLabelFromCode } from "../utils/eclipse";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
@@ -58,6 +64,8 @@ type RootStackParamList = {
   Landing: undefined;
   Timer: undefined;
   Preview: { payload: PreviewPayload };
+  Settings: undefined;
+  ThemeSettings: undefined;
   NotificationSettings: undefined;
   LocationSettings: undefined;
 };
@@ -68,6 +76,8 @@ const linking: LinkingOptions<RootStackParamList> = {
     screens: {
       Landing: "landing",
       Timer: "timer",
+      Settings: "settings",
+      ThemeSettings: "settings/theme",
       NotificationSettings: "notifications",
       LocationSettings: "locations",
     },
@@ -87,6 +97,14 @@ type TimerRouteProps = NativeStackScreenProps<RootStackParamList, "Timer"> & {
 };
 
 type PreviewRouteProps = NativeStackScreenProps<RootStackParamList, "Preview"> & {
+  onOpenMenu: () => void;
+};
+
+type SettingsRouteProps = NativeStackScreenProps<RootStackParamList, "Settings"> & {
+  onOpenMenu: () => void;
+};
+
+type ThemeSettingsRouteProps = NativeStackScreenProps<RootStackParamList, "ThemeSettings"> & {
   onOpenMenu: () => void;
 };
 
@@ -119,14 +137,28 @@ function filterLandingEclipses(
   });
 }
 
-function StartupLoadingScreen({ message }: { message: string }) {
+function StartupLoadingScreen({
+  message,
+  colors,
+}: {
+  message: string;
+  colors: ReturnType<typeof useAppTheme>["colors"];
+}) {
   return (
-    <View style={styles.startupSafe}>
-      <View style={styles.startupCard}>
+    <View style={[styles.startupSafe, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.startupCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
         <Image source={APP_LOGO} style={styles.startupLogo} resizeMode="contain" />
         <ActivityIndicator />
-        <Text style={styles.startupTitle}>Eclipse Timer</Text>
-        <Text style={styles.startupSubtitle}>{message}</Text>
+        <Text style={[styles.startupTitle, { color: colors.textPrimary }]}>Eclipse Timer</Text>
+        <Text style={[styles.startupSubtitle, { color: colors.textMuted }]}>{message}</Text>
       </View>
     </View>
   );
@@ -134,7 +166,14 @@ function StartupLoadingScreen({ message }: { message: string }) {
 
 function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null {
   if (route === "Landing" || route === "Timer") return route;
-  if (route === "NotificationSettings" || route === "LocationSettings") return route;
+  if (
+    route === "Settings" ||
+    route === "ThemeSettings" ||
+    route === "NotificationSettings" ||
+    route === "LocationSettings"
+  ) {
+    return "Settings";
+  }
   return null;
 }
 
@@ -425,6 +464,29 @@ function PreviewRoute({ navigation, route, onOpenMenu }: PreviewRouteProps) {
   );
 }
 
+function SettingsRoute({ navigation, onOpenMenu }: SettingsRouteProps) {
+  return (
+    <SettingsScreen
+      onOpenMenu={onOpenMenu}
+      onOpenThemeSettings={() => navigation.navigate("ThemeSettings")}
+      onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
+      onOpenLocationSettings={() => navigation.navigate("LocationSettings")}
+    />
+  );
+}
+
+function ThemeSettingsRoute({ onOpenMenu }: ThemeSettingsRouteProps) {
+  const { state, actions } = useAppState();
+
+  return (
+    <ThemeSettingsScreen
+      onOpenMenu={onOpenMenu}
+      preference={state.themePreference}
+      onSetThemePreference={actions.setThemePreference}
+    />
+  );
+}
+
 function NotificationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
   const { state, actions } = useAppState();
 
@@ -456,11 +518,33 @@ function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
 
 export default function RootNavigator() {
   const { state: appState, actions } = useAppState();
+  const { colors, resolvedTheme } = useAppTheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const pendingFeaturedDeepLinkActionRef = useRef<FeaturedEclipseDeepLinkAction | null>(null);
   const [catalog, setCatalog] = useState<EclipseRecord[] | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
+  const navigationTheme = useMemo<NavigationTheme>(() => {
+    const base = resolvedTheme === "light" ? NavigationLightTheme : NavigationDarkTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.surface,
+        border: colors.border,
+        text: colors.textPrimary,
+      },
+    };
+  }, [
+    colors.background,
+    colors.border,
+    colors.primary,
+    colors.surface,
+    colors.textPrimary,
+    resolvedTheme,
+  ]);
 
   useNotificationScheduler(
     appState.notificationSettings,
@@ -628,13 +712,14 @@ export default function RootNavigator() {
   }, [handleIncomingUrl]);
 
   if (!catalog) {
-    return <StartupLoadingScreen message="Loading eclipse catalog..." />;
+    return <StartupLoadingScreen message="Loading eclipse catalog..." colors={colors} />;
   }
 
   return (
     <NavigationContainer
       ref={navigationRef}
       linking={linking}
+      theme={navigationTheme}
       onReady={onNavigationReady}
       onStateChange={syncWearPreviewWithRoute}
     >
@@ -648,6 +733,12 @@ export default function RootNavigator() {
           </Stack.Screen>
           <Stack.Screen name="Preview">
             {(props) => <PreviewRoute {...props} onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="Settings">
+            {(props) => <SettingsRoute {...props} onOpenMenu={openMenu} />}
+          </Stack.Screen>
+          <Stack.Screen name="ThemeSettings">
+            {(props) => <ThemeSettingsRoute {...props} onOpenMenu={openMenu} />}
           </Stack.Screen>
           <Stack.Screen name="NotificationSettings">
             {() => <NotificationSettingsRoute onOpenMenu={openMenu} />}
