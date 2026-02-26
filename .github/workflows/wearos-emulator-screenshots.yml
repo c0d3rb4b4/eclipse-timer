@@ -470,11 +470,15 @@ jobs:
 
             adb -s "$emulator_serial" shell am force-stop "$BUNDLE_ID" >/dev/null 2>&1 || true
 
-            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" "$BUNDLE_ID" >/dev/null 2>&1 </dev/null; then
+            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" -p "$BUNDLE_ID" >/dev/null 2>&1 </dev/null; then
               return 0
             fi
 
-            adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 </dev/null
+            if adb -s "$emulator_serial" shell am start -S -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 </dev/null; then
+              return 0
+            fi
+
+            return 1
           }
 
           shots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
@@ -502,8 +506,11 @@ jobs:
 
           if [ -n "$deep_links" ]; then
             index=1
+            echo "Processing $(echo "$deep_links" | sed '/^$/d' | wc -l | tr -d ' ') deep link(s)..."
             while IFS= read -r url; do
               [ -z "$url" ] && continue
+
+              echo "[$index] Processing: $url"
 
               case "$url" in
                 *gibraltar-between-c1-c3*)
@@ -523,20 +530,29 @@ jobs:
               filename="$(printf '%02d' "$index")-$slug.png"
 
               if open_deep_link "$url"; then
+                echo "[$index] Deep link opened successfully"
                 if ! wait_for_app_foreground "$BUNDLE_ID"; then
                   echo "::warning::Deep link opened but app is not foregrounded: $url"
                   index=$((index + 1))
                   continue
                 fi
+                echo "[$index] App is in foreground, waiting ${PER_PAGE_WAIT_SECONDS}s before screenshot..."
                 sleep "$PER_PAGE_WAIT_SECONDS"
-                adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/$filename"
-                printf "%02d,%s,%s\n" "$index" "$url" "$filename" >> "$shots_dir/manifest.csv"
+                if adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/$filename"; then
+                  echo "[$index] Screenshot saved: $filename"
+                  printf "%02d,%s,%s\n" "$index" "$url" "$filename" >> "$shots_dir/manifest.csv"
+                else
+                  echo "::error::Failed to capture screenshot for: $url"
+                fi
               else
                 echo "::warning::Failed to open deep link: $url"
               fi
 
               index=$((index + 1))
             done <<< "$deep_links"
+            echo "Completed processing deep links"
+          else
+            echo "::warning::No deep links to process"
           fi
 
           {
