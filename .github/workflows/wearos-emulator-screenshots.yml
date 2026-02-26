@@ -459,12 +459,17 @@ jobs:
               local timestamp_ms="${timestamp_sec}000"
               echo "Using emulator console to set time (timestamp ms: $timestamp_ms)"
               
-              # Use emulator console command - more reliable than shell date
-              if adb -s "$emulator_serial" emu avd setclock "$timestamp_ms" </dev/null 2>&1; then
-                echo "Time set via emulator console"
-              else
-                echo "::warning::Failed to set time via emulator console"
-              fi
+              # Use telnet to emulator console - format: <unixtime in ms>
+              # Port is typically 5554 for first emulator
+              local emu_port="$(adb -s "$emulator_serial" emu avd status 2>&1 | grep -o 'console on port [0-9]*' | grep -o '[0-9]*' || echo '5554')"
+              echo "Emulator console port: $emu_port"
+              
+              # Try using adb shell date command with formatted time
+              local date_format
+              date_format="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso_utc" "+%m%d%H%M%Y.%S" 2>/dev/null)"
+              echo "Trying to set date to: $date_format"
+              
+              adb -s "$emulator_serial" shell "settings put global auto_time 0; date -u $date_format" </dev/null 2>&1 | head -5
             else
               echo "::warning::Failed to parse timestamp from $iso_utc"
             fi
@@ -508,16 +513,30 @@ jobs:
 
           open_deep_link() {
             local url="$1"
+            local tmpout="/tmp/deeplink_output_$$.txt"
 
             adb -s "$emulator_serial" shell am force-stop "$BUNDLE_ID" </dev/null >/dev/null 2>&1 || true
+            sleep 1
 
-            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" -p "$BUNDLE_ID" </dev/null >/dev/null 2>&1; then
+            echo "Attempting to open deep link: $url"
+            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" -p "$BUNDLE_ID" </dev/null >"$tmpout" 2>&1; then
+              echo "Deep link opened successfully (method 1)"
+              rm -f "$tmpout"
               return 0
             fi
+            
+            echo "Method 1 failed, output:"
+            cat "$tmpout" 2>/dev/null | head -10
 
-            if adb -s "$emulator_serial" shell am start -S -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 </dev/null; then
+            if adb -s "$emulator_serial" shell am start -S -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" </dev/null >"$tmpout" 2>&1; then
+              echo "Deep link opened successfully (method 2)"
+              rm -f "$tmpout"
               return 0
             fi
+            
+            echo "Method 2 failed, output:"
+            cat "$tmpout" 2>/dev/null | head -10
+            rm -f "$tmpout"
 
             return 1
           }
