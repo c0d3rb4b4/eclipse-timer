@@ -1,6 +1,6 @@
 # Tech Debt Tracker (Current State, Deep Audit)
 
-> Last audited: 2026-02-25
+> Last audited: 2026-02-26
 > Scope: `apps/mobile`, `packages/*`, `.github/workflows`, root tooling/docs
 > Audit method:
 > - code walkthrough across app/engine/catalog/shared + native Android/Wear + workflows/docs
@@ -29,6 +29,7 @@
 - App preferences are persisted in `AppStateProvider` with AsyncStorage.
 - Timer compute loop, contact timeline, alarm toggles, and preview route are implemented.
 - Observer altitude is propagated into compute (`Observer.elevM`).
+- `ADD-12` is complete: user-selectable theme preference (`system`/`light`/`dark`) is implemented, persisted, and wired across main app surfaces (`Landing`, `Timer`, `Preview`, `Settings`, and settings sub-screens).
 
 ### Wear companion implementation
 - Phone-side Data Layer bridge and listener service are implemented.
@@ -67,7 +68,6 @@ These are not implemented yet and would add net-new capability.
 | ADD-09 | Medium | No dependency maintenance automation | Security and update drift accumulates silently | Add Dependabot/Renovate with grouped Expo/React Native update policy |
 | ADD-10 | Medium | No docs command-validity automation | Docs drift is currently manual and recurring | Add docs CI check that validates referenced root scripts and key file paths |
 | ADD-11 | High | No first-run onboarding walkthrough | New users must infer navigation and key flows manually | Add first-launch guided walkthrough (tooltips/highlights), persisted completion state, and skip option |
-| ADD-12 | High | No user-selectable theme mode | UI is effectively dark-only and does not expose `light`/`system` preference controls | Add app theme tokens + settings option for `system`, `light`, and `dark` |
 | ADD-13 | Medium | No in-app Help/FAQ surface | Troubleshooting and feature explanations are scattered across external docs | Add a Help screen with concise FAQ, troubleshooting entries, and deep links to full docs |
 | ADD-14 | Medium | No in-app feedback/report-issue path | Feedback intake is ad hoc and detached from app context/device metadata | Add "Send feedback / Report issue" flow with prefilled app/device/version context |
 | ADD-15 | Medium | Store listing assets under-leverage product value | Generic screenshots reduce conversion clarity on Play listing | Upgrade screenshot pipeline with feature-focused captions and short demo clip support |
@@ -82,7 +82,7 @@ These are not implemented yet and would add net-new capability.
 |---|---|---|---|---|
 | IMP-01 | High | Mobile module size concentration | Large files remain: `TimerScreen.tsx` (1523), `EclipsePreviewScreen.tsx` (884), `appState.tsx` (716), `RootNavigator.tsx` (623), `NotificationSettingsScreen.tsx` (582), `useTimerState.ts` (525) | Split by feature slices (compute adapter, map overlays, alarm controls, preview renderer, state reducers/selectors) |
 | IMP-02 | High | Notifications API usage | `apps/mobile/src/services/notifications.ts` imports from `expo-notifications/build/*` internals | Move to public `expo-notifications` exports to reduce SDK break risk |
-| IMP-03 | High | Native/app version consistency | `apps/mobile/android/app/build.gradle` hardcodes `versionCode 3`, `versionName "1.0.0"` while app package is `1.1.27` | Unify version source and remove conflicting hardcoded native values |
+| IMP-03 | High | Native/app version consistency | `apps/mobile/android/app/build.gradle` hardcodes `versionCode 3`, `versionName "1.0.0"` while app package is `1.1.29` | Unify version source and remove conflicting hardcoded native values |
 | IMP-04 | High | Observability configuration | Sentry values remain placeholders across app/native config (`App.tsx`, `app.json`, `android/sentry.properties`) | Move to env/secret-driven config with startup/build validation and docs |
 
 ### 3.2 Data contracts and engine correctness
@@ -172,12 +172,11 @@ These are not implemented yet and would add net-new capability.
 
 ### Phase E: UX and adoption enhancements (from internal testing)
 1. ADD-11 first-run onboarding walkthrough
-2. ADD-12 theme mode support (`system`/`light`/`dark`)
-3. IMP-28 accessibility audit + regression checks
-4. ADD-13 in-app Help/FAQ surface
-5. ADD-14 in-app feedback/report issue flow
-6. ADD-15 Play listing screenshot/demo upgrade
-7. IMP-29 low-end performance baseline and budgets
+2. IMP-28 accessibility audit + regression checks
+3. ADD-13 in-app Help/FAQ surface
+4. ADD-14 in-app feedback/report issue flow
+5. ADD-15 Play listing screenshot/demo upgrade
+6. IMP-29 low-end performance baseline and budgets
 
 ---
 
@@ -189,6 +188,7 @@ These are not implemented yet and would add net-new capability.
 - Root script validation confirms `pnpm build`, `pnpm dev`, `pnpm test:watch`, and `pnpm clean` currently fail.
 - Markdown link targets are mostly intact; remaining path drift is primarily in plain-text path references and duplicated docs sources.
 - Internal tester report intake on 2026-02-26 confirms no crashes/critical defects and adds UX-focused backlog items (`ADD-11`..`ADD-15`, `IMP-28`..`IMP-29`).
+- `ADD-12` moved to completed on 2026-02-26 after theme preference + token migration work landed in main app surfaces.
 
 ---
 
@@ -197,7 +197,7 @@ These are not implemented yet and would add net-new capability.
 | Feedback theme from report | Tracker mapping |
 |---|---|
 | Dynamic walkthrough for new users | Added `ADD-11` |
-| Theme toggle (`dark`/`light`/`system`) | Added `ADD-12` |
+| Theme toggle (`dark`/`light`/`system`) | `ADD-12` completed on 2026-02-26 |
 | Better Play Store screenshots/demo | Added `ADD-15` |
 | In-app FAQ/help section | Added `ADD-13` |
 | In-app feedback mechanism | Added `ADD-14` |

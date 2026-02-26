@@ -1,12 +1,13 @@
 import * as Sentry from "@sentry/react-native";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 import RootNavigator from "./navigation/RootNavigator";
 import { configureNotificationPresentationHandler } from "./services/notifications";
 import { AppStateProvider } from "./state/appState";
+import { useAppTheme } from "./theme/useAppTheme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,26 +22,33 @@ if (isSentryEnabled) {
   });
 }
 
-function AppInner() {
+function AppContent() {
   useEffect(() => {
     configureNotificationPresentationHandler();
   }, []);
 
+  return <RootNavigator />;
+}
+
+function ThemedErrorBoundary({ children }: { children: ReactNode }) {
+  const { colors } = useAppTheme();
+  return <ErrorBoundary colors={colors}>{children}</ErrorBoundary>;
+}
+
+function AppInner() {
   return (
     <SafeAreaProvider>
       <AppStateProvider>
-        <RootNavigator />
+        <ThemedErrorBoundary>
+          <AppContent />
+        </ThemedErrorBoundary>
       </AppStateProvider>
     </SafeAreaProvider>
   );
 }
 
 function App() {
-  return (
-    <ErrorBoundary>
-      <AppInner />
-    </ErrorBoundary>
-  );
+  return <AppInner />;
 }
 
 export default isSentryEnabled ? Sentry.wrap(App) : App;

@@ -761,7 +761,6 @@ export default function RootNavigator() {
 const styles = StyleSheet.create({
   startupSafe: {
     flex: 1,
-    backgroundColor: "#0b0b0b",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
@@ -769,9 +768,7 @@ const styles = StyleSheet.create({
   startupCard: {
     width: "100%",
     borderRadius: 14,
-    backgroundColor: "#121212",
     borderWidth: 1,
-    borderColor: "#2b2b2b",
     paddingVertical: 24,
     paddingHorizontal: 16,
     alignItems: "center",
@@ -782,12 +779,10 @@ const styles = StyleSheet.create({
     height: 52,
   },
   startupTitle: {
-    color: "white",
     fontSize: 20,
     fontWeight: "800",
   },
   startupSubtitle: {
-    color: "#bdbdbd",
     fontSize: 13,
   },
   navigationRoot: {

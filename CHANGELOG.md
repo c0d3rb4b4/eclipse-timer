@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.29] — 2026-02-26
+
+### Changed
+- Continued the theme-token migration to remaining app surfaces by tokenizing `EclipsePreviewScreen` and removing hardcoded dark-only panel/background styling there.
+- Updated app error recovery UI to respect active app theme preference by wiring `ErrorBoundary` to theme colors through app state context.
+- Removed leftover hardcoded startup-shell fallback colors in `RootNavigator` styles so startup visual tokens come from the active theme.
+- Bumped `apps/mobile` version to `1.1.29`.
+
+### Tests
+- Verified mobile checks pass after this migration step: `pnpm -C apps/mobile typecheck`, `pnpm -C apps/mobile test`, and `pnpm -C apps/mobile lint`.
+
 ## [1.1.28] — 2026-02-26
 
 ### Added
