@@ -4,6 +4,8 @@ node_modules
 dist
 build
 coverage
+apps/*/artifacts/
+packages/*/artifacts/
 .DS_Store
 *.log
 apps/mobile/.env

@@ -12,9 +12,12 @@
     "format": "pnpm -r format",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:ci": "pnpm -r exec vitest run --config ../../vitest.config.ts --coverage --coverage.reporter=text-summary --coverage.reporter=lcovonly --coverage.reporter=json-summary --coverage.reportsDirectory=./artifacts/coverage --reporter=default --reporter=junit --outputFile.junit=./artifacts/test-results/junit.xml",
+    "coverage:gate": "node ./scripts/ci/coverage-gate.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
     "@biomejs/biome": "^2.3.15",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",

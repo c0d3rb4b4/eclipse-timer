@@ -40,4 +40,21 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        run: pnpm test:ci
+
+      - name: Coverage summary and optional gate
+        env:
+          COVERAGE_MIN_LINES: ${{ vars.COVERAGE_MIN_LINES }}
+        run: pnpm coverage:gate
+
+      - name: Upload test and coverage artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-and-coverage
+          if-no-files-found: warn
+          path: |
+            apps/*/artifacts/test-results/**
+            apps/*/artifacts/coverage/**
+            packages/*/artifacts/test-results/**
+            packages/*/artifacts/coverage/**
