@@ -249,11 +249,9 @@ function buildLandscapeCompositeLayoutFallback(
         sunRadius,
         travelVector,
       });
-      const moonOffsetX = moonGeometry.moonCenterX - moonGeometryStageSize / 2;
-      const moonOffsetY = moonGeometry.moonCenterY - moonGeometryStageSize / 2;
       moon = {
-        x: clampedX + moonOffsetX,
-        y: clampedY + moonOffsetY,
+        x: clampedX + moonGeometry.moonOffsetX,
+        y: clampedY + moonGeometry.moonOffsetY,
         radius: moonGeometry.moonRadius,
       };
     }
@@ -518,11 +516,9 @@ export function buildLandscapeCompositeLayout(
         sunRadius,
         travelVector,
       });
-      const moonOffsetX = moonGeometry.moonCenterX - moonGeometryStageSize / 2;
-      const moonOffsetY = moonGeometry.moonCenterY - moonGeometryStageSize / 2;
       moon = {
-        x: clampedX + moonOffsetX,
-        y: clampedY + moonOffsetY,
+        x: clampedX + moonGeometry.moonOffsetX,
+        y: clampedY + moonGeometry.moonOffsetY,
         radius: moonGeometry.moonRadius,
       };
     }
