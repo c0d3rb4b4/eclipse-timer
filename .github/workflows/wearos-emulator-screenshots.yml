@@ -465,6 +465,18 @@ jobs:
             return 1
           }
 
+          open_deep_link() {
+            local url="$1"
+
+            adb -s "$emulator_serial" shell am force-stop "$BUNDLE_ID" >/dev/null 2>&1 || true
+
+            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" "$BUNDLE_ID" >/dev/null 2>&1 </dev/null; then
+              return 0
+            fi
+
+            adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 </dev/null
+          }
+
           shots_dir="$GITHUB_WORKSPACE/artifacts/screenshots"
           mkdir -p "$shots_dir"
           printf "index,url,file\n" > "$shots_dir/manifest.csv"
@@ -510,7 +522,7 @@ jobs:
               fi
               filename="$(printf '%02d' "$index")-$slug.png"
 
-              if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -d "$url" -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 </dev/null; then
+              if open_deep_link "$url"; then
                 if ! wait_for_app_foreground "$BUNDLE_ID"; then
                   echo "::warning::Deep link opened but app is not foregrounded: $url"
                   index=$((index + 1))
