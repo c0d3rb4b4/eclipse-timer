@@ -48,7 +48,7 @@ on:
         description: "Deep links separated by comma or newline"
         required: false
         type: string
-        default: "eclipsetimer://wear/live?scenario=gibraltar-between-c1-c3&debugOverlay=on,eclipsetimer://wear/live?scenario=gibraltar-max&debugOverlay=on"
+        default: "eclipsetimer://wear/live?scenario=gibraltar-between-c1-c3,eclipsetimer://wear/live?scenario=gibraltar-max"
 
 concurrency:
   group: wearos-screenshots-${{ github.ref }}
