@@ -5,6 +5,14 @@ All notable updates documented under `documents/` are tracked here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.36] — 2026-02-26
+
+### Fixed
+- Corrected Photography Guide landscape composite rendering so moon occlusion aligns with shot schedule previews for eclipse phases.
+
+### Changed
+- Bumped `apps/mobile/package.json` version from `1.1.35` to `1.1.36`.
+
 ## [1.0.1] — 2026-02-19
 
 ### Added
