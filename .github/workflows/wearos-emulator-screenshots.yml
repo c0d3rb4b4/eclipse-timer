@@ -496,7 +496,7 @@ jobs:
           EOF
           )"
           echo "=== DEBUG: Raw input ==="
-          echo "$DEEP_LINKS_INPUT"
+          printf '%s\n' "$DEEP_LINKS_INPUT"
           echo "=== END Raw input ==="
           
           deep_links="$(
@@ -509,8 +509,9 @@ jobs:
           )"
           
           echo "=== DEBUG: Parsed links ==="
-          printf '%s' "$deep_links" | cat -A
-          echo ""
+          printf '%s\n' "$deep_links" | while IFS= read -r line; do
+            printf "Line: [%s]\n" "$line"
+          done
           echo "=== END Parsed links ==="
           
           link_count="$(printf '%s\n' "$deep_links" | grep -c '://' || echo 0)"
