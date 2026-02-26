@@ -23,6 +23,7 @@ export type PreviewMoonGeometry = {
   moonCenterX: number;
   moonCenterY: number;
   moonOffsetX: number;
+  moonOffsetY: number;
   moonTravelHalfSpan: number;
 };
 
@@ -232,6 +233,7 @@ export function calculatePreviewMoonGeometry(params: {
     moonCenterX,
     moonCenterY,
     moonOffsetX,
+    moonOffsetY,
     moonTravelHalfSpan: sunRadius + moonRadius,
   };
 }

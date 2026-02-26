@@ -249,11 +249,9 @@ function buildLandscapeCompositeLayoutFallback(
         sunRadius,
         travelVector,
       });
-      const moonOffsetX = moonGeometry.moonCenterX - moonGeometryStageSize / 2;
-      const moonOffsetY = moonGeometry.moonCenterY - moonGeometryStageSize / 2;
       moon = {
-        x: clampedX + moonOffsetX,
-        y: clampedY + moonOffsetY,
+        x: clampedX + moonGeometry.moonOffsetX,
+        y: clampedY + moonGeometry.moonOffsetY,
         radius: moonGeometry.moonRadius,
       };
     }
@@ -473,6 +471,7 @@ export function buildLandscapeCompositeLayout(
     frameWidth,
     frameHeight,
   );
+  const travelVector = normalizeTravelVector(input.travelVector);
   const rawHorizonY = anchorY + (maxSunAltitudeDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight;
   const horizonY = clampRange(rawHorizonY, 0, frameHeight);
 
@@ -497,8 +496,6 @@ export function buildLandscapeCompositeLayout(
     const rawY = anchorY - (altitudeDeltaDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight;
     const clampedX = clampRange(rawX, minX, maxX);
     const clampedY = clampRange(rawY, minY, maxY);
-    const clampedDeltaX = clampedX - rawX;
-    const clampedDeltaY = clampedY - rawY;
     const clamped = Math.abs(clampedX - rawX) > 0.01 || Math.abs(clampedY - rawY) > 0.01;
 
     let moon:
@@ -509,30 +506,21 @@ export function buildLandscapeCompositeLayout(
         }
       | undefined;
     if (row.showMoon) {
-      const moonRadius = bodyAngularRadiusDegToPixels(
-        sample.moon.angularRadiusDeg,
-        frameWidth,
-        frameHeight,
-      );
-      const moonAzimuthDeltaDeg = normalizeSignedDeltaDeg(maxSunAzimuthDeg, sample.moon.azimuthDeg);
-      const moonAltitudeDeltaDeg = sample.moon.altitudeDeg - maxSunAltitudeDeg;
-      const moonX =
-        anchorX +
-        (moonAzimuthDeltaDeg / LANDSCAPE_HORIZONTAL_FOV_DEG_24MM) * frameWidth +
-        clampedDeltaX;
-      const moonY =
-        anchorY -
-        (moonAltitudeDeltaDeg / LANDSCAPE_VERTICAL_FOV_DEG_24MM) * frameHeight +
-        clampedDeltaY;
-      const centerDistance = Math.hypot(moonX - clampedX, moonY - clampedY);
-      const isOccluding = centerDistance <= sunRadius + moonRadius + 0.25;
-      if (isOccluding) {
-        moon = {
-          x: moonX,
-          y: moonY,
-          radius: moonRadius,
-        };
-      }
+      const moonGeometryStageSize = Math.max(64, sunRadius * LANDSCAPE_MOON_GEOMETRY_STAGE_FACTOR);
+      const moonGeometry = calculatePreviewMoonGeometry({
+        progress: row.progress,
+        kindAtLocation: input.kindAtLocation,
+        magnitude: input.magnitude,
+        contacts: input.schedule.contacts,
+        stageSize: moonGeometryStageSize,
+        sunRadius,
+        travelVector,
+      });
+      moon = {
+        x: clampedX + moonGeometry.moonOffsetX,
+        y: clampedY + moonGeometry.moonOffsetY,
+        radius: moonGeometry.moonRadius,
+      };
     }
 
     return {
