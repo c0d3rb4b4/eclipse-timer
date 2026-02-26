@@ -433,25 +433,66 @@ jobs:
           adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.ACCESS_FINE_LOCATION || true
           adb -s "$emulator_serial" shell pm grant "$BUNDLE_ID" android.permission.ACCESS_COARSE_LOCATION || true
 
+          echo "Disabling automatic time/timezone updates..."
           adb -s "$emulator_serial" shell settings put global auto_time 0 || true
           adb -s "$emulator_serial" shell settings put global auto_time_zone 0 || true
+          
+          # Verify settings
+          auto_time_status="$(adb -s "$emulator_serial" shell settings get global auto_time 2>/dev/null | tr -d '\r')"
+          echo "Auto time status: $auto_time_status"
+          
+          # Wake up the device
+          adb -s "$emulator_serial" shell input keyevent KEYCODE_WAKEUP || true
+          sleep 1
 
           set_emulator_time_utc() {
             local iso_utc="$1"
-            local compact_utc
-            compact_utc="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso_utc" "+%Y%m%d.%H%M%S" 2>/dev/null || true)"
-            if [ -z "$compact_utc" ]; then
-              compact_utc="$(printf '%s' "$iso_utc" | tr -d ':-' | sed -E 's/T/./; s/Z$//')"
+            
+            echo "Setting emulator time to: $iso_utc"
+            
+            # Convert to Unix timestamp (seconds since epoch)
+            local timestamp_sec
+            timestamp_sec="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso_utc" "+%s" 2>/dev/null)"
+            
+            if [ -n "$timestamp_sec" ]; then
+              # Convert to milliseconds for emulator console
+              local timestamp_ms="${timestamp_sec}000"
+              echo "Using emulator console to set time (timestamp ms: $timestamp_ms)"
+              
+              # Use emulator console command - more reliable than shell date
+              if adb -s "$emulator_serial" emu avd setclock "$timestamp_ms" </dev/null 2>&1; then
+                echo "Time set via emulator console"
+              else
+                echo "::warning::Failed to set time via emulator console"
+              fi
+            else
+              echo "::warning::Failed to parse timestamp from $iso_utc"
             fi
-
-            adb -s "$emulator_serial" shell "date -u $compact_utc" </dev/null >/dev/null 2>&1 || true
-            adb -s "$emulator_serial" emu avd host-time-scale 1 </dev/null >/dev/null 2>&1 || true
+            
+            sleep 2
+            
+            # Verify time was set
+            current_time="$(adb -s "$emulator_serial" shell "date -u" </dev/null 2>/dev/null | tr -d '\r')"
+            echo "Emulator time is now: $current_time"
           }
 
           set_emulator_geo_gibraltar() {
             local lat="36.1408"
             local lon="-5.3536"
-            adb -s "$emulator_serial" emu geo fix "$lon" "$lat" </dev/null >/dev/null 2>&1 || true
+            echo "Setting emulator GPS to Gibraltar: lat=$lat, lon=$lon"
+            
+            # Use emulator console command
+            if adb -s "$emulator_serial" emu geo fix "$lon" "$lat" 0 </dev/null 2>&1; then
+              echo "GPS location set via emulator console"
+            else
+              echo "::warning::Failed to set GPS location via emulator console"
+            fi
+            
+            sleep 2
+            
+            # Verify location provider is enabled
+            location_mode="$(adb -s "$emulator_serial" shell settings get secure location_mode </dev/null 2>/dev/null | tr -d '\r')"
+            echo "Location mode: $location_mode (3=high accuracy)"
           }
 
           wait_for_app_foreground() {
@@ -535,12 +576,18 @@ jobs:
 
               case "$url" in
                 *gibraltar-between-c1-c3*)
+                  echo "Detected gibraltar-between-c1-c3 scenario"
                   set_emulator_time_utc "2027-08-02T08:23:09Z"
                   set_emulator_geo_gibraltar
+                  echo "Waiting 2 seconds for time/GPS changes to propagate..."
+                  sleep 2
                   ;;
                 *gibraltar-max*)
+                  echo "Detected gibraltar-max scenario"
                   set_emulator_time_utc "2027-08-02T08:47:59Z"
                   set_emulator_geo_gibraltar
+                  echo "Waiting 2 seconds for time/GPS changes to propagate..."
+                  sleep 2
                   ;;
               esac
 
