@@ -444,20 +444,20 @@ jobs:
               compact_utc="$(printf '%s' "$iso_utc" | tr -d ':-' | sed -E 's/T/./; s/Z$//')"
             fi
 
-            adb -s "$emulator_serial" shell "date -u $compact_utc" >/dev/null 2>&1 || true
-            adb -s "$emulator_serial" emu avd host-time-scale 1 >/dev/null 2>&1 || true
+            adb -s "$emulator_serial" shell "date -u $compact_utc" </dev/null >/dev/null 2>&1 || true
+            adb -s "$emulator_serial" emu avd host-time-scale 1 </dev/null >/dev/null 2>&1 || true
           }
 
           set_emulator_geo_gibraltar() {
             local lat="36.1408"
             local lon="-5.3536"
-            adb -s "$emulator_serial" emu geo fix "$lon" "$lat" >/dev/null 2>&1 || true
+            adb -s "$emulator_serial" emu geo fix "$lon" "$lat" </dev/null >/dev/null 2>&1 || true
           }
 
           wait_for_app_foreground() {
             local package_name="$1"
             for _ in {1..30}; do
-              if adb -s "$emulator_serial" shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity|mFocusedApp' | grep -Fq "$package_name"; then
+              if adb -s "$emulator_serial" shell dumpsys activity activities </dev/null 2>/dev/null | grep -E 'mResumedActivity|topResumedActivity|mFocusedApp' | grep -Fq "$package_name"; then
                 return 0
               fi
               sleep 1
@@ -468,9 +468,9 @@ jobs:
           open_deep_link() {
             local url="$1"
 
-            adb -s "$emulator_serial" shell am force-stop "$BUNDLE_ID" >/dev/null 2>&1 || true
+            adb -s "$emulator_serial" shell am force-stop "$BUNDLE_ID" </dev/null >/dev/null 2>&1 || true
 
-            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" -p "$BUNDLE_ID" >/dev/null 2>&1 </dev/null; then
+            if adb -s "$emulator_serial" shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" -p "$BUNDLE_ID" </dev/null >/dev/null 2>&1; then
               return 0
             fi
 
@@ -485,7 +485,7 @@ jobs:
           mkdir -p "$shots_dir"
           printf "index,url,file\n" > "$shots_dir/manifest.csv"
 
-          adb -s "$emulator_serial" shell am start -W -n "$BUNDLE_ID/$MAIN_ACTIVITY" >/dev/null 2>&1 || true
+          adb -s "$emulator_serial" shell am start -W -n "$BUNDLE_ID/$MAIN_ACTIVITY" </dev/null >/dev/null 2>&1 || true
           if ! wait_for_app_foreground "$BUNDLE_ID"; then
             echo "::warning::App did not enter the foreground after initial launch."
           fi
@@ -559,7 +559,7 @@ jobs:
                 fi
                 echo "[$index] App is in foreground, waiting ${PER_PAGE_WAIT_SECONDS}s before screenshot..."
                 sleep "$PER_PAGE_WAIT_SECONDS"
-                if adb -s "$emulator_serial" exec-out screencap -p > "$shots_dir/$filename"; then
+                if adb -s "$emulator_serial" exec-out screencap -p </dev/null > "$shots_dir/$filename"; then
                   echo "[$index] Screenshot saved: $filename"
                   printf "%02d,%s,%s\n" "$index" "$url" "$filename" >> "$shots_dir/manifest.csv"
                 else
