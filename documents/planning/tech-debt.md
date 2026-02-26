@@ -71,6 +71,7 @@ These are not implemented yet and would add net-new capability.
 | ADD-10 | Medium | No docs command-validity automation | Docs drift is currently manual and recurring | Add docs CI check that validates referenced root scripts and key file paths |
 | ADD-14 | Medium | No in-app feedback/report-issue path | Feedback intake is ad hoc and detached from app context/device metadata | Add "Send feedback / Report issue" flow with prefilled app/device/version context |
 | ADD-15 | Medium | Store listing assets under-leverage product value | Generic screenshots reduce conversion clarity on Play listing | Upgrade screenshot pipeline with feature-focused captions and short demo clip support |
+| ADD-16 | Medium | No in-app Photography Guide workflow | Users must manually guess eclipse shot timing and framing | Add timer-linked `Photography Guide` page with scheduled shot table + preview rows + landscape composite simulation; see [Photography Guide Page Plan](./photography-guide-plan.md) |
 
 ---
 

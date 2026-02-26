@@ -1,4 +1,5 @@
 import type { Circumstances, EclipseRecord } from "@eclipse-timer/shared";
+import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -6,6 +7,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { APP_LOGO } from "../assets/branding";
 import BurgerButton from "../components/BurgerButton";
 import type { TimerState } from "../hooks/useTimerState";
+import { geocodeAddressQuery, resolveAddressLabelForCoordinates } from "../services/geocoding";
 import type { FavoriteLocation } from "../state/appState";
 import { useAppTheme } from "../theme/useAppTheme";
 import { colorForContactKey } from "../utils/contactTheme";
@@ -109,18 +112,23 @@ function formatCardinalCoord(
   return `${Math.abs(value).toFixed(4)}${hemisphere}`;
 }
 
-function buildDefaultFavoriteName(lat: number, lon: number, favoriteLocations: FavoriteLocation[]) {
-  const base = `Pinned ${formatCardinalCoord(lat, "N", "S")} ${formatCardinalCoord(lon, "E", "W")}`;
+function buildUniqueFavoriteName(baseName: string, favoriteLocations: FavoriteLocation[]) {
+  const trimmedBase = baseName.trim() || "Favorite location";
   const existingNames = new Set(
     favoriteLocations.map((location) => location.name.trim().toLowerCase()).filter(Boolean),
   );
-  if (!existingNames.has(base.toLowerCase())) return base;
+  if (!existingNames.has(trimmedBase.toLowerCase())) return trimmedBase;
 
   let suffix = 2;
-  while (existingNames.has(`${base} ${suffix}`.toLowerCase())) {
+  while (existingNames.has(`${trimmedBase} ${suffix}`.toLowerCase())) {
     suffix += 1;
   }
-  return `${base} ${suffix}`;
+  return `${trimmedBase} ${suffix}`;
+}
+
+function buildDefaultFavoriteName(lat: number, lon: number, favoriteLocations: FavoriteLocation[]) {
+  const base = `Pinned ${formatCardinalCoord(lat, "N", "S")} ${formatCardinalCoord(lon, "E", "W")}`;
+  return buildUniqueFavoriteName(base, favoriteLocations);
 }
 
 function isSameFavoriteLocation(aLat: number, aLon: number, bLat: number, bLon: number) {
@@ -132,6 +140,11 @@ function isSameFavoriteLocation(aLat: number, aLon: number, bLat: number, bLon: 
 
 function clamp(value: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, value));
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return String(err);
 }
 
 function normalizeLongitudeDeg(lonDeg: number) {
@@ -225,6 +238,9 @@ export default function TimerScreen({
   const [favoriteModalPin, setFavoriteModalPin] = useState<{ lat: number; lon: number } | null>(
     null,
   );
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState("");
+  const [isLocationSearchInFlight, setIsLocationSearchInFlight] = useState(false);
   const activeEclipseOption = useMemo(
     () => eclipseOptions.find((option) => option.id === activeEclipseId) ?? null,
     [activeEclipseId, eclipseOptions],
@@ -325,6 +341,7 @@ export default function TimerScreen({
   ]);
   const hasDirectionsData = contactDirectionOverlays.length > 0;
   const mapTypeText = mapTypeLabel(timer.mapType);
+  const canRunLocationSearch = locationSearchQuery.trim().length > 0 && !isLocationSearchInFlight;
   const maxEventMoonGeometry = useMemo(() => {
     if (!timer.result) return null;
 
@@ -394,11 +411,63 @@ export default function TimerScreen({
     [isEclipsePickerOpen],
   );
 
+  const ensureAndroidGeocodePermission = useCallback(async () => {
+    if (Platform.OS !== "android") return true;
+
+    const existing = await Location.getForegroundPermissionsAsync();
+    if (existing.status === "granted") return true;
+    if (!existing.canAskAgain) return false;
+
+    const requested = await Location.requestForegroundPermissionsAsync();
+    return requested.status === "granted";
+  }, []);
+
+  const runLocationSearch = useCallback(async () => {
+    const query = locationSearchQuery.trim();
+    if (!query || isLocationSearchInFlight) return;
+
+    setIsLocationSearchInFlight(true);
+    try {
+      const hasPermission = await ensureAndroidGeocodePermission();
+      if (!hasPermission) {
+        timer.setStatusMessage("Location permission is required for address search");
+        return;
+      }
+
+      const matches = await geocodeAddressQuery(query);
+      const first = matches.find(
+        (item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude),
+      );
+      if (!first) {
+        timer.setStatusMessage(`No search results for "${query}"`);
+        return;
+      }
+
+      timer.jumpTo(first.latitude, first.longitude, 2.5);
+      const resolvedLabel = await resolveAddressLabelForCoordinates(
+        first.latitude,
+        first.longitude,
+      );
+      if (resolvedLabel) {
+        timer.setStatusMessage(`Moved pin to ${resolvedLabel}`);
+      } else {
+        timer.setStatusMessage(
+          `Moved pin to ${first.latitude.toFixed(4)}, ${first.longitude.toFixed(4)}`,
+        );
+      }
+    } catch (err: unknown) {
+      timer.setStatusMessage(`Address search failed: ${getErrorMessage(err)}`);
+    } finally {
+      setIsLocationSearchInFlight(false);
+    }
+  }, [ensureAndroidGeocodePermission, isLocationSearchInFlight, locationSearchQuery, timer]);
+
   const closeAddFavoriteModal = () => {
     setIsAddFavoriteModalOpen(false);
     setFavoriteModalName("");
     setFavoriteModalDefaultName("");
     setFavoriteModalPin(null);
+    setIsSavingFavorite(false);
   };
   const closeEclipsePicker = () => {
     setIsEclipsePickerOpen(false);
@@ -419,17 +488,35 @@ export default function TimerScreen({
     setIsAddFavoriteModalOpen(true);
   };
 
-  const submitAddFavorite = () => {
-    if (!favoriteModalPin) return;
-    const name = favoriteModalName.trim() || favoriteModalDefaultName;
+  const submitAddFavorite = async () => {
+    if (!favoriteModalPin || isSavingFavorite) return;
+    setIsSavingFavorite(true);
 
-    onAddFavoriteLocation({
-      name,
-      lat: favoriteModalPin.lat,
-      lon: favoriteModalPin.lon,
-    });
-    timer.setStatusMessage(`Saved ${name} to favorites`);
-    closeAddFavoriteModal();
+    try {
+      const trimmedName = favoriteModalName.trim();
+      const isUsingDefaultName = !trimmedName || trimmedName === favoriteModalDefaultName;
+      let name = trimmedName || favoriteModalDefaultName;
+
+      if (isUsingDefaultName) {
+        const resolvedLabel = await resolveAddressLabelForCoordinates(
+          favoriteModalPin.lat,
+          favoriteModalPin.lon,
+        );
+        if (resolvedLabel) {
+          name = buildUniqueFavoriteName(resolvedLabel, favoriteLocations);
+        }
+      }
+
+      onAddFavoriteLocation({
+        name,
+        lat: favoriteModalPin.lat,
+        lon: favoriteModalPin.lon,
+      });
+      timer.setStatusMessage(`Saved ${name} to favorites`);
+      closeAddFavoriteModal();
+    } finally {
+      setIsSavingFavorite(false);
+    }
   };
   const openEclipsePicker = () => {
     if (!eclipseOptions.length) return;
@@ -670,6 +757,39 @@ export default function TimerScreen({
       </View>
 
       <View style={styles.controls}>
+        <View style={styles.locationSearchRow}>
+          <TextInput
+            value={locationSearchQuery}
+            onChangeText={setLocationSearchQuery}
+            placeholder="Search address or place"
+            placeholderTextColor={colors.inputPlaceholder}
+            style={styles.locationSearchInput}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={() => {
+              void runLocationSearch();
+            }}
+          />
+          <Pressable
+            style={[
+              styles.locationSearchBtn,
+              !canRunLocationSearch ? styles.locationSearchBtnDisabled : null,
+            ]}
+            onPress={() => {
+              void runLocationSearch();
+            }}
+            disabled={!canRunLocationSearch}
+            accessibilityRole="button"
+            accessibilityLabel="Search and place map pin"
+            accessibilityState={{ disabled: !canRunLocationSearch }}
+          >
+            <Text style={styles.locationSearchBtnText}>
+              {isLocationSearchInFlight ? "Searching..." : "Find"}
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={styles.btnRowCompact}>
           <Pressable
             style={[styles.btnCompact, isActiveEclipseLoading ? styles.btnDisabled : null]}
@@ -765,7 +885,9 @@ export default function TimerScreen({
         <View style={styles.favoriteModalBackdrop}>
           <View style={styles.favoriteModalCard}>
             <Text style={styles.favoriteModalTitle}>Add to Favorites</Text>
-            <Text style={styles.favoriteModalSubtitle}>Name this location (optional)</Text>
+            <Text style={styles.favoriteModalSubtitle}>
+              Name this location (optional). We will use the nearest address when available.
+            </Text>
             <TextInput
               value={favoriteModalName}
               onChangeText={setFavoriteModalName}
@@ -785,8 +907,16 @@ export default function TimerScreen({
               <Pressable style={styles.favoriteModalCancelBtn} onPress={closeAddFavoriteModal}>
                 <Text style={styles.favoriteModalCancelText}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.favoriteModalSaveBtn} onPress={submitAddFavorite}>
-                <Text style={styles.favoriteModalSaveText}>Save</Text>
+              <Pressable
+                style={[styles.favoriteModalSaveBtn, isSavingFavorite ? styles.btnDisabled : null]}
+                onPress={() => {
+                  void submitAddFavorite();
+                }}
+                disabled={isSavingFavorite}
+              >
+                <Text style={styles.favoriteModalSaveText}>
+                  {isSavingFavorite ? "Saving..." : "Save"}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1070,6 +1200,39 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     controls: {
       paddingHorizontal: 12,
       paddingTop: 6,
+    },
+    locationSearchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    locationSearchInput: {
+      flex: 1,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBackground,
+      color: colors.textPrimary,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      fontSize: 13,
+    },
+    locationSearchBtn: {
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      minHeight: 38,
+      paddingHorizontal: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    locationSearchBtnDisabled: {
+      opacity: 0.7,
+    },
+    locationSearchBtnText: {
+      color: colors.primaryText,
+      fontSize: 12,
+      fontWeight: "700",
     },
     btnRowCompact: {
       flexDirection: "row",

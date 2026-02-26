@@ -224,7 +224,7 @@ Expected:
 - No login/account system exists. All data is local to the device.
 - NASA GIF preview depends on network connectivity; offline fallback is expected.
 - Timer screen does not provide in-place eclipse switching; switch eclipses from `Eclipse List`.
-- Address/geocoding search is not implemented; location entry is map/GPS/manual coordinates.
+- Address/geocoding search now uses the platform geocoder (Timer + Location Settings), but it selects the first match and may vary by device/locale.
 - App is portrait-only.
 - Per-event second-level alarms (`a1/a2`) are foreground-only; keep app open during precision countdown checks.
 - Overlay differentiation relies heavily on color; accessibility patterns are limited.

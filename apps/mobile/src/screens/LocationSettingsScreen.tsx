@@ -1,8 +1,10 @@
+import * as Location from "expo-location";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import BurgerButton from "../components/BurgerButton";
+import { geocodeAddressQuery, resolveAddressLabelForCoordinates } from "../services/geocoding";
 import type { FavoriteLocation } from "../state/appState";
 import { useAppTheme } from "../theme/useAppTheme";
 
@@ -17,6 +19,11 @@ function formatCoordLabel(value: number) {
   return value.toFixed(4);
 }
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return String(err);
+}
+
 export default function LocationSettingsScreen({
   onOpenMenu,
   favoriteLocations,
@@ -26,8 +33,11 @@ export default function LocationSettingsScreen({
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [name, setName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [latitudeText, setLatitudeText] = useState("");
   const [longitudeText, setLongitudeText] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const sortedFavorites = useMemo(
@@ -35,12 +45,65 @@ export default function LocationSettingsScreen({
     [favoriteLocations],
   );
 
-  const addFavorite = () => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setErrorMessage("Enter a name for the favorite location.");
+  const ensureAndroidGeocodePermission = async () => {
+    if (Platform.OS !== "android") return true;
+
+    const existing = await Location.getForegroundPermissionsAsync();
+    if (existing.status === "granted") return true;
+    if (!existing.canAskAgain) return false;
+
+    const requested = await Location.requestForegroundPermissionsAsync();
+    return requested.status === "granted";
+  };
+
+  const searchAddress = async () => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || isSearching) {
+      if (!trimmedQuery) setErrorMessage("Enter an address or place to search.");
       return;
     }
+
+    setIsSearching(true);
+    setErrorMessage(null);
+
+    try {
+      const hasPermission = await ensureAndroidGeocodePermission();
+      if (!hasPermission) {
+        setErrorMessage("Location permission is required to search addresses.");
+        return;
+      }
+
+      const matches = await geocodeAddressQuery(trimmedQuery);
+      const first = matches.find(
+        (item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude),
+      );
+      if (!first) {
+        setErrorMessage(`No search results for "${trimmedQuery}".`);
+        return;
+      }
+
+      const lat = first.latitude;
+      const lon = first.longitude;
+      setLatitudeText(lat.toFixed(6));
+      setLongitudeText(lon.toFixed(6));
+      if (!name.trim()) {
+        const resolved = await resolveAddressLabelForCoordinates(lat, lon);
+        if (resolved) {
+          setName(resolved);
+        } else {
+          setName(trimmedQuery);
+        }
+      }
+      setErrorMessage(null);
+    } catch (err: unknown) {
+      setErrorMessage(`Address search failed: ${getErrorMessage(err)}`);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const addFavorite = async () => {
+    if (isSavingFavorite) return;
 
     const lat = Number(latitudeText);
     if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
@@ -54,16 +117,36 @@ export default function LocationSettingsScreen({
       return;
     }
 
-    onAddFavoriteLocation({
-      name: trimmedName,
-      lat,
-      lon,
-    });
-    setName("");
-    setLatitudeText("");
-    setLongitudeText("");
+    setIsSavingFavorite(true);
     setErrorMessage(null);
+    try {
+      let resolvedName = name.trim();
+      if (!resolvedName) {
+        resolvedName = (await resolveAddressLabelForCoordinates(lat, lon)) ?? "";
+      }
+      if (!resolvedName) {
+        setErrorMessage("Enter a name or search for an address before saving.");
+        return;
+      }
+
+      onAddFavoriteLocation({
+        name: resolvedName,
+        lat,
+        lon,
+      });
+      setName("");
+      setSearchQuery("");
+      setLatitudeText("");
+      setLongitudeText("");
+      setErrorMessage(null);
+    } finally {
+      setIsSavingFavorite(false);
+    }
   };
+
+  const canSearchAddress = searchQuery.trim().length > 0 && !isSearching;
+  const canAddFavorite =
+    latitudeText.trim().length > 0 && longitudeText.trim().length > 0 && !isSavingFavorite;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
@@ -79,9 +162,36 @@ export default function LocationSettingsScreen({
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Add Favorite Location</Text>
           <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search address or place"
+            placeholderTextColor={colors.inputPlaceholder}
+            style={styles.input}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={() => {
+              void searchAddress();
+            }}
+          />
+          <Pressable
+            style={[styles.searchBtn, !canSearchAddress ? styles.actionBtnDisabled : null]}
+            onPress={() => {
+              void searchAddress();
+            }}
+            disabled={!canSearchAddress}
+            accessibilityRole="button"
+            accessibilityLabel="Find coordinates for address search query"
+            accessibilityState={{ disabled: !canSearchAddress }}
+          >
+            <Text style={styles.searchBtnText}>
+              {isSearching ? "Searching..." : "Find Address"}
+            </Text>
+          </Pressable>
+          <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Name (e.g. Austin Home)"
+            placeholder="Name (optional if address resolves)"
             placeholderTextColor={colors.inputPlaceholder}
             style={styles.input}
             autoCapitalize="words"
@@ -110,8 +220,14 @@ export default function LocationSettingsScreen({
             />
           </View>
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-          <Pressable style={styles.addBtn} onPress={addFavorite}>
-            <Text style={styles.addBtnText}>Add Favorite</Text>
+          <Pressable
+            style={[styles.addBtn, !canAddFavorite ? styles.actionBtnDisabled : null]}
+            onPress={() => {
+              void addFavorite();
+            }}
+            disabled={!canAddFavorite}
+          >
+            <Text style={styles.addBtnText}>{isSavingFavorite ? "Saving..." : "Add Favorite"}</Text>
           </Pressable>
         </View>
 
@@ -199,6 +315,18 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       paddingHorizontal: 12,
       fontSize: 14,
     },
+    searchBtn: {
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 11,
+    },
+    searchBtnText: {
+      color: colors.primaryText,
+      fontSize: 13,
+      fontWeight: "700",
+    },
     coordRow: {
       flexDirection: "row",
       gap: 10,
@@ -216,6 +344,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 11,
+    },
+    actionBtnDisabled: {
+      opacity: 0.7,
     },
     addBtnText: {
       color: colors.primaryText,

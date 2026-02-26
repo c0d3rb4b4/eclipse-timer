@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.32] — 2026-02-26
+
+### Added
+- Added address/place geocoding search on the `Timer` screen to place the observer pin from text input.
+- Added address/place geocoding search on `Location Settings` with coordinate autofill for adding favorites.
+- Added reverse-geocoded address label formatting utilities and regression tests for address-label construction.
+
+### Changed
+- Updated favorite save flows to prefer reverse-geocoded address naming when the user keeps the default/empty favorite name.
+- Updated testing notes to reflect that geocoding search is now implemented (first-match behavior depends on platform geocoder/locale).
+- Bumped `apps/mobile` version to `1.1.32`.
+
+### Tests
+- Verified mobile checks pass: `pnpm -C apps/mobile typecheck`, `pnpm -C apps/mobile lint`, and `pnpm -C apps/mobile test`.
+
 ## [1.1.31] — 2026-02-26
 
 ### Added
