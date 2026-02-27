@@ -66,6 +66,14 @@ const GOOGLE_CENTER_ARRAY_RE = new RegExp(
   "i",
 );
 
+// Browser headers to avoid consent pages
+const BROWSER_HEADERS = {
+  "user-agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-GB,en;q=0.9",
+};
+
 type ExpandedShortMapUrlResult = {
   expandedUrl: string;
   responseText: string | null;
@@ -336,15 +344,30 @@ function parseGoogleDecimalPairFromText(input: string): { lat: number; lon: numb
 }
 
 function parseGoogleCoordinatesFromText(input: string): { lat: number; lon: number } | null {
-  return (
-    parseGooglePreviewCoordinatesFromText(input) ??
-    parseGoogleStateCoordinatesFromText(input) ??
-    parseGoogleStaticMapCenterFromText(input) ??
+  // Match gmaps-coords.ts pattern priority order:
+  // 1. JSON lat/lng fields (most specific)
+  // 2. Center array (specific)
+  // 3. Mobile-specific patterns (PB, state, staticmap)
+  // 4. Decimal pair scan (last resort - can have false positives)
+  const result =
     parseGoogleJsonLatLngFromText(input) ??
     parseGoogleJsonLngLatFromText(input) ??
     parseGoogleCenterArrayFromText(input) ??
-    parseGoogleDecimalPairFromText(input)
-  );
+    parseGooglePreviewCoordinatesFromText(input) ??
+    parseGoogleStateCoordinatesFromText(input) ??
+    parseGoogleStaticMapCenterFromText(input) ??
+    parseGoogleDecimalPairFromText(input);
+
+  if (result) {
+    console.info("[share.debug] parse_success_from_html", result);
+  } else if (input && input.length > 0) {
+    console.info("[share.debug] parse_all_patterns_failed", {
+      htmlLength: input.length,
+      htmlPreview: input.substring(0, 300),
+    });
+  }
+
+  return result;
 }
 
 async function expandShortMapUrlWithResponse(
@@ -378,6 +401,7 @@ async function expandShortMapUrlWithResponse(
       fetchImpl(parsed.toString(), {
         method: "GET",
         redirect: "follow",
+        headers: BROWSER_HEADERS,
       }),
       timeoutMs,
     );
@@ -439,6 +463,7 @@ async function fetchMapPageText(
       fetchImpl(parsed.toString(), {
         method: "GET",
         redirect: "follow",
+        headers: BROWSER_HEADERS,
       }),
       timeoutMs,
     );
@@ -471,6 +496,7 @@ async function fetchMapPageText(
               fetchImpl(simplifiedUrl, {
                 method: "GET",
                 redirect: "follow",
+                headers: BROWSER_HEADERS,
               }),
               timeoutMs,
             );

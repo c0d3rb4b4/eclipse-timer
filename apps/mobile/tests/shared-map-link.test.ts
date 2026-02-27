@@ -300,5 +300,24 @@ describe("shared map link parser", () => {
       const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/abc123", { fetchImpl });
       expect(parsed).toBeNull();
     });
+
+    it("parses short link with JSON lat/lng fields in HTML", async () => {
+      const fetchImpl = vi.fn(async () => ({
+        url: "https://www.google.com/maps/place/Somewhere",
+        text: async () =>
+          'window.APP_INITIALIZATION_STATE=[null,null,null,null,[null,null,null,null,null,null,null,null,"en",null,"GB"],null,[null,null,[1,29.54214059542,-1.55405635],null,null,null,null,null,null,null,null,null,"uk",[["29.54214059542,-1.55405635"],["29.54214059542","-1.55405635"]]],null,null,null,null,null,[[null,null,null,null,"en_GB"]]];{"lat":29.54214059542,"lng":-1.55405635}',
+      }));
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/vXkKY6MxxhQgBZ6R6", {
+        fetchImpl,
+      });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 29.54214059542,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/vXkKY6MxxhQgBZ6R6",
+      });
+    });
   });
 });
