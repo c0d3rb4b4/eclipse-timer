@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.42] — 2026-02-27
+
+### Fixed
+- Fixed non-interactive iOS EAS build failures caused by `ShareExtension` credential setup requirements by disabling iOS share-extension target generation in `expo-share-intent` plugin config for now (`disableIOS: true`).
+
+### Changed
+- Kept Android share-link intake enabled through tracked native manifest intent filters while plugin Android mutation remains disabled (`disableAndroid: true`).
+- Bumped `apps/mobile` version to `1.1.42`.
+
 ## [1.1.41] — 2026-02-27
 
 ### Added

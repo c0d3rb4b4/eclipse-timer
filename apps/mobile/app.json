@@ -86,7 +86,8 @@
       [
         "expo-share-intent",
         {
-          "disableAndroid": true
+          "disableAndroid": true,
+          "disableIOS": true
         }
       ],
       [

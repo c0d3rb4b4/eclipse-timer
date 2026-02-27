@@ -32,7 +32,7 @@ Completed:
 5. Added `apps/mobile/src/services/shareIntake.ts` and `apps/mobile/tests/share-intake.test.ts` for normalized external-link intake plumbing (linking path implemented; share-target source wiring still pending).
 6. Added `expo-share-intent` integration for Expo SDK 54:
    - dependency + peer deps in `apps/mobile/package.json`
-   - plugin registration in `apps/mobile/app.json` (configured with `disableAndroid: true`)
+   - plugin registration in `apps/mobile/app.json` (configured with `disableAndroid: true`, `disableIOS: true` for CI credential stability)
    - `useShareIntent` wiring in `RootNavigator` to forward shared text/web URLs into the same parser + navigation path used by deep links.
 7. Added Android native intent filter for share payload intake in `apps/mobile/android/app/src/main/AndroidManifest.xml` (`ACTION_SEND`, `text/*`) so tracked Android native config does not rely on CNG/plugin mutation.
 8. Added pnpm native patching for `xcode@3.0.1` (`package.json` `pnpm.patchedDependencies` + `patches/xcode@3.0.1.patch`) to avoid known Expo prebuild/share-extension config sync issues.
@@ -212,6 +212,35 @@ This keeps location application near existing timer state APIs and avoids adding
 
 Implementation note: platform integration should be done via a maintained Expo-compatible package/config plugin to avoid hand-maintained native extension code where possible.
 
+### 6.6 iOS differences and extra requirements
+
+Why iOS is different from Android:
+
+1. Android can receive shared text via `ACTION_SEND` intent filters directly on the main activity.
+2. iOS share-sheet ingestion is implemented through a separate `Share Extension` target, not the main app target.
+3. The `Share Extension` is treated as a second iOS target with its own bundle identifier and provisioning profile requirements.
+4. Because there are multiple iOS targets, EAS credentials setup must succeed for both targets (`EclipseTimer` and `ShareExtension`) in non-interactive CI.
+
+What this means for this project:
+
+1. `expo-share-intent` is currently configured with `disableIOS: true` to keep CI stable until extension credentials are explicitly prepared.
+2. Android share flow remains enabled through tracked `AndroidManifest.xml` intent filters and JS intake wiring.
+3. iOS share-sheet ingestion is pending only for credential/provisioning setup; parser and navigator logic are already in place.
+
+Extra iOS work required to re-enable `ShareExtension`:
+
+1. Re-enable iOS plugin generation by setting `disableIOS: false` in `apps/mobile/app.json`.
+2. Ensure extension identifiers and entitlements are created/consistent:
+   - app target: `com.lallimaven.eclipse-timer`
+   - extension target: `com.lallimaven.eclipse-timer.share-extension`
+   - app group entitlement used by the plugin (currently `group.com.lallimaven.eclipse-timer`)
+3. Configure credentials for both iOS targets in EAS (interactive run required once):
+   - `pnpm -C apps/mobile exec eas credentials --platform ios`
+4. Confirm CI can build iOS in non-interactive mode after credentials exist for both targets:
+   - `pnpm -C apps/mobile exec eas build --profile production --platform ios --local --non-interactive`
+5. Validate only one intended extension target is present in iOS build output and EAS credentials mapping.
+6. Run manual iOS share flow matrix (cold/warm/foreground) and confirm map pin/status behavior.
+
 ## 7. File Touchpoints (Planned)
 
 1. `apps/mobile/src/navigation/RootNavigator.tsx`
@@ -258,7 +287,15 @@ Progress: In progress.
 1. JS and config integration is implemented (`expo-share-intent` dependency/plugin + `useShareIntent` wiring).
 2. Android native share intent filter is implemented in tracked manifest (`ACTION_SEND` + `text/*`).
 3. Known prebuild hardening applied (`xcode@3.0.1` patch via pnpm patchedDependencies).
-4. Remaining work is platform validation and any native configuration hardening discovered during device/EAS testing.
+4. iOS share-extension target generation is temporarily disabled (`disableIOS: true`) because non-interactive CI failed on missing `ShareExtension` credentials; re-enable after provisioning profile setup.
+5. Remaining work is platform validation and any native configuration hardening discovered during device/EAS testing.
+
+iOS re-enable checklist:
+
+1. Toggle `disableIOS` to `false` in `apps/mobile/app.json`.
+2. Run interactive iOS credentials setup for both targets with EAS.
+3. Verify a successful non-interactive iOS production build in CI.
+4. Verify iOS manual share matrix passes.
 
 ### Phase 4: Validation and hardening
 
