@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.51] — 2026-02-27
+
+### Added
+- Added detailed `[share.debug]` parser instrumentation for Google Maps short-link expansion/fetch/parse steps to improve troubleshooting in Android logcat.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.51`.
+
 ## [1.1.50] — 2026-02-27
 
 ### Added

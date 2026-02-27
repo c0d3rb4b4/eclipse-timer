@@ -226,6 +226,7 @@ async function expandShortMapUrlWithResponse(
 ): Promise<ExpandedShortMapUrlResult> {
   const parsed = parseUrl(url);
   if (!parsed || !isGoogleShortHost(parsed.hostname)) {
+    console.info("[share.debug] expand_not_short", url);
     return { expandedUrl: url, responseText: null };
   }
 
@@ -233,6 +234,7 @@ async function expandShortMapUrlWithResponse(
     options.fetchImpl ??
     (typeof fetch === "function" ? (fetch as unknown as FetchLike) : undefined);
   if (!fetchImpl) {
+    console.info("[share.debug] expand_no_fetch");
     return { expandedUrl: url, responseText: null };
   }
 
@@ -240,6 +242,8 @@ async function expandShortMapUrlWithResponse(
     typeof options.timeoutMs === "number" && Number.isFinite(options.timeoutMs)
       ? Math.max(1, Math.floor(options.timeoutMs))
       : DEFAULT_EXPAND_TIMEOUT_MS;
+
+  console.info("[share.debug] expand_fetching", { url, timeoutMs });
 
   try {
     const response = await withTimeout(
@@ -250,11 +254,18 @@ async function expandShortMapUrlWithResponse(
       timeoutMs,
     );
 
+    console.info("[share.debug] expand_response", {
+      expandedUrl: response.url,
+      hasText: typeof response.text === "function",
+    });
+
     let responseText: string | null = null;
     if (readResponseText && typeof response.text === "function") {
       try {
         responseText = await withTimeout(Promise.resolve(response.text()), timeoutMs);
-      } catch {
+        console.info("[share.debug] expand_text_length", responseText?.length ?? 0);
+      } catch (err) {
+        console.info("[share.debug] expand_text_error", err);
         responseText = null;
       }
     }
@@ -270,8 +281,9 @@ async function expandShortMapUrlWithResponse(
       expandedUrl: url,
       responseText,
     };
-  } catch {
+  } catch (err) {
     // Fall back to the original short URL on timeout/fetch failure.
+    console.info("[share.debug] expand_fetch_error", err);
     return { expandedUrl: url, responseText: null };
   }
 }
@@ -389,26 +401,48 @@ export async function parseSharedMapLinkAsync(
 
   if (!isGoogleShortHost(url.hostname)) return null;
 
+  console.info("[share.debug] parse_short_url", extracted);
   const { expandedUrl, responseText } = await expandShortMapUrlWithResponse(extracted, options);
+
+  console.info("[share.debug] after_expand", {
+    expandedUrl,
+    urlChanged: expandedUrl !== extracted,
+    responseLength: responseText?.length ?? 0,
+  });
+
   if (expandedUrl !== extracted) {
     const expandedParsedUrl = parseUrl(expandedUrl);
-    if (!expandedParsedUrl) return null;
+    if (!expandedParsedUrl) {
+      console.info("[share.debug] expanded_url_parse_failed", expandedUrl);
+      return null;
+    }
 
     const parsedExpandedLink = parseSharedMapLinkFromUrl(expandedParsedUrl, extracted);
-    if (parsedExpandedLink) return parsedExpandedLink;
+    if (parsedExpandedLink) {
+      console.info("[share.debug] parsed_from_expanded_url", parsedExpandedLink);
+      return parsedExpandedLink;
+    }
+    console.info("[share.debug] expanded_url_no_coords", expandedUrl);
   }
 
+  console.info("[share.debug] try_parse_from_response_text", responseText?.substring(0, 200));
   let parsedFromPreviewPayload = parseGoogleCoordinatesFromText(responseText ?? "");
   if (!parsedFromPreviewPayload) {
+    console.info("[share.debug] response_text_parse_failed_try_refetch");
     const fallbackText = await fetchMapPageText(
       expandedUrl !== extracted ? expandedUrl : extracted,
       options,
     );
+    console.info("[share.debug] refetch_text_length", fallbackText?.length ?? 0);
     parsedFromPreviewPayload = parseGoogleCoordinatesFromText(fallbackText ?? "");
   }
 
-  if (!parsedFromPreviewPayload) return null;
+  if (!parsedFromPreviewPayload) {
+    console.info("[share.debug] all_parsing_failed");
+    return null;
+  }
 
+  console.info("[share.debug] parsed_from_text", parsedFromPreviewPayload);
   return {
     provider: "google",
     lat: parsedFromPreviewPayload.lat,
