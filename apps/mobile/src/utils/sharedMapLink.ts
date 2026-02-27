@@ -295,6 +295,7 @@ async function expandShortMapUrlWithResponse(
 async function fetchMapPageText(
   url: string,
   options: ExpandShortMapUrlOptions = {},
+  maxConsentRedirects = 2,
 ): Promise<string | null> {
   const parsed = parseUrl(url);
   if (!parsed || !isSupportedMapHost(parsed)) return null;
@@ -319,7 +320,23 @@ async function fetchMapPageText(
     );
 
     if (typeof response.text !== "function") return null;
-    return await withTimeout(Promise.resolve(response.text()), timeoutMs);
+    const responseText = await withTimeout(Promise.resolve(response.text()), timeoutMs);
+
+    // Check if we got redirected to a consent page
+    const responseUrl = typeof response.url === "string" ? parseUrl(response.url) : null;
+    if (responseUrl && isGoogleConsentHost(responseUrl.hostname) && maxConsentRedirects > 0) {
+      console.info("[share.debug] fetch_hit_consent_page", { url, responseUrl: response.url });
+      // Extract the real Maps URL from the consent page
+      const extractedUrl =
+        typeof response.url === "string" ? extractUrlFromGoogleConsent(response.url) : null;
+      if (extractedUrl) {
+        console.info("[share.debug] fetch_extracted_from_consent", extractedUrl);
+        // Recursively fetch the extracted URL, but limit redirects to prevent infinite loops
+        return await fetchMapPageText(extractedUrl, options, maxConsentRedirects - 1);
+      }
+    }
+
+    return responseText;
   } catch {
     return null;
   }
