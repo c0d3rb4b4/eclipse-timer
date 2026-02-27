@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.40] — 2026-02-27
+
+### Fixed
+- Tightened `Photography Guide` landscape composite corona rendering so the ring appears only when `MAX` is during true totality (`C2 < MAX < C3`) and never for non-total scenarios.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.40`.
+
 ## [1.1.39] — 2026-02-27
 
 ### Fixed

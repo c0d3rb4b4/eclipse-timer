@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLandscapeCompositeLayout,
   buildPhotographyGuideSchedule,
+  isMaxDuringTotality,
 } from "../src/utils/photographyGuide";
 
 function isoUtc(hour: number, minute: number) {
@@ -84,6 +85,46 @@ describe("photography guide schedule", () => {
 
     expect(result.schedule.rows).toHaveLength(5);
     expect(result.schedule.rows[2]?.phaseBucket).toBe("MAX");
+  });
+
+  it("detects when MAX occurs during totality", () => {
+    expect(
+      isMaxDuringTotality({
+        kindAtLocation: "total",
+        c2Utc: isoUtc(10, 30),
+        maxUtc: isoUtc(11, 0),
+        c3Utc: isoUtc(11, 30),
+      }),
+    ).toBe(true);
+  });
+
+  it("does not mark MAX as totality outside total eclipses or without valid C2/C3 bounds", () => {
+    expect(
+      isMaxDuringTotality({
+        kindAtLocation: "partial",
+        c2Utc: isoUtc(10, 30),
+        maxUtc: isoUtc(11, 0),
+        c3Utc: isoUtc(11, 30),
+      }),
+    ).toBe(false);
+
+    expect(
+      isMaxDuringTotality({
+        kindAtLocation: "annular",
+        c2Utc: isoUtc(10, 30),
+        maxUtc: isoUtc(11, 0),
+        c3Utc: isoUtc(11, 30),
+      }),
+    ).toBe(false);
+
+    expect(
+      isMaxDuringTotality({
+        kindAtLocation: "total",
+        c2Utc: isoUtc(11, 30),
+        maxUtc: isoUtc(11, 0),
+        c3Utc: isoUtc(10, 30),
+      }),
+    ).toBe(false);
   });
 
   it("builds a stable 3-shot schedule around MAX", () => {

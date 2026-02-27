@@ -72,6 +72,7 @@ These are not implemented yet and would add net-new capability.
 | ADD-10 | Medium | No docs command-validity automation | Docs drift is currently manual and recurring | Add docs CI check that validates referenced root scripts and key file paths |
 | ADD-14 | Medium | No in-app feedback/report-issue path | Feedback intake is ad hoc and detached from app context/device metadata | Add "Send feedback / Report issue" flow with prefilled app/device/version context |
 | ADD-15 | Medium | Store listing assets under-leverage product value | Generic screenshots reduce conversion clarity on Play listing | Upgrade screenshot pipeline with feature-focused captions and short demo clip support |
+| ADD-17 | Medium | No inbound map-link sharing flow to timer | Users cannot jump from shared Google/Apple Maps links directly into a timer location context | Implement shared map-link intake (deep link + share target), parse coordinates, and route to `Timer` with pin jump. Detailed plan: [location-share-links-plan.md](./location-share-links-plan.md) |
 
 ---
 
@@ -170,6 +171,7 @@ These are not implemented yet and would add net-new capability.
 4. ADD-08 PR native release smoke
 5. ADD-09 dependency automation
 6. ADD-10 docs validation automation
+7. ADD-17 shared map-link intake to timer
 
 ### Phase E: UX and adoption enhancements (from internal testing)
 1. IMP-28 accessibility audit + regression checks

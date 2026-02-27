@@ -17,6 +17,7 @@ import { fmtLocalHuman, fmtUtcHuman } from "../utils/date";
 import {
   buildLandscapeCompositeLayout,
   buildPhotographyGuideSchedule,
+  isMaxDuringTotality,
   type PhotographyGuidePictureCount,
   type PhotographyGuideRow,
 } from "../utils/photographyGuide";
@@ -124,6 +125,16 @@ export default function PhotographyGuideScreen({
     ? TOTALITY_SKY_COLOR
     : DEFAULT_COMPOSITE_SKY_COLOR;
   const isWithinEclipseArea = payload.visible && payload.kindAtLocation !== "none";
+  const isMaxDuringTotalityWindow = useMemo(
+    () =>
+      isMaxDuringTotality({
+        kindAtLocation: payload.kindAtLocation,
+        c2Utc: payload.c2Utc,
+        maxUtc: payload.maxUtc,
+        c3Utc: payload.c3Utc,
+      }),
+    [payload.c2Utc, payload.c3Utc, payload.kindAtLocation, payload.maxUtc],
+  );
   const scheduleResult = useMemo(
     () =>
       buildPhotographyGuideSchedule({
@@ -485,7 +496,7 @@ export default function PhotographyGuideScreen({
                   />
                   {compositeLayout.placements.map((placement) => {
                     const showTotalityCorona =
-                      payload.kindAtLocation === "total" &&
+                      isMaxDuringTotalityWindow &&
                       placement.phaseBucket === "MAX" &&
                       placement.showMoon &&
                       Boolean(placement.moon);

@@ -107,6 +107,24 @@ function parseUtcMs(iso?: string): number | undefined {
   return parsed;
 }
 
+export function isMaxDuringTotality(params: {
+  kindAtLocation: EclipseKindAtLocation;
+  c2Utc?: string;
+  maxUtc?: string;
+  c3Utc?: string;
+}) {
+  if (params.kindAtLocation !== "total") return false;
+
+  const c2Ms = parseUtcMs(params.c2Utc);
+  const maxMs = parseUtcMs(params.maxUtc);
+  const c3Ms = parseUtcMs(params.c3Utc);
+  if (typeof c2Ms !== "number" || typeof maxMs !== "number" || typeof c3Ms !== "number") {
+    return false;
+  }
+
+  return c2Ms < maxMs && maxMs < c3Ms;
+}
+
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
