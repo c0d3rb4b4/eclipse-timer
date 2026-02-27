@@ -5,14 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.35] — 2026-02-26
+## [1.1.37] — 2026-02-26
+
+### Changed
+- Fixed changelog version labeling for the previous release so it matches the mobile package version (`1.1.36`).
+- Bumped `apps/mobile` version to `1.1.37`.
+
+## [1.1.36] — 2026-02-26
 
 ### Fixed
 - Updated `Photography Guide` landscape composite framing so `MAX` is anchored at the center of the frame (horizontal + vertical), preventing MAX placement from being cut off in the modal.
 
 ### Changed
 - Updated landscape composite helper expectations/docs to reflect centered `MAX` framing.
-- Bumped `apps/mobile` version to `1.1.35`.
+- Bumped `apps/mobile` version to `1.1.36`.
 
 ## [1.1.34] — 2026-02-26
 
