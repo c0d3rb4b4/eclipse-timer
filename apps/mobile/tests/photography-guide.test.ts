@@ -267,4 +267,37 @@ describe("photography guide schedule", () => {
       expect(centerDistance).toBeLessThan(placement.sunRadius * 2.5);
     }
   });
+
+  it("flags above/below horizon and exposes azimuth/altitude in observer-aware layouts", () => {
+    const scheduleResult = buildPhotographyGuideSchedule({
+      visible: true,
+      totalPictures: 5,
+      kindAtLocation: "partial",
+      c1Utc: "2027-08-02T01:00:00.000Z",
+      maxUtc: "2027-08-02T02:00:00.000Z",
+      c4Utc: "2027-08-02T03:00:00.000Z",
+    });
+    expect(scheduleResult.ok).toBe(true);
+    if (!scheduleResult.ok) return;
+
+    const layout = buildLandscapeCompositeLayout({
+      schedule: scheduleResult.schedule,
+      kindAtLocation: "partial",
+      maxUtc: "2027-08-02T02:00:00.000Z",
+      frameWidth: 360,
+      frameHeight: 216,
+      observer: {
+        latDeg: 36.13173,
+        lonDeg: -5.34095,
+      },
+      travelVector: { x: 1, y: 0 },
+    });
+
+    expect(layout.placements.some((placement) => placement.isAboveHorizon)).toBe(false);
+    for (const placement of layout.placements) {
+      expect(typeof placement.sunAzimuthDeg).toBe("number");
+      expect(typeof placement.sunAltitudeDeg).toBe("number");
+      expect(placement.isAboveHorizon).toBe(false);
+    }
+  });
 });

@@ -71,6 +71,9 @@ export type LandscapeCompositePlacement = {
   sunRadius: number;
   clamped: boolean;
   showMoon: boolean;
+  sunAltitudeDeg?: number;
+  sunAzimuthDeg?: number;
+  isAboveHorizon: boolean;
   moon?: {
     x: number;
     y: number;
@@ -265,6 +268,7 @@ function buildLandscapeCompositeLayoutFallback(
       sunRadius,
       clamped,
       showMoon: row.showMoon,
+      isAboveHorizon: clampedY + sunRadius <= frameHeight * LANDSCAPE_HORIZON_FALLBACK_Y_RATIO,
       moon,
     };
   });
@@ -532,6 +536,9 @@ export function buildLandscapeCompositeLayout(
       sunRadius,
       clamped,
       showMoon: row.showMoon && Boolean(moon),
+      sunAltitudeDeg: sample.sun.altitudeDeg,
+      sunAzimuthDeg: sample.sun.azimuthDeg,
+      isAboveHorizon: sample.sun.altitudeDeg >= 0,
       moon,
     };
   });
