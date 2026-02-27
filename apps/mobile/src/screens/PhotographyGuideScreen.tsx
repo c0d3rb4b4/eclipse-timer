@@ -28,10 +28,9 @@ import {
 const PHOTO_COUNT_OPTIONS: readonly PhotographyGuidePictureCount[] = [3, 5, 7, 9];
 const TABLE_THUMB_STAGE_SIZE = 40;
 const TABLE_THUMB_SUN_RADIUS = 18;
+const DEFAULT_COMPOSITE_SKY_COLOR = "#89b7ef";
 const TOTALITY_SKY_COLOR = "#050d24";
 const TOTALITY_GROUND_COLOR = "#111827";
-const TOTALITY_MOON_COLOR = TOTALITY_SKY_COLOR;
-const TOTALITY_MOON_BORDER_COLOR = "#1f2c47";
 const TOTALITY_HORIZON_LINE_COLOR = "rgba(255, 174, 205, 0.75)";
 const TOTALITY_HORIZON_GLOW_COLOR = "rgba(255, 136, 182, 0.42)";
 const LANDSCAPE_HORIZONTAL_FOV_DEG_24MM = 74;
@@ -119,6 +118,11 @@ export default function PhotographyGuideScreen({
     height: 0,
   });
   const isTotalCompositeTheme = payload.kindAtLocation === "total";
+  const isAnnularOrTotalCompositeTheme =
+    payload.kindAtLocation === "annular" || payload.kindAtLocation === "total";
+  const compositeSkyColor = isTotalCompositeTheme
+    ? TOTALITY_SKY_COLOR
+    : DEFAULT_COMPOSITE_SKY_COLOR;
   const isWithinEclipseArea = payload.visible && payload.kindAtLocation !== "none";
   const scheduleResult = useMemo(
     () =>
@@ -415,12 +419,7 @@ export default function PhotographyGuideScreen({
               </Text>
             </Pressable>
             <View style={styles.compositeFrame} onLayout={handleCompositeStageLayout}>
-              <View
-                style={[
-                  styles.compositeSky,
-                  isTotalCompositeTheme ? { backgroundColor: TOTALITY_SKY_COLOR } : null,
-                ]}
-              />
+              <View style={[styles.compositeSky, { backgroundColor: compositeSkyColor }]} />
               <View
                 style={[
                   styles.compositeGround,
@@ -484,102 +483,108 @@ export default function PhotographyGuideScreen({
                       },
                     ]}
                   />
-                  {compositeLayout.placements.map((placement) => (
-                    <View key={placement.index}>
-                      {!placement.isAboveHorizon ? null : (
-                        <>
-                          {isTotalCompositeTheme &&
-                          placement.phaseBucket === "MAX" &&
-                          placement.showMoon &&
-                          placement.moon ? (
-                            <>
-                              <View
-                                style={[
-                                  styles.compositeCoronaGlow,
-                                  {
-                                    width: Math.max(placement.sunRadius * 9, 16),
-                                    height: Math.max(placement.sunRadius * 9, 16),
-                                    borderRadius: Math.max(placement.sunRadius * 4.5, 8),
-                                    left: placement.x - Math.max(placement.sunRadius * 4.5, 8),
-                                    top: placement.y - Math.max(placement.sunRadius * 4.5, 8),
-                                  },
-                                ]}
-                              />
-                              <View
-                                style={[
-                                  styles.compositeCoronaRing,
-                                  {
-                                    width: Math.max(placement.sunRadius * 6, 10),
-                                    height: Math.max(placement.sunRadius * 6, 10),
-                                    borderRadius: Math.max(placement.sunRadius * 3, 5),
-                                    left: placement.x - Math.max(placement.sunRadius * 3, 5),
-                                    top: placement.y - Math.max(placement.sunRadius * 3, 5),
-                                  },
-                                ]}
-                              />
-                            </>
-                          ) : null}
-                          <View
-                            style={[
-                              styles.compositeSun,
-                              {
-                                width: placement.sunRadius * 2,
-                                height: placement.sunRadius * 2,
-                                borderRadius: placement.sunRadius,
-                                left: placement.x - placement.sunRadius,
-                                top: placement.y - placement.sunRadius,
-                              },
-                            ]}
-                          />
-                          {placement.showMoon && placement.moon ? (
+                  {compositeLayout.placements.map((placement) => {
+                    const showTotalityCorona =
+                      payload.kindAtLocation === "total" &&
+                      placement.phaseBucket === "MAX" &&
+                      placement.showMoon &&
+                      Boolean(placement.moon);
+                    const useBlackMoon =
+                      isAnnularOrTotalCompositeTheme && placement.phaseBucket === "MAX";
+                    const moonColor = useBlackMoon ? "#000000" : compositeSkyColor;
+
+                    return (
+                      <View key={placement.index}>
+                        {!placement.isAboveHorizon ? null : (
+                          <>
+                            {showTotalityCorona ? (
+                              <>
+                                <View
+                                  style={[
+                                    styles.compositeCoronaGlow,
+                                    {
+                                      width: Math.max(placement.sunRadius * 9, 16),
+                                      height: Math.max(placement.sunRadius * 9, 16),
+                                      borderRadius: Math.max(placement.sunRadius * 4.5, 8),
+                                      left: placement.x - Math.max(placement.sunRadius * 4.5, 8),
+                                      top: placement.y - Math.max(placement.sunRadius * 4.5, 8),
+                                    },
+                                  ]}
+                                />
+                                <View
+                                  style={[
+                                    styles.compositeCoronaRing,
+                                    {
+                                      width: Math.max(placement.sunRadius * 6, 10),
+                                      height: Math.max(placement.sunRadius * 6, 10),
+                                      borderRadius: Math.max(placement.sunRadius * 3, 5),
+                                      left: placement.x - Math.max(placement.sunRadius * 3, 5),
+                                      top: placement.y - Math.max(placement.sunRadius * 3, 5),
+                                    },
+                                  ]}
+                                />
+                              </>
+                            ) : null}
                             <View
                               style={[
-                                styles.compositeMoon,
-                                isTotalCompositeTheme
-                                  ? {
-                                      backgroundColor: TOTALITY_MOON_COLOR,
-                                      borderColor: TOTALITY_MOON_BORDER_COLOR,
-                                    }
-                                  : null,
+                                styles.compositeSun,
                                 {
-                                  width: placement.moon.radius * 2,
-                                  height: placement.moon.radius * 2,
-                                  borderRadius: placement.moon.radius,
-                                  left: placement.moon.x - placement.moon.radius,
-                                  top: placement.moon.y - placement.moon.radius,
+                                  width: placement.sunRadius * 2,
+                                  height: placement.sunRadius * 2,
+                                  borderRadius: placement.sunRadius,
+                                  left: placement.x - placement.sunRadius,
+                                  top: placement.y - placement.sunRadius,
                                 },
                               ]}
                             />
-                          ) : null}
-                          {showCompositeMarkings ? (
-                            <View
-                              style={[
-                                styles.compositeShotIndexTag,
-                                {
-                                  left: placement.x - 9,
-                                  top: placement.y + placement.sunRadius + 3,
-                                },
-                                placement.clamped ? styles.compositeShotIndexTagClamped : null,
-                              ]}
-                            >
-                              <Text style={styles.compositeShotIndexText}>{placement.index}</Text>
-                            </View>
-                          ) : null}
-                          {showCompositeMarkings && placement.clamped ? (
-                            <View
-                              style={[
-                                styles.compositeClampIndicator,
-                                {
-                                  left: placement.x + placement.sunRadius - 4,
-                                  top: placement.y - placement.sunRadius - 4,
-                                },
-                              ]}
-                            />
-                          ) : null}
-                        </>
-                      )}
-                    </View>
-                  ))}
+                            {placement.showMoon && placement.moon ? (
+                              <View
+                                style={[
+                                  styles.compositeMoon,
+                                  {
+                                    backgroundColor: moonColor,
+                                    borderColor: moonColor,
+                                  },
+                                  {
+                                    width: placement.moon.radius * 2,
+                                    height: placement.moon.radius * 2,
+                                    borderRadius: placement.moon.radius,
+                                    left: placement.moon.x - placement.moon.radius,
+                                    top: placement.moon.y - placement.moon.radius,
+                                  },
+                                ]}
+                              />
+                            ) : null}
+                            {showCompositeMarkings ? (
+                              <View
+                                style={[
+                                  styles.compositeShotIndexTag,
+                                  {
+                                    left: placement.x - 9,
+                                    top: placement.y + placement.sunRadius + 3,
+                                  },
+                                  placement.clamped ? styles.compositeShotIndexTagClamped : null,
+                                ]}
+                              >
+                                <Text style={styles.compositeShotIndexText}>{placement.index}</Text>
+                              </View>
+                            ) : null}
+                            {showCompositeMarkings && placement.clamped ? (
+                              <View
+                                style={[
+                                  styles.compositeClampIndicator,
+                                  {
+                                    left: placement.x + placement.sunRadius - 4,
+                                    top: placement.y - placement.sunRadius - 4,
+                                  },
+                                ]}
+                              />
+                            ) : null}
+                          </>
+                        )}
+                      </View>
+                    );
+                  })}
                 </>
               ) : null}
             </View>
@@ -887,11 +892,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.16)",
       overflow: "hidden",
-      backgroundColor: "#89b7ef",
+      backgroundColor: DEFAULT_COMPOSITE_SKY_COLOR,
     },
     compositeSky: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: "#89b7ef",
+      backgroundColor: DEFAULT_COMPOSITE_SKY_COLOR,
     },
     compositeGround: {
       position: "absolute",

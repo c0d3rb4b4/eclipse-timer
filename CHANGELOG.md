@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.39] — 2026-02-27
+
+### Fixed
+- Updated `Photography Guide` landscape composite visuals so corona rings render only for `total` eclipses at `MAX` (no corona for `partial` or `annular` eclipses).
+- Updated composite moon styling to match the sky for non-`MAX` shots, with moon rendered black at `MAX` only for `annular` and `total` eclipses.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.39`.
+
 ## [1.1.38] — 2026-02-27
 
 ### Added
