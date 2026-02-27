@@ -8,11 +8,12 @@
 ## Current Baseline
 
 - First public Android release is manual.
-- App version: `1.0.0`.
+- Current mobile version source is `apps/mobile/package.json` (currently `1.1.40`).
 - EAS project ID: `a29a7662-96be-4509-a79e-fbe4b5dac1ff`.
 - Build profile for stores: `production` in `apps/mobile/eas.json` (`autoIncrement: true`).
-- Runtime policy: `runtimeVersion` is tied to app version in `apps/mobile/app.json`.
+- Runtime policy: `version` and `runtimeVersion` are derived in `apps/mobile/app.config.ts` from `apps/mobile/package.json`.
 - GitHub workflow path for builds is self-hosted macOS (`.github/workflows/eas-build.yml`).
+- Store submit job runs automatically only when `apps/mobile/package.json` semver is greater than the latest `vX.Y.Z` tag.
 
 ---
 
@@ -40,15 +41,15 @@
   - `GOOGLE_MAPS_ANDROID_API_KEY`: Google Cloud -> `APIs & Services -> Credentials -> API key` (restrict to Android app package/SHA-1 and Maps SDK for Android API).
   - `APPSTORE_ISSUER_ID` / `APPSTORE_API_KEY_ID` / `APPSTORE_API_PRIVATE_KEY`: App Store Connect -> `Users and Access -> Integrations -> App Store Connect API` (Team API key; paste full `.p8` contents for private key).
   - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`: Play Console -> `Setup -> API access` (link GCP project/service account) + Google Cloud service account JSON key.
-- Detailed acquisition steps for every secret are documented in `documents/self-hosted-macos-runner.md` under `## 5. Repo secrets needed`.
+- Detailed acquisition steps for every secret are documented in `documents/planning/self-hosted-macos-runner.md` under `## 5. Repo secrets needed`.
 - GitHub Release publishing uses workflow `GITHUB_TOKEN` (`contents: write` permission configured in `.github/workflows/eas-build.yml`).
   - You do not create this token manually. GitHub injects it automatically for every workflow run.
   - In workflows it is available as `${{ secrets.GITHUB_TOKEN }}` (or `github.token` context).
   - If release creation fails with permission errors, check: `Settings -> Actions -> General -> Workflow permissions` and allow write access for the repository/organization policy.
   - Only use a PAT secret if org policy prevents write-capable `GITHUB_TOKEN`.
 - Store listing metadata is kept current in:
-  - `documents/store-metadata.md`
-  - `documents/store-privacy-declarations.md`
+  - `documents/reference/store-metadata.md`
+  - `documents/reference/store-privacy-declarations.md`
 - Required checks pass locally: `pnpm typecheck`, `pnpm lint`, `pnpm test`.
 
 ---
@@ -63,12 +64,11 @@
 
 ### 2) Versioning
 
-- Bump `apps/mobile/package.json` -> `version` (for example: `1.0.1`).
-- Bump `apps/mobile/app.json` -> `expo.version` to the same value.
-- Bump `apps/mobile/app.json` -> `expo.runtimeVersion` to the same value.
-- Release workflow enforcement (`submit: true`):
+- Bump `apps/mobile/package.json` -> `version` (for example: `1.1.41`).
+- Do not set `expo.version` or `expo.runtimeVersion` in `apps/mobile/app.json`; both are derived from package version in `apps/mobile/app.config.ts`.
+- Release workflow enforcement (`submit` job):
   - Version must be valid `x.y.z`.
-  - `package.json` version, `expo.version`, and `expo.runtimeVersion` must match.
+  - `apps/mobile/app.json` must not define `expo.version` or `expo.runtimeVersion`.
   - New version must be greater than the latest Git tag in `vX.Y.Z` format.
 - Keep `android.versionCode` and `ios.buildNumber` managed by EAS `production.autoIncrement` unless a manual override is needed.
 
@@ -85,24 +85,31 @@ pnpm test
 From repo root:
 
 ```bash
-pnpm -C apps/mobile exec eas build --profile production --platform ios --local
-pnpm -C apps/mobile exec eas build --profile production --platform android --local
+pnpm -C apps/mobile exec eas build --profile production --platform ios --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production --platform android --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production-apk --platform android --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production-wear --platform android --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production-wear-apk --platform android --local --non-interactive
 ```
 
 Android-only:
 
 ```bash
-pnpm -C apps/mobile exec eas build --profile production --platform android --local
+pnpm -C apps/mobile exec eas build --profile production --platform android --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production-apk --platform android --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production-wear --platform android --local --non-interactive
+pnpm -C apps/mobile exec eas build --profile production-wear-apk --platform android --local --non-interactive
 ```
 
 ### 5) Submit binaries to stores
 
 Option A: via GitHub Actions submit job (default)
-- Run `.github/workflows/eas-build.yml` with `submit: true` and `platform: ios|android|all`.
+- Push release commit to `main` (or run `workflow_dispatch`) after version bump.
 - The submit job uploads:
   - iOS `.ipa` to App Store Connect via `apple-actions/upload-testflight-build@v3`
   - Android `.aab` to Google Play via `r0adkll/upload-google-play@v1`
-- The same job also creates a GitHub Release `vX.Y.Z` and attaches generated artifacts (`ios.ipa`, `android.aab` for selected platform).
+  - Wear OS `.aab` to Google Play internal track (non-blocking; pipeline continues if this upload fails)
+- The same job also creates a GitHub Release `vX.Y.Z` and attaches generated artifacts (`ios.ipa`, phone `android.aab` + `android.apk`, wear `wear.aab` + `wear.apk`).
 
 Option B: manual direct upload from local machine
 - iOS: upload `.ipa` with Transporter or `xcrun altool`.
@@ -126,13 +133,13 @@ pnpm -C apps/mobile exec eas submit --platform android --path /absolute/path/to/
 
 - Use `.github/workflows/eas-build.yml` for repeatable release execution.
 - Workflow runs on your self-hosted macOS runner.
-- Trigger `workflow_dispatch` with:
-  - `platform: android` or `all`
-  - `submit: true` when ready to upload automatically after build
+- Build job runs on every push to `main` and on `workflow_dispatch`.
+- Submit job runs automatically when release gate detects `apps/mobile/package.json` version > latest `vX.Y.Z` tag.
+- Use `workflow_dispatch` for dry-run validation; without a version bump, submit is skipped.
 - Keep required secrets configured:
   - `EXPO_TOKEN` for build
   - `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_PRIVATE_KEY` for iOS upload
-  - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` for Android upload
+  - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` for Android + Wear uploads
 - Optional for EAS Submit fallback:
   - `EXPO_APPLE_ID` (iOS only)
 
@@ -172,11 +179,11 @@ Rules:
 ## Quick Checklist (Per Release)
 
 - [ ] Changelog updated
-- [ ] Version updated (`app.json`, `package.json`)
+- [ ] Version updated (`apps/mobile/package.json`)
 - [ ] Typecheck/lint/test passed
 - [ ] Local build completed
-- [ ] Store upload completed (iOS + Android as applicable)
+- [ ] Store upload completed (iOS + Android, and Wear where applicable)
 - [ ] GitHub Release created with downloadable artifacts
 - [ ] Release notes entered in store consoles
 - [ ] Rollout started and monitored
-- [ ] Post-release verification done on physical Android + iOS devices
+- [ ] Post-release verification done on physical Android + iOS devices (and Wear device when applicable)

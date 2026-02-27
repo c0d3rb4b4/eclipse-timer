@@ -84,7 +84,7 @@ These are not implemented yet and would add net-new capability.
 |---|---|---|---|---|
 | IMP-01 | High | Mobile module size concentration | Large files remain: `TimerScreen.tsx` (1523), `EclipsePreviewScreen.tsx` (884), `appState.tsx` (716), `RootNavigator.tsx` (623), `NotificationSettingsScreen.tsx` (582), `useTimerState.ts` (525) | Split by feature slices (compute adapter, map overlays, alarm controls, preview renderer, state reducers/selectors) |
 | IMP-02 | High | Notifications API usage | `apps/mobile/src/services/notifications.ts` imports from `expo-notifications/build/*` internals | Move to public `expo-notifications` exports to reduce SDK break risk |
-| IMP-03 | High | Native/app version consistency | `apps/mobile/android/app/build.gradle` hardcodes `versionCode 3`, `versionName "1.0.0"` while app package is `1.1.29` | Unify version source and remove conflicting hardcoded native values |
+| IMP-03 | High | Native/app version consistency | `apps/mobile/android/app/build.gradle` hardcodes `versionCode 3`, `versionName "1.0.0"` while app package is `1.1.40` | Unify version source and remove conflicting hardcoded native values |
 | IMP-04 | High | Observability configuration | Sentry values remain placeholders across app/native config (`App.tsx`, `app.json`, `android/sentry.properties`) | Move to env/secret-driven config with startup/build validation and docs |
 
 ### 3.2 Data contracts and engine correctness
@@ -122,7 +122,7 @@ These are not implemented yet and would add net-new capability.
 | ID | Priority | Area | Current state | Improvement |
 |---|---|---|---|---|
 | IMP-20 | High | Documentation command drift | Multiple docs still instruct non-existent root scripts (`pnpm dev`, `pnpm build`, `pnpm test:watch`, `pnpm clean`) and these commands fail when executed | Update docs to current script surface and add docs command validation check |
-| IMP-21 | Medium | Documentation path drift | Plain-text references still point to moved paths (for example root `README.md` references `documents/self-hosted-macos-runner.md`; release plan references old store docs paths) | Update stale paths to `documents/planning/*` and `documents/reference/*` |
+| IMP-21 | Medium | Documentation path drift | Plain-text references still point to moved paths (for example root `README.md` references `documents/self-hosted-macos-runner.md`) | Update stale paths to `documents/planning/*` and `documents/reference/*` |
 | IMP-22 | Medium | Duplicate config sources | Root `app.json`/`eas.json` and `apps/mobile` config diverge (including bundle ID/CLI profile details) | Define single source of truth and deprecate duplicates |
 | IMP-23 | Medium | Changelog source-of-truth drift | Both root `CHANGELOG.md` and `documents/reference/CHANGELOG.md` exist with divergent content/version history | Consolidate to one authoritative changelog location and update cross-links |
 | IMP-24 | Low | Environment/tooling enforcement | `packageManager` is pinned, but no strict `engines`/Corepack enforcement gate | Add `engines` and optional install-time guard script |

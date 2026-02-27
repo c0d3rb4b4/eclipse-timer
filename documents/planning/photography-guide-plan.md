@@ -1,6 +1,6 @@
 # Photography Guide Page Plan
 
-Last updated: 2026-02-26  
+Last updated: 2026-02-27  
 Status: In progress (`Phase 1-3` complete, `Phase 4` partially complete)
 
 ## 1. Goal
@@ -45,7 +45,7 @@ Pending:
 
 ## 4. Distribution Rules
 
-Given selected `n` in `{3,5,7,9,11}`:
+Given selected `n` in `{3,5,7,9}`:
 
 1. `n` is odd and always includes one photo at `MAX`.
 2. Let `k = (n - 3) / 2`.

@@ -1,13 +1,27 @@
 # In-App Alarm Rework Plan (No Native Clock Export)
 
-Last updated: 2026-02-20  
-Status: Proposed
+Last updated: 2026-02-27  
+Status: Implemented in code; focused physical-device QA and final cleanup pending
 
 ## 1. Goal
 
 Use a hybrid model:
 - background local notifications for eclipse-level reminders (`T-1h`, `T-10m`)
 - foreground in-app alarms for fast, second-level event countdown guidance (`a1`, `a2`)
+
+## 1.1 Current Implementation Snapshot (2026-02-27)
+
+Implemented:
+1. `Notification Settings` rename to `Notification/Alarm Settings`.
+2. Persisted `a1`/`a2` settings with range checks and `a2 < a1` validation.
+3. Per-eclipse master toggle (`Enable alarms and reminders for this eclipse`) with per-event toggle preservation.
+4. Foreground in-app alarm engine (`a1` phrase, `a2` countdown, terminal event phrase).
+5. Fixed per-eclipse background reminders (`T-1h`, `T-10m`) anchored to first valid contact.
+6. Automated regression coverage for alarm timing, in-app engine behavior, and reminder scheduling.
+
+Still pending:
+1. Full physical-device manual verification pass for the matrix in `## 10. Test Strategy`.
+2. Final notification-layer hardening called out in tracker items (for example private `expo-notifications/build/*` import cleanup).
 
 ## 2. Requested Behavior
 

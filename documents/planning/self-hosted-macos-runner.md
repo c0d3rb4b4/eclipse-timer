@@ -1,6 +1,6 @@
 # Self-Hosted macOS Runner Setup (Mac mini)
 
-This project can build both iOS and Android on your own Mac mini using GitHub Actions self-hosted runners.
+This project can build iOS, Android (phone), and Android Wear artifacts on your own Mac mini using GitHub Actions self-hosted runners.
 The updated workflows run on the label set:
 
 - `self-hosted`
@@ -202,7 +202,7 @@ Notes:
 
 1. `EXPO_TOKEN` is required for local `eas build --local` in CI.
 2. Store upload credentials are injected via GitHub secrets; no credential files need to live on the runner filesystem for pipeline submit.
-3. Keep `submit` job gated by the `production` environment approval in GitHub.
+3. Submit execution is gated by release version logic (`apps/mobile/package.json` semver must be greater than latest `vX.Y.Z` tag).
 4. GitHub Release creation uses `GITHUB_TOKEN` with `contents: write` permission (set in `.github/workflows/eas-build.yml`).
    - You do not add `GITHUB_TOKEN` as a repo secret; GitHub provides it automatically per workflow run.
    - It is available as `${{ secrets.GITHUB_TOKEN }}` (or `github.token` context).
@@ -215,15 +215,19 @@ Notes:
 - `.github/workflows/eas-build.yml`:
   - Runs CI checks on self-hosted macOS.
   - Builds locally with:
-    - `eas build --local --platform ios`
-    - `eas build --local --platform android`
-  - Uploads local artifacts (`ios.ipa`, `android.aab`) to the workflow run.
-  - Optional submit job uploads:
+    - `eas build --profile production --platform ios --local`
+    - `eas build --profile production --platform android --local`
+    - `eas build --profile production-apk --platform android --local`
+    - `eas build --profile production-wear --platform android --local`
+    - `eas build --profile production-wear-apk --platform android --local`
+  - Uploads local artifacts (`ios.ipa`, phone `android.aab` + `android.apk`, wear `wear.aab` + `wear.apk`) to the workflow run.
+  - Conditional submit job uploads:
     - iOS via `apple-actions/upload-testflight-build@v3`
     - Android via `r0adkll/upload-google-play@v1`
+    - Wear OS via `r0adkll/upload-google-play@v1` (non-blocking)
   - Submit job also:
     - Enforces release version bump (`apps/mobile/package.json` `version` must be greater than latest `vX.Y.Z` tag)
-    - Creates a GitHub Release and attaches uploaded artifacts (`ios.ipa`/`android.aab`)
+    - Creates a GitHub Release and attaches uploaded artifacts (`ios.ipa`, `android.aab`, `android.apk`, `wear.aab`, `wear.apk`)
 
 Trigger conditions:
 
@@ -309,16 +313,17 @@ If this passes, GitHub workflow `eas-build.yml` should pass on the same runner h
 ## 8. First validation run
 
 1. In GitHub Actions, run `Self-Hosted Mobile Build & Submit`.
-2. Inputs:
-   - `platform: ios` first, then `android`.
-   - `submit: false`.
-3. Confirm build artifacts are attached to the run.
-4. Then run once with `submit: true` after all four store-upload secrets are set:
+2. No manual inputs are required for `workflow_dispatch`; run it once as a build validation.
+3. Confirm build artifacts are attached to the run (`ios.ipa`, `android.aab`, `android.apk`, `wear.aab`, `wear.apk`).
+4. Ensure all four store-upload secrets are set:
    - `APPSTORE_ISSUER_ID`
    - `APPSTORE_API_KEY_ID`
    - `APPSTORE_API_PRIVATE_KEY`
    - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
-5. Verify a GitHub Release was created with attached mobile artifacts.
+5. Push a commit to `main` that bumps `apps/mobile/package.json` to a semver greater than the latest `vX.Y.Z` tag, then verify:
+   - submit job runs,
+   - store uploads execute,
+   - a GitHub Release is created with attached mobile artifacts.
 
 ## 9. Common issues
 
@@ -343,7 +348,7 @@ If this passes, GitHub workflow `eas-build.yml` should pass on the same runner h
    - Install JDK 17 on the runner (`brew install temurin@17`).
    - Or rely on workflow-managed Java setup (`actions/setup-java@v4`) and rerun.
 8. Submit job fails with missing secret:
-   - Verify required secrets exist and are available to the selected environment (`production`).
+   - Verify required secrets exist in repository Actions secrets and are readable by workflows.
    - For iOS, ensure `APPSTORE_API_PRIVATE_KEY` is the raw `.p8` key content, not a file path.
 9. Submit job fails on Google Play permissions:
    - Ensure the service account in `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` has access to app `com.lallimaven.eclipsetimer` and the target track.

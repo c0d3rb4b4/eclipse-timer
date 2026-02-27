@@ -22,6 +22,8 @@ Establish a maintainable documentation set that explains:
   - End-user behavior, states, and interaction model.
 - `documents/high-level/development-workflow.md`
   - Setup, scripts, monorepo workflow, and current engineering constraints.
+- `documents/high-level/wearable-companion-requirements.md`
+  - Wearable companion behavior scope, acceptance criteria, and constraints.
 
 ### Low-Level Documentation
 - `documents/low-level/data-contracts.md`
@@ -30,6 +32,8 @@ Establish a maintainable documentation set that explains:
   - Computation stages, math helpers, root solving, and output derivation.
 - `documents/low-level/mobile-app-internals.md`
   - React Native state model, handlers, and UI-to-engine integration details.
+- `documents/low-level/wearable-companion-technical-design.md`
+  - Phone/watch data-layer contracts, payload flow, and renderer behavior.
 
 ## Documentation Standards
 
@@ -49,6 +53,5 @@ Update docs whenever any of these change:
 
 ## Open Gaps Identified
 
-- Test strategy is not yet implemented (`test` scripts are placeholders).
-- Linting strategy is not yet implemented (`lint` scripts are placeholders).
+- Documentation command references can still drift from real root scripts (`dev:mobile`, `typecheck`, `lint`, `test`, `test:ci`, `coverage:gate`).
 - `deltaTSecondsApprox` exists but is not currently used by `computeCircumstances`.
