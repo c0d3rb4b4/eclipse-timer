@@ -34,6 +34,30 @@ const TOTALITY_MOON_COLOR = TOTALITY_SKY_COLOR;
 const TOTALITY_MOON_BORDER_COLOR = "#1f2c47";
 const TOTALITY_HORIZON_LINE_COLOR = "rgba(255, 174, 205, 0.75)";
 const TOTALITY_HORIZON_GLOW_COLOR = "rgba(255, 136, 182, 0.42)";
+const LANDSCAPE_HORIZONTAL_FOV_DEG_24MM = 74;
+const COMPASS_MARKERS = [
+  { label: "N", azimuthDeg: 0 },
+  { label: "NNE", azimuthDeg: 22.5 },
+  { label: "NE", azimuthDeg: 45 },
+  { label: "ENE", azimuthDeg: 67.5 },
+  { label: "E", azimuthDeg: 90 },
+  { label: "ESE", azimuthDeg: 112.5 },
+  { label: "SE", azimuthDeg: 135 },
+  { label: "SSE", azimuthDeg: 157.5 },
+  { label: "S", azimuthDeg: 180 },
+  { label: "SSW", azimuthDeg: 202.5 },
+  { label: "SW", azimuthDeg: 225 },
+  { label: "WSW", azimuthDeg: 247.5 },
+  { label: "W", azimuthDeg: 270 },
+  { label: "WNW", azimuthDeg: 292.5 },
+  { label: "NW", azimuthDeg: 315 },
+  { label: "NNW", azimuthDeg: 337.5 },
+] as const;
+
+function normalizeSignedDeltaDeg(fromDeg: number, toDeg: number) {
+  const delta = ((toDeg - fromDeg + 540) % 360) - 180;
+  return delta === -180 ? 180 : delta;
+}
 
 export type PhotographyGuidePayload = {
   eclipseId: string;
@@ -89,6 +113,7 @@ export default function PhotographyGuideScreen({
   const [totalPictures, setTotalPictures] = useState<PhotographyGuidePictureCount>(5);
   const [isCountPickerOpen, setIsCountPickerOpen] = useState(false);
   const [isLandscapeCompositeOpen, setIsLandscapeCompositeOpen] = useState(false);
+  const [showCompositeMarkings, setShowCompositeMarkings] = useState(true);
   const [compositeStageSize, setCompositeStageSize] = useState({
     width: 0,
     height: 0,
@@ -184,6 +209,22 @@ export default function PhotographyGuideScreen({
     if (typeof activeCompositeHorizonY !== "number") return undefined;
     return Math.max(0, compositeStageSize.height - activeCompositeHorizonY);
   }, [activeCompositeHorizonY, compositeStageSize.height]);
+  const horizonCompassMarkers = useMemo(() => {
+    if (!compositeLayout) return [];
+    const maxPlacement = compositeLayout.placements.find(
+      (placement) => placement.phaseBucket === "MAX" && typeof placement.sunAzimuthDeg === "number",
+    );
+    if (!maxPlacement || typeof maxPlacement.sunAzimuthDeg !== "number") return [];
+    const centerAzimuthDeg = maxPlacement.sunAzimuthDeg;
+
+    return COMPASS_MARKERS.map((marker) => {
+      const deltaDeg = normalizeSignedDeltaDeg(centerAzimuthDeg, marker.azimuthDeg);
+      const x =
+        compositeLayout.anchorX +
+        (deltaDeg / LANDSCAPE_HORIZONTAL_FOV_DEG_24MM) * compositeStageSize.width;
+      return { ...marker, x, inFrame: x >= 0 && x <= compositeStageSize.width };
+    }).filter((marker) => marker.inFrame);
+  }, [compositeLayout, compositeStageSize.width]);
   const handleCompositeStageLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.round(event.nativeEvent.layout.width);
     const nextHeight = Math.round(event.nativeEvent.layout.height);
@@ -363,6 +404,16 @@ export default function PhotographyGuideScreen({
           />
           <View style={styles.compositeModal}>
             <Text style={styles.compositeModalTitle}>Landscape composite</Text>
+            <Pressable
+              style={styles.compositeMarkingsToggleBtn}
+              onPress={() => setShowCompositeMarkings((current) => !current)}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle composite markings"
+            >
+              <Text style={styles.compositeMarkingsToggleText}>
+                {showCompositeMarkings ? "Hide" : "Show"} markings, directions, and shot numbers
+              </Text>
+            </Pressable>
             <View style={styles.compositeFrame} onLayout={handleCompositeStageLayout}>
               <View
                 style={[
@@ -402,6 +453,26 @@ export default function PhotographyGuideScreen({
                     : null,
                 ]}
               />
+              {showCompositeMarkings && typeof activeCompositeHorizonY === "number"
+                ? horizonCompassMarkers.map((marker) => (
+                    <View key={`horizon-marker-${marker.label}`} style={{ left: marker.x - 10 }}>
+                      <View
+                        style={[
+                          styles.compositeDirectionTick,
+                          { top: activeCompositeHorizonY - 6 },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.compositeDirectionLabel,
+                          { top: activeCompositeHorizonY + 4 },
+                        ]}
+                      >
+                        {marker.label}
+                      </Text>
+                    </View>
+                  ))
+                : null}
               {compositeLayout ? (
                 <>
                   <View
@@ -415,92 +486,98 @@ export default function PhotographyGuideScreen({
                   />
                   {compositeLayout.placements.map((placement) => (
                     <View key={placement.index}>
-                      {isTotalCompositeTheme &&
-                      placement.phaseBucket === "MAX" &&
-                      placement.showMoon &&
-                      placement.moon ? (
+                      {!placement.isAboveHorizon ? null : (
                         <>
+                          {isTotalCompositeTheme &&
+                          placement.phaseBucket === "MAX" &&
+                          placement.showMoon &&
+                          placement.moon ? (
+                            <>
+                              <View
+                                style={[
+                                  styles.compositeCoronaGlow,
+                                  {
+                                    width: Math.max(placement.sunRadius * 9, 16),
+                                    height: Math.max(placement.sunRadius * 9, 16),
+                                    borderRadius: Math.max(placement.sunRadius * 4.5, 8),
+                                    left: placement.x - Math.max(placement.sunRadius * 4.5, 8),
+                                    top: placement.y - Math.max(placement.sunRadius * 4.5, 8),
+                                  },
+                                ]}
+                              />
+                              <View
+                                style={[
+                                  styles.compositeCoronaRing,
+                                  {
+                                    width: Math.max(placement.sunRadius * 6, 10),
+                                    height: Math.max(placement.sunRadius * 6, 10),
+                                    borderRadius: Math.max(placement.sunRadius * 3, 5),
+                                    left: placement.x - Math.max(placement.sunRadius * 3, 5),
+                                    top: placement.y - Math.max(placement.sunRadius * 3, 5),
+                                  },
+                                ]}
+                              />
+                            </>
+                          ) : null}
                           <View
                             style={[
-                              styles.compositeCoronaGlow,
+                              styles.compositeSun,
                               {
-                                width: Math.max(placement.sunRadius * 9, 16),
-                                height: Math.max(placement.sunRadius * 9, 16),
-                                borderRadius: Math.max(placement.sunRadius * 4.5, 8),
-                                left: placement.x - Math.max(placement.sunRadius * 4.5, 8),
-                                top: placement.y - Math.max(placement.sunRadius * 4.5, 8),
+                                width: placement.sunRadius * 2,
+                                height: placement.sunRadius * 2,
+                                borderRadius: placement.sunRadius,
+                                left: placement.x - placement.sunRadius,
+                                top: placement.y - placement.sunRadius,
                               },
                             ]}
                           />
-                          <View
-                            style={[
-                              styles.compositeCoronaRing,
-                              {
-                                width: Math.max(placement.sunRadius * 6, 10),
-                                height: Math.max(placement.sunRadius * 6, 10),
-                                borderRadius: Math.max(placement.sunRadius * 3, 5),
-                                left: placement.x - Math.max(placement.sunRadius * 3, 5),
-                                top: placement.y - Math.max(placement.sunRadius * 3, 5),
-                              },
-                            ]}
-                          />
+                          {placement.showMoon && placement.moon ? (
+                            <View
+                              style={[
+                                styles.compositeMoon,
+                                isTotalCompositeTheme
+                                  ? {
+                                      backgroundColor: TOTALITY_MOON_COLOR,
+                                      borderColor: TOTALITY_MOON_BORDER_COLOR,
+                                    }
+                                  : null,
+                                {
+                                  width: placement.moon.radius * 2,
+                                  height: placement.moon.radius * 2,
+                                  borderRadius: placement.moon.radius,
+                                  left: placement.moon.x - placement.moon.radius,
+                                  top: placement.moon.y - placement.moon.radius,
+                                },
+                              ]}
+                            />
+                          ) : null}
+                          {showCompositeMarkings ? (
+                            <View
+                              style={[
+                                styles.compositeShotIndexTag,
+                                {
+                                  left: placement.x - 9,
+                                  top: placement.y + placement.sunRadius + 3,
+                                },
+                                placement.clamped ? styles.compositeShotIndexTagClamped : null,
+                              ]}
+                            >
+                              <Text style={styles.compositeShotIndexText}>{placement.index}</Text>
+                            </View>
+                          ) : null}
+                          {showCompositeMarkings && placement.clamped ? (
+                            <View
+                              style={[
+                                styles.compositeClampIndicator,
+                                {
+                                  left: placement.x + placement.sunRadius - 4,
+                                  top: placement.y - placement.sunRadius - 4,
+                                },
+                              ]}
+                            />
+                          ) : null}
                         </>
-                      ) : null}
-                      <View
-                        style={[
-                          styles.compositeSun,
-                          {
-                            width: placement.sunRadius * 2,
-                            height: placement.sunRadius * 2,
-                            borderRadius: placement.sunRadius,
-                            left: placement.x - placement.sunRadius,
-                            top: placement.y - placement.sunRadius,
-                          },
-                        ]}
-                      />
-                      {placement.showMoon && placement.moon ? (
-                        <View
-                          style={[
-                            styles.compositeMoon,
-                            isTotalCompositeTheme
-                              ? {
-                                  backgroundColor: TOTALITY_MOON_COLOR,
-                                  borderColor: TOTALITY_MOON_BORDER_COLOR,
-                                }
-                              : null,
-                            {
-                              width: placement.moon.radius * 2,
-                              height: placement.moon.radius * 2,
-                              borderRadius: placement.moon.radius,
-                              left: placement.moon.x - placement.moon.radius,
-                              top: placement.moon.y - placement.moon.radius,
-                            },
-                          ]}
-                        />
-                      ) : null}
-                      <View
-                        style={[
-                          styles.compositeShotIndexTag,
-                          {
-                            left: placement.x - 9,
-                            top: placement.y + placement.sunRadius + 3,
-                          },
-                          placement.clamped ? styles.compositeShotIndexTagClamped : null,
-                        ]}
-                      >
-                        <Text style={styles.compositeShotIndexText}>{placement.index}</Text>
-                      </View>
-                      {placement.clamped ? (
-                        <View
-                          style={[
-                            styles.compositeClampIndicator,
-                            {
-                              left: placement.x + placement.sunRadius - 4,
-                              top: placement.y - placement.sunRadius - 4,
-                            },
-                          ]}
-                        />
-                      ) : null}
+                      )}
                     </View>
                   ))}
                 </>
@@ -510,7 +587,8 @@ export default function PhotographyGuideScreen({
               24mm framing simulation with MAX anchored at frame center.
             </Text>
             <Text style={styles.compositeLegendText}>
-              Numbers are shot indices. Amber dots mark edge-clamped shots.
+              Numbers are shot indices. Horizon ticks show compass directions. Amber dots mark
+              edge-clamped shots.
             </Text>
             <Pressable
               style={styles.compositeModalCloseBtn}
@@ -902,6 +980,36 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       borderWidth: 1,
       borderColor: "#7a5222",
       opacity: 0.9,
+    },
+    compositeDirectionTick: {
+      position: "absolute",
+      width: 1,
+      height: 12,
+      backgroundColor: "rgba(255,255,255,0.7)",
+    },
+    compositeDirectionLabel: {
+      position: "absolute",
+      width: 20,
+      textAlign: "center",
+      color: "#ffffff",
+      fontSize: 9,
+      fontWeight: "700",
+      textShadowColor: "rgba(0,0,0,0.4)",
+      textShadowRadius: 2,
+      textShadowOffset: { width: 0, height: 1 },
+    },
+    compositeMarkingsToggleBtn: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      backgroundColor: colors.surfaceMuted,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+    },
+    compositeMarkingsToggleText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "700",
     },
     compositeModal: {
       width: "100%",
