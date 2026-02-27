@@ -9,6 +9,7 @@ export type ParsedSharedMapLink = {
 
 type FetchResponseLike = {
   url?: string;
+  text?: () => Promise<string>;
 };
 
 type FetchLike = (input: string, init?: Record<string, unknown>) => Promise<FetchResponseLike>;
@@ -32,6 +33,15 @@ const GOOGLE_PATH_COORD_RE = new RegExp(
   `@(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})(?:\\s*,|\\s*$)`,
   "i",
 );
+const GOOGLE_PB_COORD_RE = new RegExp(
+  `(?:%21|!)2d(${NUMBER_PART})(?:%21|!)3d(${NUMBER_PART})`,
+  "i",
+);
+
+type ExpandedShortMapUrlResult = {
+  expandedUrl: string;
+  responseText: string | null;
+};
 
 function normalizeHost(hostname: string): string {
   return hostname.trim().replace(/\.+$/, "").toLowerCase();
@@ -137,6 +147,77 @@ function parseSharedMapLinkFromUrl(url: URL, rawUrl: string): ParsedSharedMapLin
   };
 }
 
+function parseGooglePreviewCoordinatesFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  const match = input.match(GOOGLE_PB_COORD_RE);
+  if (!match) return null;
+
+  const [, lonRaw = "", latRaw = ""] = match;
+  const lon = Number(lonRaw);
+  const lat = Number(latRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  return sanitizeCoordinates({ lat, lon });
+}
+
+async function expandShortMapUrlWithResponse(
+  url: string,
+  options: ExpandShortMapUrlOptions = {},
+  readResponseText = true,
+): Promise<ExpandedShortMapUrlResult> {
+  const parsed = parseUrl(url);
+  if (!parsed || !isGoogleShortHost(parsed.hostname)) {
+    return { expandedUrl: url, responseText: null };
+  }
+
+  const fetchImpl =
+    options.fetchImpl ??
+    (typeof fetch === "function" ? (fetch as unknown as FetchLike) : undefined);
+  if (!fetchImpl) {
+    return { expandedUrl: url, responseText: null };
+  }
+
+  const timeoutMs =
+    typeof options.timeoutMs === "number" && Number.isFinite(options.timeoutMs)
+      ? Math.max(1, Math.floor(options.timeoutMs))
+      : DEFAULT_EXPAND_TIMEOUT_MS;
+
+  try {
+    const response = await withTimeout(
+      fetchImpl(parsed.toString(), {
+        method: "GET",
+        redirect: "follow",
+      }),
+      timeoutMs,
+    );
+
+    let responseText: string | null = null;
+    if (readResponseText && typeof response.text === "function") {
+      try {
+        responseText = await withTimeout(Promise.resolve(response.text()), timeoutMs);
+      } catch {
+        responseText = null;
+      }
+    }
+
+    if (typeof response.url === "string" && response.url.trim()) {
+      return {
+        expandedUrl: response.url,
+        responseText,
+      };
+    }
+
+    return {
+      expandedUrl: url,
+      responseText,
+    };
+  } catch {
+    // Fall back to the original short URL on timeout/fetch failure.
+    return { expandedUrl: url, responseText: null };
+  }
+}
+
 export function extractFirstUrl(input: string): string | null {
   const text = input.trim();
   if (!text) return null;
@@ -189,35 +270,8 @@ export async function expandShortMapUrl(
   url: string,
   options: ExpandShortMapUrlOptions = {},
 ): Promise<string> {
-  const parsed = parseUrl(url);
-  if (!parsed || !isGoogleShortHost(parsed.hostname)) return url;
-
-  const fetchImpl =
-    options.fetchImpl ??
-    (typeof fetch === "function" ? (fetch as unknown as FetchLike) : undefined);
-  if (!fetchImpl) return url;
-
-  const timeoutMs =
-    typeof options.timeoutMs === "number" && Number.isFinite(options.timeoutMs)
-      ? Math.max(1, Math.floor(options.timeoutMs))
-      : DEFAULT_EXPAND_TIMEOUT_MS;
-
-  try {
-    const response = await withTimeout(
-      fetchImpl(parsed.toString(), {
-        method: "GET",
-        redirect: "follow",
-      }),
-      timeoutMs,
-    );
-    if (typeof response.url === "string" && response.url.trim()) {
-      return response.url;
-    }
-  } catch {
-    // Fall back to the original short URL on timeout/fetch failure.
-  }
-
-  return url;
+  const result = await expandShortMapUrlWithResponse(url, options, false);
+  return result.expandedUrl;
 }
 
 export function parseSharedMapLink(input: string): ParsedSharedMapLink | null {
@@ -244,11 +298,22 @@ export async function parseSharedMapLinkAsync(
 
   if (!isGoogleShortHost(url.hostname)) return null;
 
-  const expanded = await expandShortMapUrl(extracted, options);
-  if (expanded === extracted) return null;
+  const { expandedUrl, responseText } = await expandShortMapUrlWithResponse(extracted, options);
+  if (expandedUrl !== extracted) {
+    const expandedParsedUrl = parseUrl(expandedUrl);
+    if (!expandedParsedUrl) return null;
 
-  const expandedUrl = parseUrl(expanded);
-  if (!expandedUrl) return null;
+    const parsedExpandedLink = parseSharedMapLinkFromUrl(expandedParsedUrl, extracted);
+    if (parsedExpandedLink) return parsedExpandedLink;
+  }
 
-  return parseSharedMapLinkFromUrl(expandedUrl, extracted);
+  const parsedFromPreviewPayload = parseGooglePreviewCoordinatesFromText(responseText ?? "");
+  if (!parsedFromPreviewPayload) return null;
+
+  return {
+    provider: "google",
+    lat: parsedFromPreviewPayload.lat,
+    lon: parsedFromPreviewPayload.lon,
+    rawUrl: extracted,
+  };
 }

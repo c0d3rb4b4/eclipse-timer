@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.43] — 2026-02-27
+
+### Fixed
+- Fixed shared Google Maps short links (`maps.app.goo.gl`) that expanded to place URLs without direct coordinate query/path params by adding a fallback parser for encoded preview payload coordinates.
+
+### Added
+- Added regression test coverage for short-link parsing when coordinates are only present in Google preview payload data.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.43`.
+
 ## [1.1.42] — 2026-02-27
 
 ### Fixed

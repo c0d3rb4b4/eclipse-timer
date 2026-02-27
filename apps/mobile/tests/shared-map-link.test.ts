@@ -166,6 +166,25 @@ describe("shared map link parser", () => {
       });
     });
 
+    it("parses short links from google preview payload coordinates when url has no coord params", async () => {
+      const fetchImpl = vi.fn(async () => ({
+        url: "https://www.google.com/maps/place/Somewhere",
+        text: async () =>
+          '<a href="/maps/preview/place?pb=%211m3%212d-1.55405635%213d52.276200949999996">Preview</a>',
+      }));
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/RhH3TWEtdqJqRWpw6", {
+        fetchImpl,
+      });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 52.276200949999996,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/RhH3TWEtdqJqRWpw6",
+      });
+    });
+
     it("returns null when expansion cannot produce parseable map coordinates", async () => {
       const fetchImpl = vi.fn(async () => ({
         url: "https://www.google.com/maps/place/Somewhere",
