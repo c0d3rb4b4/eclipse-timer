@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.45] — 2026-02-27
+
+### Fixed
+- Fixed share-intent gating for Android payloads that provide URL-like content via `meta.title` without `text/webUrl` by treating `meta.title` as a valid incoming-share signal and processing it through the existing shared-link intake path.
+- Fixed shared-intent effect dependency coverage so `meta.title` updates trigger intake handling.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.45`.
+
 ## [1.1.44] — 2026-02-27
 
 ### Fixed

@@ -22,7 +22,10 @@ const SHARE_INTENT_DEFAULT_VALUE: ShareIntent = {
 
 function hasShareIntentValue(intent: ShareIntent): boolean {
   return Boolean(
-    intent.text || intent.webUrl || (Array.isArray(intent.files) && intent.files.length > 0),
+    intent.text ||
+      intent.webUrl ||
+      intent.meta?.title ||
+      (Array.isArray(intent.files) && intent.files.length > 0),
   );
 }
 

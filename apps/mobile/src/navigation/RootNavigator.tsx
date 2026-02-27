@@ -944,7 +944,14 @@ export default function RootNavigator() {
       }
       resetShareIntent();
     })();
-  }, [handleIncomingUrl, hasShareIntent, resetShareIntent, shareIntent.text, shareIntent.webUrl]);
+  }, [
+    handleIncomingUrl,
+    hasShareIntent,
+    resetShareIntent,
+    shareIntent.meta?.title,
+    shareIntent.text,
+    shareIntent.webUrl,
+  ]);
 
   if (!catalog) {
     return <StartupLoadingScreen message="Loading eclipse catalog..." colors={colors} />;
