@@ -459,6 +459,21 @@ export async function parseSharedMapLinkAsync(
             console.info("[share.debug] parsed_from_consent_url", parsedFromConsent);
             return parsedFromConsent;
           }
+
+          // Couldn't parse directly, fetch the extracted Maps URL to get coordinates from HTML
+          console.info("[share.debug] consent_url_no_direct_coords_fetching");
+          const extractedMapsText = await fetchMapPageText(actualMapsUrl, options);
+          console.info("[share.debug] extracted_maps_text_length", extractedMapsText?.length ?? 0);
+          const parsedFromExtractedText = parseGoogleCoordinatesFromText(extractedMapsText ?? "");
+          if (parsedFromExtractedText) {
+            console.info("[share.debug] parsed_from_extracted_maps_html", parsedFromExtractedText);
+            return {
+              provider: "google",
+              lat: parsedFromExtractedText.lat,
+              lon: parsedFromExtractedText.lon,
+              rawUrl: extracted,
+            };
+          }
         }
       }
     }
