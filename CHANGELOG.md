@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.48] — 2026-02-27
+
+### Fixed
+- Fixed Google Maps short-link parsing for Android response variants that do not include `pb=%21...2d...3d...` preview tokens by adding fallback extraction from embedded map-state coordinate arrays (for example `[[distance,lon,lat],[0,0,0],[w,h],zoom]`) in fetched HTML payloads.
+
+### Added
+- Added regression test coverage for short-link parsing using the Android-style Google Maps state payload coordinate format.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.48`.
+
 ## [1.1.47] — 2026-02-27
 
 ### Fixed

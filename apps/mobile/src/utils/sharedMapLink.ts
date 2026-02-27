@@ -37,6 +37,10 @@ const GOOGLE_PB_COORD_RE = new RegExp(
   `(?:%21|!)2d(${NUMBER_PART})(?:%21|!)3d(${NUMBER_PART})`,
   "i",
 );
+const GOOGLE_STATE_COORD_RE = new RegExp(
+  `\\[\\[(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\]\\s*,\\s*\\[0\\s*,\\s*0\\s*,\\s*0\\]\\s*,\\s*\\[\\d+\\s*,\\s*\\d+\\]\\s*,\\s*(${NUMBER_PART})\\]`,
+  "i",
+);
 
 type ExpandedShortMapUrlResult = {
   expandedUrl: string;
@@ -159,6 +163,25 @@ function parseGooglePreviewCoordinatesFromText(input: string): { lat: number; lo
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
   return sanitizeCoordinates({ lat, lon });
+}
+
+function parseGoogleStateCoordinatesFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  const match = input.match(GOOGLE_STATE_COORD_RE);
+  if (!match) return null;
+
+  const [, _distanceRaw = "", lonRaw = "", latRaw = "", _zoomRaw = ""] = match;
+  const lon = Number(lonRaw);
+  const lat = Number(latRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+
+  return sanitizeCoordinates({ lat, lon });
+}
+
+function parseGoogleCoordinatesFromText(input: string): { lat: number; lon: number } | null {
+  return parseGooglePreviewCoordinatesFromText(input) ?? parseGoogleStateCoordinatesFromText(input);
 }
 
 async function expandShortMapUrlWithResponse(
@@ -340,10 +363,10 @@ export async function parseSharedMapLinkAsync(
     if (parsedExpandedLink) return parsedExpandedLink;
   }
 
-  let parsedFromPreviewPayload = parseGooglePreviewCoordinatesFromText(responseText ?? "");
+  let parsedFromPreviewPayload = parseGoogleCoordinatesFromText(responseText ?? "");
   if (!parsedFromPreviewPayload && expandedUrl !== extracted) {
     const expandedPageText = await fetchMapPageText(expandedUrl, options);
-    parsedFromPreviewPayload = parseGooglePreviewCoordinatesFromText(expandedPageText ?? "");
+    parsedFromPreviewPayload = parseGoogleCoordinatesFromText(expandedPageText ?? "");
   }
 
   if (!parsedFromPreviewPayload) return null;

@@ -185,6 +185,23 @@ describe("shared map link parser", () => {
       });
     });
 
+    it("parses short links from google state payload coordinates when preview token is absent", async () => {
+      const fetchImpl = vi.fn(async () => ({
+        url: "https://www.google.com/maps/place/Somewhere",
+        text: async () =>
+          '...,"uk",[[19529.54214059542,-1.55405635,52.276200949999996],[0,0,0],[1024,768],13.1],"token"...',
+      }));
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/abc123", { fetchImpl });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 52.276200949999996,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/abc123",
+      });
+    });
+
     it("re-fetches expanded url page when short-link response body is unavailable", async () => {
       const fetchImpl = vi.fn(async (input: string) => {
         if (input === "https://maps.app.goo.gl/abc123") {
