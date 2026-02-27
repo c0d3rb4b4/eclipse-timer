@@ -63,6 +63,10 @@ function isGoogleShortHost(hostname: string): boolean {
   return normalizeHost(hostname) === "maps.app.goo.gl";
 }
 
+function isGoogleConsentHost(hostname: string): boolean {
+  return normalizeHost(hostname) === "consent.google.com";
+}
+
 function providerFromHost(hostname: string): ParsedSharedMapLink["provider"] | null {
   const host = normalizeHost(hostname);
   if (host === "maps.apple.com") return "apple";
@@ -345,6 +349,31 @@ export function isSupportedMapHost(url: URL): boolean {
   return false;
 }
 
+function extractUrlFromGoogleConsent(consentUrl: string): string | null {
+  try {
+    const parsed = new URL(consentUrl);
+    if (!isGoogleConsentHost(parsed.hostname)) return null;
+
+    const continueParam = parsed.searchParams.get("continue");
+    if (!continueParam) return null;
+
+    // Try to decode and validate the continue URL
+    try {
+      const decodedUrl = decodeURIComponent(continueParam);
+      const continueUrlParsed = new URL(decodedUrl);
+      if (isSupportedMapHost(continueUrlParsed)) {
+        return decodedUrl;
+      }
+    } catch {
+      // If continue param isn't a valid URL, return null
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function parseSharedMapCoordinates(url: URL): { lat: number; lon: number } | null {
   if (!isSupportedMapHost(url)) return null;
 
@@ -415,6 +444,23 @@ export async function parseSharedMapLinkAsync(
     if (!expandedParsedUrl) {
       console.info("[share.debug] expanded_url_parse_failed", expandedUrl);
       return null;
+    }
+
+    // Check if we got redirected to a consent page
+    if (isGoogleConsentHost(expandedParsedUrl.hostname)) {
+      console.info("[share.debug] consent_page_detected");
+      const actualMapsUrl = extractUrlFromGoogleConsent(expandedUrl);
+      if (actualMapsUrl) {
+        console.info("[share.debug] extracted_from_consent", actualMapsUrl);
+        const actualParsedUrl = parseUrl(actualMapsUrl);
+        if (actualParsedUrl) {
+          const parsedFromConsent = parseSharedMapLinkFromUrl(actualParsedUrl, extracted);
+          if (parsedFromConsent) {
+            console.info("[share.debug] parsed_from_consent_url", parsedFromConsent);
+            return parsedFromConsent;
+          }
+        }
+      }
     }
 
     const parsedExpandedLink = parseSharedMapLinkFromUrl(expandedParsedUrl, extracted);
