@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.50] — 2026-02-27
+
+### Added
+- Added a new `About` screen in Settings that displays app version/build metadata in the UI (`App Version`, `Build`, `Configured Version`, and `Runtime Version`).
+
+### Fixed
+- Fixed Android app version reporting mismatch by sourcing native `versionName` from `apps/mobile/package.json` in app Gradle config instead of using a hardcoded value.
+
+### Changed
+- Added Settings navigation/linking support for the new `About` route (`settings/about`).
+- Bumped `apps/mobile` version to `1.1.50`.
+
 ## [1.1.49] — 2026-02-27
 
 ### Fixed

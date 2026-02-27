@@ -11,6 +11,7 @@ type SettingsScreenProps = {
   onOpenLocationSettings: () => void;
   onOpenThemeSettings: () => void;
   onOpenHelp: () => void;
+  onOpenAbout: () => void;
 };
 
 type SettingsActionCardProps = {
@@ -43,6 +44,7 @@ export default function SettingsScreen({
   onOpenLocationSettings,
   onOpenThemeSettings,
   onOpenHelp,
+  onOpenAbout,
 }: SettingsScreenProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -79,6 +81,11 @@ export default function SettingsScreen({
           title="Help & FAQ"
           subtitle="Read quick answers, troubleshooting tips, and full docs."
           onPress={onOpenHelp}
+        />
+        <SettingsActionCard
+          title="About"
+          subtitle="View app version and build details."
+          onPress={onOpenAbout}
         />
       </View>
     </SafeAreaView>

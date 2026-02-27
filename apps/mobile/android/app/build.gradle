@@ -1,8 +1,11 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+import groovy.json.JsonSlurper
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def mobilePackageJson = new JsonSlurper().parse(file("../../package.json"))
+def mobileVersionName = (mobilePackageJson.version ?: "1.0.0").toString()
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -120,7 +123,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 3
-        versionName "1.0.0"
+        versionName mobileVersionName
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
         manifestPlaceholders += [GOOGLE_MAPS_ANDROID_API_KEY: googleMapsAndroidApiKey]

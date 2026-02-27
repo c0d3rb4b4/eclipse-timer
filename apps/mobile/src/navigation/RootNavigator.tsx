@@ -43,6 +43,7 @@ import { useLandingEclipses } from "../hooks/useLandingEclipses";
 import { useLandingScroll } from "../hooks/useLandingScroll";
 import { useNotificationScheduler } from "../hooks/useNotificationScheduler";
 import { useTimerState } from "../hooks/useTimerState";
+import AboutScreen from "../screens/AboutScreen";
 import EclipsePreviewScreen, { type PreviewPayload } from "../screens/EclipsePreviewScreen";
 import HelpScreen from "../screens/HelpScreen";
 import LandingScreen from "../screens/LandingScreen";
@@ -79,6 +80,7 @@ type RootStackParamList = {
   Preview: { payload: PreviewPayload };
   PhotographyGuide: { payload: PhotographyGuidePayload };
   Settings: undefined;
+  About: undefined;
   Help: undefined;
   ThemeSettings: undefined;
   NotificationSettings: undefined;
@@ -93,6 +95,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Timer: "timer",
       PhotographyGuide: "photography-guide",
       Settings: "settings",
+      About: "settings/about",
       Help: "settings/help",
       ThemeSettings: "settings/theme",
       NotificationSettings: "notifications",
@@ -192,6 +195,7 @@ function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null 
   if (route === "Timer" || route === "PhotographyGuide") return "Timer";
   if (
     route === "Settings" ||
+    route === "About" ||
     route === "Help" ||
     route === "ThemeSettings" ||
     route === "NotificationSettings" ||
@@ -553,6 +557,7 @@ function SettingsRoute({ navigation, onOpenMenu }: SettingsRouteProps) {
   return (
     <SettingsScreen
       onOpenMenu={onOpenMenu}
+      onOpenAbout={() => navigation.navigate("About")}
       onOpenHelp={() => navigation.navigate("Help")}
       onOpenThemeSettings={() => navigation.navigate("ThemeSettings")}
       onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
@@ -563,6 +568,10 @@ function SettingsRoute({ navigation, onOpenMenu }: SettingsRouteProps) {
 
 function HelpRoute({ onOpenMenu }: RouteWithMenuProps) {
   return <HelpScreen onOpenMenu={onOpenMenu} />;
+}
+
+function AboutRoute({ onOpenMenu }: RouteWithMenuProps) {
+  return <AboutScreen onOpenMenu={onOpenMenu} />;
 }
 
 function ThemeSettingsRoute({ onOpenMenu }: ThemeSettingsRouteProps) {
@@ -1010,6 +1019,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Settings">
             {(props) => <SettingsRoute {...props} onOpenMenu={openMenu} />}
           </Stack.Screen>
+          <Stack.Screen name="About">{() => <AboutRoute onOpenMenu={openMenu} />}</Stack.Screen>
           <Stack.Screen name="Help">{() => <HelpRoute onOpenMenu={openMenu} />}</Stack.Screen>
           <Stack.Screen name="ThemeSettings">
             {(props) => <ThemeSettingsRoute {...props} onOpenMenu={openMenu} />}
