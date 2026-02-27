@@ -410,6 +410,7 @@ function TimerRoute({
     if (!pendingSharedLocation) return;
     if (lastAppliedSharedLocationIdRef.current === pendingSharedLocation.id) return;
 
+    console.info("[share.debug] applying_pending_location", pendingSharedLocation);
     lastAppliedSharedLocationIdRef.current = pendingSharedLocation.id;
     timerState.jumpTo(pendingSharedLocation.lat, pendingSharedLocation.lon, 2);
     timerState.setStatusMessage("Location loaded from shared map link");
@@ -609,6 +610,7 @@ export default function RootNavigator() {
   const { state: appState, hasHydratedPreferences, actions } = useAppState();
   const { colors, resolvedTheme } = useAppTheme();
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentBridge({
+    debug: true,
     resetOnBackground: false,
   });
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
@@ -735,6 +737,7 @@ export default function RootNavigator() {
         id: `shared-location-${sharedLocationSequenceRef.current}`,
       };
 
+      console.info("[share.debug] queue_pending_location", pending);
       setPendingSharedLocation(pending);
       closeMenu();
 
@@ -770,12 +773,15 @@ export default function RootNavigator() {
 
   const handleIncomingUrl = useCallback(
     async (incoming: IncomingExternalLink) => {
+      console.info("[share.debug] handle_incoming", incoming);
       if (!shouldProcessIncomingExternalLink(incoming.value)) {
+        console.info("[share.debug] dropped_duplicate", incoming.value);
         return false;
       }
 
       const action = parseFeaturedEclipseDeepLink(incoming.value);
       if (action) {
+        console.info("[share.debug] featured_deep_link", action);
         if (!navigationRef.isReady()) {
           pendingFeaturedDeepLinkActionRef.current = action;
           return true;
@@ -786,7 +792,12 @@ export default function RootNavigator() {
       }
 
       const sharedMapLink = await parseSharedMapLinkAsync(incoming.value);
-      if (!sharedMapLink) return false;
+      if (!sharedMapLink) {
+        console.info("[share.debug] map_parse_failed", incoming.value);
+        return false;
+      }
+
+      console.info("[share.debug] map_parse_success", sharedMapLink);
 
       queuePendingSharedLocation(sharedMapLink);
       return true;
@@ -932,6 +943,15 @@ export default function RootNavigator() {
       webUrl: shareIntent.webUrl,
       text: shareIntent.text,
       value: shareIntent.meta?.title,
+    });
+    console.info("[share.debug] share_payload", {
+      hasShareIntent,
+      text: shareIntent.text,
+      webUrl: shareIntent.webUrl,
+      title: shareIntent.meta?.title,
+      type: shareIntent.type,
+      fileCount: shareIntent.files?.length ?? 0,
+      normalized: shareIncomingLinks.map((x) => x.value),
     });
     if (!shareIncomingLinks.length) {
       resetShareIntent();

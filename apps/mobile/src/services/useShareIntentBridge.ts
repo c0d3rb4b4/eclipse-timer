@@ -53,6 +53,14 @@ export default function useShareIntentBridge(options: ShareIntentOptions = {}) {
     ],
   );
 
+  const logDebug = useCallback(
+    (...args: unknown[]) => {
+      if (!resolvedOptions.debug) return;
+      console.info("[share.debug]", ...args);
+    },
+    [resolvedOptions.debug],
+  );
+
   const resetShareIntent = useCallback(
     (clearNativeModule = true) => {
       if (resolvedOptions.disabled) return;
@@ -71,6 +79,7 @@ export default function useShareIntentBridge(options: ShareIntentOptions = {}) {
   const refreshShareIntent = useCallback(() => {
     if (resolvedOptions.disabled || !ShareIntentModule) return;
 
+    logDebug("refresh", { platform: Platform.OS, url });
     if (Platform.OS === "android") {
       ShareIntentModule.getShareIntent("");
       return;
@@ -80,7 +89,7 @@ export default function useShareIntentBridge(options: ShareIntentOptions = {}) {
     if (typeof url === "string" && url.includes(`${scheme}://dataUrl=`)) {
       ShareIntentModule.getShareIntent(url);
     }
-  }, [resolvedOptions, url]);
+  }, [logDebug, resolvedOptions, url]);
 
   useEffect(() => {
     if (resolvedOptions.disabled) {
@@ -90,50 +99,61 @@ export default function useShareIntentBridge(options: ShareIntentOptions = {}) {
 
     if (!ShareIntentModule) {
       setIsReady(true);
-      if (resolvedOptions.debug) {
-        console.warn("expo-share-intent module unavailable");
-      }
+      console.warn("[share.debug] expo-share-intent module unavailable");
       return;
     }
 
     const changeSubscription = ShareIntentModule.addListener("onChange", (event) => {
       try {
+        logDebug("onChange_raw", event?.value);
         const parsed = parseShareIntent(
           event.value as string | AndroidShareIntent,
           resolvedOptions,
         );
+        logDebug("onChange_parsed", {
+          text: parsed.text,
+          webUrl: parsed.webUrl,
+          title: parsed.meta?.title,
+          type: parsed.type,
+          fileCount: parsed.files?.length ?? 0,
+        });
         setShareIntent(parsed);
         setError(null);
       } catch {
+        logDebug("onChange_parse_error");
         setError("Cannot parse share intent value!");
       }
     });
 
     const errorSubscription = ShareIntentModule.addListener("onError", (event) => {
+      logDebug("onError", event?.value);
       setError(event?.value ?? "Share intent error");
     });
 
     // Important: refresh after listeners are attached so cold-start payloads are not dropped.
     refreshShareIntent();
+    logDebug("listeners_ready");
     setIsReady(true);
 
     return () => {
       changeSubscription.remove();
       errorSubscription.remove();
     };
-  }, [refreshShareIntent, resolvedOptions]);
+  }, [logDebug, refreshShareIntent, resolvedOptions]);
 
   useEffect(() => {
     if (resolvedOptions.disabled) return;
 
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
+        logDebug("appstate_active_refresh");
         refreshShareIntent();
       } else if (
         resolvedOptions.resetOnBackground !== false &&
         appState.current === "active" &&
         (nextAppState === "inactive" || nextAppState === "background")
       ) {
+        logDebug("appstate_background_reset");
         resetShareIntent();
       }
       appState.current = nextAppState;
@@ -142,7 +162,7 @@ export default function useShareIntentBridge(options: ShareIntentOptions = {}) {
     return () => {
       subscription.remove();
     };
-  }, [refreshShareIntent, resetShareIntent, resolvedOptions]);
+  }, [logDebug, refreshShareIntent, resetShareIntent, resolvedOptions]);
 
   return {
     isReady,

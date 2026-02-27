@@ -3,6 +3,7 @@ import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -10,6 +11,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
+import expo.modules.shareintent.ExpoShareIntentSingleton
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +44,18 @@ class MainActivity : ReactActivity() {
               mainComponentName,
               fabricEnabled
           ){})
+  }
+
+  override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+    if (intent == null) return
+
+    setIntent(intent)
+    if (intent.type != null) {
+      // Keep the latest share intent pending so JS can retrieve it reliably after resume.
+      ExpoShareIntentSingleton.intent = intent
+      ExpoShareIntentSingleton.isPending = true
+    }
   }
 
   /**

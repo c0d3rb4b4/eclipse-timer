@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.46] — 2026-02-27
+
+### Fixed
+- Fixed Android warm-start share-intent persistence by caching incoming `ACTION_SEND` intents in `MainActivity.onNewIntent`, so pending share payloads remain retrievable from JS after app resume.
+
+### Added
+- Added temporary `[share.debug]` instrumentation in share-intake paths (`useShareIntentBridge` + `RootNavigator`) to expose raw/parsed share payloads and map-link parse outcomes in logcat.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.46`.
+
 ## [1.1.45] — 2026-02-27
 
 ### Fixed
