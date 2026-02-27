@@ -1,7 +1,7 @@
 # Location Share Links Plan
 
 Last updated: 2026-02-27  
-Status: Proposed
+Status: In Progress
 
 ## 1. Goal
 
@@ -10,6 +10,40 @@ Add support for incoming shared map links so that:
 1. A shared Google Maps or Apple Maps link is accepted by the app.
 2. The app opens to `Timer`.
 3. The timer map pin is set to the shared location coordinates.
+
+## 1.1 Progress Snapshot (2026-02-27)
+
+Completed:
+
+1. Added `apps/mobile/src/utils/sharedMapLink.ts` with:
+   - host allowlist checks
+   - coordinate parsing for query params + Google `@lat,lon` path token
+   - latitude/longitude normalization via existing map helpers
+   - short-link expansion for `maps.app.goo.gl` with timeout fallback
+2. Added `apps/mobile/tests/shared-map-link.test.ts` covering valid/invalid parsing paths, plus short-link expansion behavior.
+3. Updated `apps/mobile/src/navigation/RootNavigator.tsx` to:
+   - parse incoming map links after featured-eclipse deep-link handling
+   - queue `pendingSharedLocation` payloads
+   - navigate to `Timer`
+   - apply location in `TimerRoute` via `timerState.jumpTo(lat, lon, 2)`
+   - set status message `Location loaded from shared map link`
+   - clear pending payload after consumption
+4. Added duplicate-link guard in `RootNavigator` to reduce cold-start double-processing risk (`getInitialURL` + URL event).
+5. Added `apps/mobile/src/services/shareIntake.ts` and `apps/mobile/tests/share-intake.test.ts` for normalized external-link intake plumbing (linking path implemented; share-target source wiring still pending).
+6. Added `expo-share-intent` integration for Expo SDK 54:
+   - dependency + peer deps in `apps/mobile/package.json`
+   - plugin registration in `apps/mobile/app.json` (configured with `disableAndroid: true`)
+   - `useShareIntent` wiring in `RootNavigator` to forward shared text/web URLs into the same parser + navigation path used by deep links.
+7. Added Android native intent filter for share payload intake in `apps/mobile/android/app/src/main/AndroidManifest.xml` (`ACTION_SEND`, `text/*`) so tracked Android native config does not rely on CNG/plugin mutation.
+8. Added pnpm native patching for `xcode@3.0.1` (`package.json` `pnpm.patchedDependencies` + `patches/xcode@3.0.1.patch`) to avoid known Expo prebuild/share-extension config sync issues.
+
+Validation run so far:
+
+1. `pnpm --filter @eclipse-timer/mobile test`
+2. `pnpm --filter @eclipse-timer/mobile typecheck`
+3. `pnpm --filter @eclipse-timer/mobile lint`
+
+All passing as of this update.
 
 ## 2. Current Baseline
 
@@ -199,6 +233,8 @@ Implementation note: platform integration should be done via a maintained Expo-c
 Exit criteria:
 1. Parser test suite covers all supported URL patterns and rejects invalid cases.
 
+Progress: Completed (including short-link expansion tests).
+
 ### Phase 2: Navigator integration
 
 1. Wire parser into existing URL handling pipeline.
@@ -208,6 +244,8 @@ Exit criteria:
 1. Direct map link opening (where app receives URL) navigates to `Timer` and moves pin.
 2. Existing featured-eclipse links still work.
 
+Progress: Implemented in code. Automated regression tests pass; manual device validation remains.
+
 ### Phase 3: Share-target integration (platform)
 
 1. Integrate share-intake package/plugin for Android + iOS.
@@ -215,6 +253,12 @@ Exit criteria:
 
 Exit criteria:
 1. Share from Google Maps and Apple Maps opens Eclipse Timer and applies location on both platforms.
+
+Progress: In progress.
+1. JS and config integration is implemented (`expo-share-intent` dependency/plugin + `useShareIntent` wiring).
+2. Android native share intent filter is implemented in tracked manifest (`ACTION_SEND` + `text/*`).
+3. Known prebuild hardening applied (`xcode@3.0.1` patch via pnpm patchedDependencies).
+4. Remaining work is platform validation and any native configuration hardening discovered during device/EAS testing.
 
 ### Phase 4: Validation and hardening
 
@@ -225,6 +269,8 @@ Exit criteria:
 Exit criteria:
 1. Manual matrix passes for Android + iOS.
 2. `pnpm --filter @eclipse-timer/mobile test`, `typecheck`, and `lint` pass.
+
+Progress: Automated checks currently passing; manual matrix still pending.
 
 ## 9. Test Plan
 

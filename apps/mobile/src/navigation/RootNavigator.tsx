@@ -24,6 +24,7 @@ import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
+import { useShareIntent } from "expo-share-intent";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -54,12 +55,18 @@ import PhotographyGuideScreen, {
 import SettingsScreen from "../screens/SettingsScreen";
 import ThemeSettingsScreen from "../screens/ThemeSettingsScreen";
 import TimerScreen from "../screens/TimerScreen";
+import {
+  type IncomingExternalLink,
+  normalizeSharePayloadToIncomingLinks,
+  subscribeToIncomingExternalLinks,
+} from "../services/shareIntake";
 import { syncWearPreviewRouteState } from "../services/wearPreviewPublisher";
 import { startWearLiveSync } from "../services/wearSync";
 import { type FavoriteLocation, useAppState } from "../state/appState";
 import { useAppTheme } from "../theme/useAppTheme";
 import { localYmdNow } from "../utils/date";
 import { kindCodeForRecord, kindLabelFromCode } from "../utils/eclipse";
+import { type ParsedSharedMapLink, parseSharedMapLinkAsync } from "../utils/sharedMapLink";
 import FirstRunOnboardingOverlay from "./FirstRunOnboardingOverlay";
 import { ONBOARDING_WALKTHROUGH_STEPS, type OnboardingRouteName } from "./onboardingWalkthrough";
 import SideMenu, { type MenuRouteName } from "./SideMenu";
@@ -104,6 +111,8 @@ type LandingRouteProps = NativeStackScreenProps<RootStackParamList, "Landing"> &
 type TimerRouteProps = NativeStackScreenProps<RootStackParamList, "Timer"> & {
   catalog: EclipseRecord[];
   onOpenMenu: () => void;
+  pendingSharedLocation: PendingSharedLocation | null;
+  onConsumePendingSharedLocation: (id: string) => void;
 };
 
 type PreviewRouteProps = NativeStackScreenProps<RootStackParamList, "Preview"> & {
@@ -196,6 +205,13 @@ function toMenuRouteName(route: keyof RootStackParamList): MenuRouteName | null 
 type FeaturedEclipseDeepLinkAction =
   | { type: "open_timer"; eclipseId: string }
   | { type: "open_preview"; eclipseId: string };
+
+type PendingSharedLocation = ParsedSharedMapLink & {
+  id: string;
+};
+
+const INCOMING_EXTERNAL_LINK_DEDUPE_WINDOW_MS = 5_000;
+const MAX_TRACKED_INCOMING_EXTERNAL_LINKS = 20;
 
 const FEATURED_ECLIPSE_BY_SLUG: Record<string, string> = {
   "2026-total": "2026-08-12T",
@@ -322,9 +338,16 @@ function LandingRoute({ navigation, catalog, onOpenMenu }: LandingRouteProps) {
   );
 }
 
-function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
+function TimerRoute({
+  navigation,
+  catalog,
+  onOpenMenu,
+  pendingSharedLocation,
+  onConsumePendingSharedLocation,
+}: TimerRouteProps) {
   const { state, actions } = useAppState();
   const isFocused = useIsFocused();
+  const lastAppliedSharedLocationIdRef = useRef<string | null>(null);
   const [activeEclipse, setActiveEclipse] = useState<EclipseRecord | null>(null);
   const [isActiveEclipseLoading, setIsActiveEclipseLoading] = useState(false);
   const todayYmd = useMemo(() => localYmdNow(), []);
@@ -382,6 +405,16 @@ function TimerRoute({ navigation, catalog, onOpenMenu }: TimerRouteProps) {
     actions.upsertEclipseReminderAnchor,
     actions.removeEclipseReminderAnchor,
   );
+
+  useEffect(() => {
+    if (!pendingSharedLocation) return;
+    if (lastAppliedSharedLocationIdRef.current === pendingSharedLocation.id) return;
+
+    lastAppliedSharedLocationIdRef.current = pendingSharedLocation.id;
+    timerState.jumpTo(pendingSharedLocation.lat, pendingSharedLocation.lon, 2);
+    timerState.setStatusMessage("Location loaded from shared map link");
+    onConsumePendingSharedLocation(pendingSharedLocation.id);
+  }, [onConsumePendingSharedLocation, pendingSharedLocation, timerState]);
 
   useInAppAlarmEngine({
     isRouteFocused: isFocused,
@@ -575,9 +608,17 @@ function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
 export default function RootNavigator() {
   const { state: appState, hasHydratedPreferences, actions } = useAppState();
   const { colors, resolvedTheme } = useAppTheme();
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({
+    resetOnBackground: false,
+  });
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const pendingFeaturedDeepLinkActionRef = useRef<FeaturedEclipseDeepLinkAction | null>(null);
+  const sharedLocationSequenceRef = useRef(0);
+  const recentIncomingExternalLinksRef = useRef<Array<{ value: string; receivedAtMs: number }>>([]);
   const [catalog, setCatalog] = useState<EclipseRecord[] | null>(null);
+  const [pendingSharedLocation, setPendingSharedLocation] = useState<PendingSharedLocation | null>(
+    null,
+  );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [onboardingStepIndex, setOnboardingStepIndex] = useState(0);
   const [currentRouteName, setCurrentRouteName] = useState<keyof RootStackParamList>("Landing");
@@ -686,29 +727,98 @@ export default function RootNavigator() {
     [activateEclipseById, closeMenu, navigationRef],
   );
 
-  const handleIncomingUrl = useCallback(
-    (url: string) => {
-      const action = parseFeaturedEclipseDeepLink(url);
-      if (!action) return false;
+  const queuePendingSharedLocation = useCallback(
+    (link: ParsedSharedMapLink) => {
+      sharedLocationSequenceRef.current += 1;
+      const pending: PendingSharedLocation = {
+        ...link,
+        id: `shared-location-${sharedLocationSequenceRef.current}`,
+      };
 
-      if (!navigationRef.isReady()) {
-        pendingFeaturedDeepLinkActionRef.current = action;
+      setPendingSharedLocation(pending);
+      closeMenu();
+
+      if (!navigationRef.isReady()) return;
+      navigationRef.navigate("Timer");
+    },
+    [closeMenu, navigationRef],
+  );
+
+  const consumePendingSharedLocation = useCallback((id: string) => {
+    setPendingSharedLocation((current) => (current?.id === id ? null : current));
+  }, []);
+
+  const shouldProcessIncomingExternalLink = useCallback((value: string) => {
+    const nowMs = Date.now();
+    const cutoffMs = nowMs - INCOMING_EXTERNAL_LINK_DEDUPE_WINDOW_MS;
+    const recent = recentIncomingExternalLinksRef.current.filter(
+      (entry) => entry.receivedAtMs >= cutoffMs,
+    );
+    const isDuplicate = recent.some((entry) => entry.value === value);
+    if (isDuplicate) {
+      recentIncomingExternalLinksRef.current = recent;
+      return false;
+    }
+
+    recent.push({ value, receivedAtMs: nowMs });
+    if (recent.length > MAX_TRACKED_INCOMING_EXTERNAL_LINKS) {
+      recent.splice(0, recent.length - MAX_TRACKED_INCOMING_EXTERNAL_LINKS);
+    }
+    recentIncomingExternalLinksRef.current = recent;
+    return true;
+  }, []);
+
+  const handleIncomingUrl = useCallback(
+    async (incoming: IncomingExternalLink) => {
+      if (!shouldProcessIncomingExternalLink(incoming.value)) {
+        return false;
+      }
+
+      const action = parseFeaturedEclipseDeepLink(incoming.value);
+      if (action) {
+        if (!navigationRef.isReady()) {
+          pendingFeaturedDeepLinkActionRef.current = action;
+          return true;
+        }
+
+        runFeaturedDeepLinkAction(action);
         return true;
       }
 
-      runFeaturedDeepLinkAction(action);
+      const sharedMapLink = await parseSharedMapLinkAsync(incoming.value);
+      if (!sharedMapLink) return false;
+
+      queuePendingSharedLocation(sharedMapLink);
       return true;
     },
-    [navigationRef, runFeaturedDeepLinkAction],
+    [
+      navigationRef,
+      queuePendingSharedLocation,
+      runFeaturedDeepLinkAction,
+      shouldProcessIncomingExternalLink,
+    ],
   );
 
   const onNavigationReady = useCallback(() => {
     syncWearPreviewWithRoute();
     const pendingAction = pendingFeaturedDeepLinkActionRef.current;
-    if (!pendingAction) return;
-    pendingFeaturedDeepLinkActionRef.current = null;
-    runFeaturedDeepLinkAction(pendingAction);
-  }, [runFeaturedDeepLinkAction, syncWearPreviewWithRoute]);
+    if (pendingAction) {
+      pendingFeaturedDeepLinkActionRef.current = null;
+      runFeaturedDeepLinkAction(pendingAction);
+      return;
+    }
+
+    if (pendingSharedLocation) {
+      closeMenu();
+      navigationRef.navigate("Timer");
+    }
+  }, [
+    closeMenu,
+    navigationRef,
+    pendingSharedLocation,
+    runFeaturedDeepLinkAction,
+    syncWearPreviewWithRoute,
+  ]);
 
   const onNavigateFromMenu = useCallback(
     (route: MenuRouteName) => {
@@ -807,23 +917,33 @@ export default function RootNavigator() {
   }, []);
 
   useEffect(() => {
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      handleIncomingUrl(url);
-    });
-
-    void Linking.getInitialURL()
-      .then((url) => {
-        if (!url) return;
-        handleIncomingUrl(url);
-      })
-      .catch(() => {
-        // Ignore URL parsing failures and allow default linking behavior.
-      });
-
-    return () => {
-      subscription.remove();
-    };
+    return subscribeToIncomingExternalLinks(
+      (incoming) => {
+        void handleIncomingUrl(incoming);
+      },
+      { linking: Linking },
+    );
   }, [handleIncomingUrl]);
+
+  useEffect(() => {
+    if (!hasShareIntent) return;
+
+    const shareIncomingLinks = normalizeSharePayloadToIncomingLinks({
+      webUrl: shareIntent.webUrl,
+      text: shareIntent.text,
+    });
+    if (!shareIncomingLinks.length) {
+      resetShareIntent();
+      return;
+    }
+
+    void (async () => {
+      for (const incoming of shareIncomingLinks) {
+        await handleIncomingUrl(incoming);
+      }
+      resetShareIntent();
+    })();
+  }, [handleIncomingUrl, hasShareIntent, resetShareIntent, shareIntent.text, shareIntent.webUrl]);
 
   if (!catalog) {
     return <StartupLoadingScreen message="Loading eclipse catalog..." colors={colors} />;
@@ -843,7 +963,15 @@ export default function RootNavigator() {
             {(props) => <LandingRoute {...props} catalog={catalog} onOpenMenu={openMenu} />}
           </Stack.Screen>
           <Stack.Screen name="Timer">
-            {(props) => <TimerRoute {...props} catalog={catalog} onOpenMenu={openMenu} />}
+            {(props) => (
+              <TimerRoute
+                {...props}
+                catalog={catalog}
+                onOpenMenu={openMenu}
+                pendingSharedLocation={pendingSharedLocation}
+                onConsumePendingSharedLocation={consumePendingSharedLocation}
+              />
+            )}
           </Stack.Screen>
           <Stack.Screen name="Preview">
             {(props) => <PreviewRoute {...props} onOpenMenu={openMenu} />}

@@ -17,8 +17,8 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.9",
     "@biomejs/biome": "^2.3.15",
+    "@vitest/coverage-v8": "^2.1.9",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "typescript": "^5.4.0",
@@ -28,5 +28,10 @@
     "*.{ts,tsx,js,jsx,json,css,md}": [
       "biome check --write --no-errors-on-unmatched"
     ]
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "xcode@3.0.1": "patches/xcode@3.0.1.patch"
+    }
   }
 }

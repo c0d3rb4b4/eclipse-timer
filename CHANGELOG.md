@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.41] — 2026-02-27
+
+### Added
+- Added shared map-link parsing support for Apple Maps and Google Maps links, including coordinate extraction from query params and Google `@lat,lon` path tokens.
+- Added short-link redirect expansion support for `maps.app.goo.gl` with timeout-safe fallback behavior.
+- Added shared-link intake utilities and tests to normalize incoming linking/share payloads and keep parsing behavior deterministic.
+- Added Android `ACTION_SEND` (`text/*`) intent filter to accept shared text/map URLs in the tracked native manifest.
+
+### Changed
+- Integrated incoming map-link handling into `RootNavigator` so supported links navigate to `Timer`, jump the pin to parsed coordinates, and show `Location loaded from shared map link`.
+- Added shared-link dedupe guarding to avoid duplicate processing during cold-start intake (`getInitialURL` + runtime URL events).
+- Added `expo-share-intent` integration and wiring so share-target payloads feed the same parser/navigation pipeline as deep links.
+- Added pnpm `patchedDependencies` entry and `xcode@3.0.1` patch hardening to avoid known share-extension config-sync failures during native config generation.
+- Bumped `apps/mobile` version to `1.1.41`.
+
 ## [1.1.40] — 2026-02-27
 
 ### Fixed

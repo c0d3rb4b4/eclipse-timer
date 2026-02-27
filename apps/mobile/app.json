@@ -84,6 +84,12 @@
     "plugins": [
       "expo-notifications",
       [
+        "expo-share-intent",
+        {
+          "disableAndroid": true
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Eclipse Timer to access your location to compute eclipse timings."
