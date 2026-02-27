@@ -49,6 +49,22 @@ const GOOGLE_STATICMAP_CENTER_RE = new RegExp(
   `center=(${NUMBER_PART})(?:%2c|%2C|,)(${NUMBER_PART})`,
   "i",
 );
+// JSON field patterns from HTML (e.g., "lat":52.28..."lng":-1.53)
+const GOOGLE_JSON_LAT_LNG_RE = new RegExp(
+  `"lat"\\s*:\\s*(${NUMBER_PART})[^]{0,200}?"lng"\\s*:\\s*(${NUMBER_PART})`,
+  "i",
+);
+const GOOGLE_JSON_LNG_LAT_RE = new RegExp(
+  `"lng"\\s*:\\s*(${NUMBER_PART})[^]{0,200}?"lat"\\s*:\\s*(${NUMBER_PART})`,
+  "i",
+);
+// Decimal pair pattern - requires 4+ decimals to avoid noise (e.g., 52.2814,-1.5345)
+const GOOGLE_DECIMAL_PAIR_RE = /(?<lat>-?\d{1,2}\.\d{4,})\s*,\s*(?<lon>-?\d{1,3}\.\d{4,})/g;
+// Center array pattern (e.g., "center":[52.28,-1.53])
+const GOOGLE_CENTER_ARRAY_RE = new RegExp(
+  `"center"\\s*:\\s*\\[\\s*(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\s*\\]`,
+  "i",
+);
 
 type ExpandedShortMapUrlResult = {
   expandedUrl: string;
@@ -244,11 +260,91 @@ function parseGoogleStaticMapCenterFromText(input: string): { lat: number; lon: 
   return sanitizeCoordinates({ lat, lon });
 }
 
+function parseGoogleJsonLatLngFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  const match = input.match(GOOGLE_JSON_LAT_LNG_RE);
+  if (!match) return null;
+
+  const [, latRaw = "", lngRaw = ""] = match;
+  const lat = Number(latRaw);
+  const lon = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  // Reject super "round" tiny values that are common noise in arrays
+  if (Math.abs(lat) <= 2 && Math.abs(lon) <= 2) return null;
+
+  return sanitizeCoordinates({ lat, lon });
+}
+
+function parseGoogleJsonLngLatFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  const match = input.match(GOOGLE_JSON_LNG_LAT_RE);
+  if (!match) return null;
+
+  const [, lngRaw = "", latRaw = ""] = match;
+  const lat = Number(latRaw);
+  const lon = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (Math.abs(lat) <= 2 && Math.abs(lon) <= 2) return null;
+
+  return sanitizeCoordinates({ lat, lon });
+}
+
+function parseGoogleCenterArrayFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  const match = input.match(GOOGLE_CENTER_ARRAY_RE);
+  if (!match) return null;
+
+  const [, latRaw = "", lonRaw = ""] = match;
+  const lat = Number(latRaw);
+  const lon = Number(lonRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (Math.abs(lat) <= 2 && Math.abs(lon) <= 2) return null;
+
+  return sanitizeCoordinates({ lat, lon });
+}
+
+function parseGoogleDecimalPairFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  // Scan for decimal pairs with 4+ decimal places
+  const regex = new RegExp(GOOGLE_DECIMAL_PAIR_RE);
+  let match = regex.exec(input);
+  while (match !== null) {
+    const groups = match.groups as { lat?: string; lon?: string } | undefined;
+    if (groups?.lat && groups?.lon) {
+      const lat = Number(groups.lat);
+      const lon = Number(groups.lon);
+      if (
+        Number.isFinite(lat) &&
+        Number.isFinite(lon) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lon) <= 180 &&
+        !(Math.abs(lat) <= 2 && Math.abs(lon) <= 2)
+      ) {
+        return sanitizeCoordinates({ lat, lon });
+      }
+    }
+    match = regex.exec(input);
+  }
+
+  return null;
+}
+
 function parseGoogleCoordinatesFromText(input: string): { lat: number; lon: number } | null {
   return (
     parseGooglePreviewCoordinatesFromText(input) ??
     parseGoogleStateCoordinatesFromText(input) ??
-    parseGoogleStaticMapCenterFromText(input)
+    parseGoogleStaticMapCenterFromText(input) ??
+    parseGoogleJsonLatLngFromText(input) ??
+    parseGoogleJsonLngLatFromText(input) ??
+    parseGoogleCenterArrayFromText(input) ??
+    parseGoogleDecimalPairFromText(input)
   );
 }
 
@@ -385,10 +481,15 @@ async function fetchMapPageText(
                 timeoutMs,
               );
               console.info("[share.debug] fetch_simplified_result_length", simpleText?.length ?? 0);
-              // Check if we still hit consent
-              const simpleUrl =
-                typeof simpleResponse.url === "string" ? parseUrl(simpleResponse.url) : null;
-              if (simpleUrl && !isGoogleConsentHost(simpleUrl.hostname)) {
+              // Return the simplified HTML even if it still hit consent - let parsing try
+              if (simpleText) {
+                const simpleUrl =
+                  typeof simpleResponse.url === "string" ? parseUrl(simpleResponse.url) : null;
+                if (simpleUrl && !isGoogleConsentHost(simpleUrl.hostname)) {
+                  console.info("[share.debug] fetch_simplified_success_no_consent");
+                } else {
+                  console.info("[share.debug] fetch_simplified_still_consent_but_returning_html");
+                }
                 return simpleText;
               }
             }
