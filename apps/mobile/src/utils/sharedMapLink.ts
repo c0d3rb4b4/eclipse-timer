@@ -313,9 +313,9 @@ function parseGoogleDecimalPairFromText(input: string): { lat: number; lon: numb
   if (!input) return null;
 
   // Scan for decimal pairs with 4+ decimal places
-  const regex = new RegExp(GOOGLE_DECIMAL_PAIR_RE);
-  let match = regex.exec(input);
-  while (match !== null) {
+  // Use matchAll to properly iterate with the global flag
+  const matches = input.matchAll(GOOGLE_DECIMAL_PAIR_RE);
+  for (const match of matches) {
     const groups = match.groups as { lat?: string; lon?: string } | undefined;
     if (groups?.lat && groups?.lon) {
       const lat = Number(groups.lat);
@@ -330,7 +330,6 @@ function parseGoogleDecimalPairFromText(input: string): { lat: number; lon: numb
         return sanitizeCoordinates({ lat, lon });
       }
     }
-    match = regex.exec(input);
   }
 
   return null;
