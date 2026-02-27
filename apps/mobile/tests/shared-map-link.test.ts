@@ -185,6 +185,36 @@ describe("shared map link parser", () => {
       });
     });
 
+    it("re-fetches expanded url page when short-link response body is unavailable", async () => {
+      const fetchImpl = vi.fn(async (input: string) => {
+        if (input === "https://maps.app.goo.gl/abc123") {
+          return {
+            url: "https://www.google.com/maps/place/Somewhere",
+          };
+        }
+
+        if (input === "https://www.google.com/maps/place/Somewhere") {
+          return {
+            url: input,
+            text: async () =>
+              '<a href="/maps/preview/place?pb=%211m3%212d-1.55405635%213d52.276200949999996">Preview</a>',
+          };
+        }
+
+        return { url: input };
+      });
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/abc123", { fetchImpl });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 52.276200949999996,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/abc123",
+      });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
     it("returns null when expansion cannot produce parseable map coordinates", async () => {
       const fetchImpl = vi.fn(async () => ({
         url: "https://www.google.com/maps/place/Somewhere",

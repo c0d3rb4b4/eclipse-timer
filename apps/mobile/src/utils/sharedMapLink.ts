@@ -218,6 +218,39 @@ async function expandShortMapUrlWithResponse(
   }
 }
 
+async function fetchMapPageText(
+  url: string,
+  options: ExpandShortMapUrlOptions = {},
+): Promise<string | null> {
+  const parsed = parseUrl(url);
+  if (!parsed || !isSupportedMapHost(parsed)) return null;
+
+  const fetchImpl =
+    options.fetchImpl ??
+    (typeof fetch === "function" ? (fetch as unknown as FetchLike) : undefined);
+  if (!fetchImpl) return null;
+
+  const timeoutMs =
+    typeof options.timeoutMs === "number" && Number.isFinite(options.timeoutMs)
+      ? Math.max(1, Math.floor(options.timeoutMs))
+      : DEFAULT_EXPAND_TIMEOUT_MS;
+
+  try {
+    const response = await withTimeout(
+      fetchImpl(parsed.toString(), {
+        method: "GET",
+        redirect: "follow",
+      }),
+      timeoutMs,
+    );
+
+    if (typeof response.text !== "function") return null;
+    return await withTimeout(Promise.resolve(response.text()), timeoutMs);
+  } catch {
+    return null;
+  }
+}
+
 export function extractFirstUrl(input: string): string | null {
   const text = input.trim();
   if (!text) return null;
@@ -307,7 +340,12 @@ export async function parseSharedMapLinkAsync(
     if (parsedExpandedLink) return parsedExpandedLink;
   }
 
-  const parsedFromPreviewPayload = parseGooglePreviewCoordinatesFromText(responseText ?? "");
+  let parsedFromPreviewPayload = parseGooglePreviewCoordinatesFromText(responseText ?? "");
+  if (!parsedFromPreviewPayload && expandedUrl !== extracted) {
+    const expandedPageText = await fetchMapPageText(expandedUrl, options);
+    parsedFromPreviewPayload = parseGooglePreviewCoordinatesFromText(expandedPageText ?? "");
+  }
+
   if (!parsedFromPreviewPayload) return null;
 
   return {
