@@ -1,0 +1,201 @@
+name: Develop APK Dev Release
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: develop-apk-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_release:
+    name: Build APK + Create Dev Release
+    runs-on: [self-hosted, macOS, eclipse-timer]
+    permissions:
+      contents: write
+    env:
+      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
+      SENTRY_DISABLE_XCODE_DEBUG_UPLOAD: "true"
+      SENTRY_ALLOW_FAILURE: "true"
+      SENTRY_CLI_EXECUTABLE: "/usr/bin/true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Android SDK tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+
+          sdk_root=""
+          for candidate in \
+            "${ANDROID_SDK_ROOT:-}" \
+            "${ANDROID_HOME:-}" \
+            "$HOME/Library/Android/sdk" \
+            "$HOME/Android/Sdk" \
+            "/usr/local/share/android-sdk" \
+            "/opt/homebrew/share/android-sdk"
+          do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              sdk_root="$candidate"
+              break
+            fi
+          done
+
+          if [ ! -d "$sdk_root" ]; then
+            echo "Android SDK directory not found."
+            echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
+            exit 1
+          fi
+
+          missing_packages=()
+          [ -d "$sdk_root/platform-tools" ] || missing_packages+=("platform-tools")
+          [ -d "$sdk_root/platforms/android-36" ] || missing_packages+=("platforms;android-36")
+          [ -d "$sdk_root/build-tools/36.0.0" ] || missing_packages+=("build-tools;36.0.0")
+          [ -d "$sdk_root/ndk/27.1.12297006" ] || missing_packages+=("ndk;27.1.12297006")
+
+          if [ "${#missing_packages[@]}" -eq 0 ]; then
+            echo "All required Android SDK packages are already installed in $sdk_root."
+            exit 0
+          fi
+
+          echo "Installing missing Android SDK packages: ${missing_packages[*]}"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "${missing_packages[@]}"
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Validate Google Maps Android key
+        run: |
+          if [ -z "$GOOGLE_MAPS_ANDROID_API_KEY" ]; then
+            echo "Missing GOOGLE_MAPS_ANDROID_API_KEY GitHub secret."
+            echo "Add it in: Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Build Android APK
+        working-directory: apps/mobile
+        env:
+          EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts/raw
+        run: |
+          set -euo pipefail
+
+          sdk_root=""
+          for candidate in \
+            "${ANDROID_SDK_ROOT:-}" \
+            "${ANDROID_HOME:-}" \
+            "$HOME/Library/Android/sdk" \
+            "$HOME/Android/Sdk" \
+            "/usr/local/share/android-sdk" \
+            "/opt/homebrew/share/android-sdk"
+          do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              sdk_root="$candidate"
+              break
+            fi
+          done
+
+          if [ ! -d "$sdk_root" ]; then
+            echo "Android SDK directory not found."
+            echo "Install Android SDK on the runner or set ANDROID_SDK_ROOT/ANDROID_HOME."
+            exit 1
+          fi
+
+          export ANDROID_SDK_ROOT="$sdk_root"
+          export ANDROID_HOME="$sdk_root"
+          escaped_sdk_root="${sdk_root// /\\ }"
+          printf 'sdk.dir=%s\n' "$escaped_sdk_root" > android/local.properties
+          echo "Using Android SDK at $sdk_root"
+
+          pnpm exec eas build --profile production-apk --platform android --local --non-interactive
+
+      - name: Prepare dev release metadata
+        id: release_meta
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts/release
+          version="$(node -p "JSON.parse(require('fs').readFileSync('apps/mobile/package.json', 'utf8')).version")"
+          short_sha="${GITHUB_SHA::7}"
+          run_id="${GITHUB_RUN_ID}"
+          run_attempt="${GITHUB_RUN_ATTEMPT}"
+
+          apk_source="$(find artifacts/raw -type f -name '*.apk' | grep -iv 'wear' | head -n 1 || true)"
+          if [ -z "$apk_source" ]; then
+            apk_source="$(find artifacts/raw -type f -name '*.apk' | head -n 1 || true)"
+          fi
+
+          if [ -z "$apk_source" ]; then
+            echo "Missing Android APK artifact in artifacts/raw."
+            exit 1
+          fi
+
+          tag_name="dev-v${version}-r${run_id}-a${run_attempt}-${short_sha}"
+          release_name="Eclipse Timer Dev v${version} (run ${run_id}.${run_attempt}, ${short_sha})"
+          apk_asset_name="eclipse-timer-dev-v${version}-${short_sha}.apk"
+          apk_target="artifacts/release/${apk_asset_name}"
+          notes_file="artifacts/release/dev-release-notes.md"
+
+          cp "$apk_source" "$apk_target"
+
+          {
+            echo "Automated develop APK build."
+            echo ""
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Version: \`${version}\`"
+          } > "$notes_file"
+
+          {
+            echo "tag_name=${tag_name}"
+            echo "release_name=${release_name}"
+            echo "apk_path=${apk_target}"
+            echo "notes_path=${notes_file}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: develop-apk-${{ github.run_id }}
+          path: ${{ steps.release_meta.outputs.apk_path }}
+          if-no-files-found: error
+
+      - name: Create GitHub dev release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: ${{ steps.release_meta.outputs.release_name }}
+          body_path: ${{ steps.release_meta.outputs.notes_path }}
+          prerelease: true
+          generate_release_notes: false
+          files: ${{ steps.release_meta.outputs.apk_path }}

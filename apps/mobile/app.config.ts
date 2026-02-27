@@ -6,9 +6,9 @@ const pkg = require("./package.json") as { version?: string };
 const googleMapsAndroidApiKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim();
 const packageVersion = pkg.version;
 
-if (typeof packageVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(packageVersion)) {
+if (typeof packageVersion !== "string" || !/^\d+\.\d+\.\d+(?:-SNAPSHOT)?$/.test(packageVersion)) {
   throw new Error(
-    `[app.config] apps/mobile/package.json version must be x.y.z. Found: ${JSON.stringify(packageVersion)}`,
+    `[app.config] apps/mobile/package.json version must be x.y.z or x.y.z-SNAPSHOT. Found: ${JSON.stringify(packageVersion)}`,
   );
 }
 
