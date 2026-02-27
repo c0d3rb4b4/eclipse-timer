@@ -67,6 +67,35 @@ function isGoogleConsentHost(hostname: string): boolean {
   return normalizeHost(hostname) === "consent.google.com";
 }
 
+function extractPlaceIdFromDataParam(dataParam: string): string | null {
+  // Extract place ID from Google Maps data parameter
+  // Format: data=!4m2!3m1!1s<PLACE_ID>!...
+  const match = dataParam.match(/!1s([0-9a-fx:]+)/i);
+  return match?.[1] ?? null;
+}
+
+function simplifyGoogleMapsUrl(mapsUrl: string): string | null {
+  try {
+    const parsed = new URL(mapsUrl);
+    if (!parsed.hostname.includes("google.com")) return null;
+
+    // Try to extract place ID from data parameter
+    const dataParam = parsed.pathname.match(/\/data=([^/]+)/)?.[1];
+    if (dataParam) {
+      const placeId = extractPlaceIdFromDataParam(decodeURIComponent(dataParam));
+      if (placeId) {
+        // Construct minimal URL with just place ID
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeId)}&query_place_id=${encodeURIComponent(placeId)}`;
+      }
+    }
+
+    // Fallback: strip query params and keep just the path
+    return `https://www.google.com${parsed.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
 function providerFromHost(hostname: string): ParsedSharedMapLink["provider"] | null {
   const host = normalizeHost(hostname);
   if (host === "maps.apple.com") return "apple";
@@ -324,15 +353,49 @@ async function fetchMapPageText(
 
     // Check if we got redirected to a consent page
     const responseUrl = typeof response.url === "string" ? parseUrl(response.url) : null;
-    if (responseUrl && isGoogleConsentHost(responseUrl.hostname) && maxConsentRedirects > 0) {
+    if (responseUrl && isGoogleConsentHost(responseUrl.hostname)) {
       console.info("[share.debug] fetch_hit_consent_page", { url, responseUrl: response.url });
-      // Extract the real Maps URL from the consent page
-      const extractedUrl =
-        typeof response.url === "string" ? extractUrlFromGoogleConsent(response.url) : null;
-      if (extractedUrl) {
-        console.info("[share.debug] fetch_extracted_from_consent", extractedUrl);
-        // Recursively fetch the extracted URL, but limit redirects to prevent infinite loops
-        return await fetchMapPageText(extractedUrl, options, maxConsentRedirects - 1);
+
+      if (maxConsentRedirects > 0) {
+        // Extract the real Maps URL from the consent page
+        const extractedUrl =
+          typeof response.url === "string" ? extractUrlFromGoogleConsent(response.url) : null;
+        if (extractedUrl) {
+          console.info("[share.debug] fetch_extracted_from_consent", extractedUrl);
+          // Recursively fetch the extracted URL, but limit redirects to prevent infinite loops
+          return await fetchMapPageText(extractedUrl, options, maxConsentRedirects - 1);
+        }
+      } else {
+        // Out of retries, try one last thing: simplify the URL
+        console.info("[share.debug] fetch_consent_retries_exhausted_trying_simplified");
+        const simplifiedUrl = simplifyGoogleMapsUrl(url);
+        if (simplifiedUrl && simplifiedUrl !== url) {
+          console.info("[share.debug] fetch_trying_simplified_url", simplifiedUrl);
+          try {
+            const simpleResponse = await withTimeout(
+              fetchImpl(simplifiedUrl, {
+                method: "GET",
+                redirect: "follow",
+              }),
+              timeoutMs,
+            );
+            if (typeof simpleResponse.text === "function") {
+              const simpleText = await withTimeout(
+                Promise.resolve(simpleResponse.text()),
+                timeoutMs,
+              );
+              console.info("[share.debug] fetch_simplified_result_length", simpleText?.length ?? 0);
+              // Check if we still hit consent
+              const simpleUrl =
+                typeof simpleResponse.url === "string" ? parseUrl(simpleResponse.url) : null;
+              if (simpleUrl && !isGoogleConsentHost(simpleUrl.hostname)) {
+                return simpleText;
+              }
+            }
+          } catch (err) {
+            console.info("[share.debug] fetch_simplified_failed", err);
+          }
+        }
       }
     }
 
@@ -379,7 +442,20 @@ function extractUrlFromGoogleConsent(consentUrl: string): string | null {
       const decodedUrl = decodeURIComponent(continueParam);
       const continueUrlParsed = new URL(decodedUrl);
       if (isSupportedMapHost(continueUrlParsed)) {
-        return decodedUrl;
+        // Strip tracking parameters that might trigger consent loops
+        const paramsToRemove = [
+          "utm_source",
+          "utm_medium",
+          "utm_campaign",
+          "entry",
+          "coh",
+          "g_ep",
+          "skid",
+        ];
+        for (const param of paramsToRemove) {
+          continueUrlParsed.searchParams.delete(param);
+        }
+        return continueUrlParsed.toString();
       }
     } catch {
       // If continue param isn't a valid URL, return null
