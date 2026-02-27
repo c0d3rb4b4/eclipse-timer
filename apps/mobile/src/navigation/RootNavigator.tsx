@@ -24,7 +24,6 @@ import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
-import { useShareIntent } from "expo-share-intent";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -60,6 +59,7 @@ import {
   normalizeSharePayloadToIncomingLinks,
   subscribeToIncomingExternalLinks,
 } from "../services/shareIntake";
+import useShareIntentBridge from "../services/useShareIntentBridge";
 import { syncWearPreviewRouteState } from "../services/wearPreviewPublisher";
 import { startWearLiveSync } from "../services/wearSync";
 import { type FavoriteLocation, useAppState } from "../state/appState";
@@ -608,7 +608,7 @@ function LocationSettingsRoute({ onOpenMenu }: RouteWithMenuProps) {
 export default function RootNavigator() {
   const { state: appState, hasHydratedPreferences, actions } = useAppState();
   const { colors, resolvedTheme } = useAppTheme();
-  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentBridge({
     resetOnBackground: false,
   });
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
@@ -931,6 +931,7 @@ export default function RootNavigator() {
     const shareIncomingLinks = normalizeSharePayloadToIncomingLinks({
       webUrl: shareIntent.webUrl,
       text: shareIntent.text,
+      value: shareIntent.meta?.title,
     });
     if (!shareIncomingLinks.length) {
       resetShareIntent();

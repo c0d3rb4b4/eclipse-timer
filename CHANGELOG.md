@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.44] — 2026-02-27
+
+### Fixed
+- Fixed Android shared-link cold-start intake timing by replacing direct `useShareIntent` usage with a local bridge hook that attaches native listeners before requesting pending share-intent payloads.
+- Fixed potential dropped first-share behavior after launching from Google Maps share sheet by processing native intent refresh only after listener registration.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.44`.
+
 ## [1.1.43] — 2026-02-27
 
 ### Fixed
