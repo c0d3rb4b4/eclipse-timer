@@ -202,6 +202,40 @@ describe("shared map link parser", () => {
       });
     });
 
+    it("parses short links from relaxed google state payload format", async () => {
+      const fetchImpl = vi.fn(async () => ({
+        url: "https://www.google.com/maps/place/Somewhere",
+        text: async () =>
+          "window.CONFIG=[...,[[19529.54214059542,-1.55405635,52.276200949999996],[1,2,3],[412.5,915.75],13.1],...];",
+      }));
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/abc123", { fetchImpl });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 52.276200949999996,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/abc123",
+      });
+    });
+
+    it("parses short links from staticmap center metadata when pb/state payloads are absent", async () => {
+      const fetchImpl = vi.fn(async () => ({
+        url: "https://www.google.com/maps/place/Somewhere",
+        text: async () =>
+          '<meta content="https://maps.google.com/maps/api/staticmap?center=52.27620095%2C-1.55405635&amp;zoom=14" property="og:image">',
+      }));
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/abc123", { fetchImpl });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 52.27620095,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/abc123",
+      });
+    });
+
     it("re-fetches expanded url page when short-link response body is unavailable", async () => {
       const fetchImpl = vi.fn(async (input: string) => {
         if (input === "https://maps.app.goo.gl/abc123") {
@@ -226,6 +260,32 @@ describe("shared map link parser", () => {
       expect(parsed).toEqual({
         provider: "google",
         lat: 52.276200949999996,
+        lon: -1.55405635,
+        rawUrl: "https://maps.app.goo.gl/abc123",
+      });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("re-fetches short url page when expanded url is unavailable and first body is empty", async () => {
+      const fetchImpl = vi.fn(async (input: string) => {
+        if (input === "https://maps.app.goo.gl/abc123" && fetchImpl.mock.calls.length === 1) {
+          return {
+            url: input,
+          };
+        }
+
+        return {
+          url: input,
+          text: async () =>
+            '<meta content="https://maps.google.com/maps/api/staticmap?center=52.27620095%2C-1.55405635&amp;zoom=14" property="og:image">',
+        };
+      });
+
+      const parsed = await parseSharedMapLinkAsync("https://maps.app.goo.gl/abc123", { fetchImpl });
+
+      expect(parsed).toEqual({
+        provider: "google",
+        lat: 52.27620095,
         lon: -1.55405635,
         rawUrl: "https://maps.app.goo.gl/abc123",
       });

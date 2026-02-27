@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.49] — 2026-02-27
+
+### Fixed
+- Fixed remaining Google Maps short-link parse failures on Android by broadening coordinate extraction fallbacks to handle additional `window.CONFIG` state-array variants and static-map metadata (`center=lat,lon`) when preview `pb` tokens are missing.
+- Fixed short-link fallback fetch behavior by re-attempting page-content extraction even when URL expansion does not change the original short URL.
+
+### Added
+- Added regression tests for relaxed Google state-array parsing, static-map metadata coordinate extraction, and short-link re-fetch fallback when the first response body is empty.
+
+### Changed
+- Bumped `apps/mobile` version to `1.1.49`.
+
 ## [1.1.48] — 2026-02-27
 
 ### Fixed

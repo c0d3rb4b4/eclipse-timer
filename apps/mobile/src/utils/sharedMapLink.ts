@@ -41,6 +41,14 @@ const GOOGLE_STATE_COORD_RE = new RegExp(
   `\\[\\[(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\]\\s*,\\s*\\[0\\s*,\\s*0\\s*,\\s*0\\]\\s*,\\s*\\[\\d+\\s*,\\s*\\d+\\]\\s*,\\s*(${NUMBER_PART})\\]`,
   "i",
 );
+const GOOGLE_STATE_COORD_FALLBACK_RE = new RegExp(
+  `\\[\\[\\s*(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\s*,\\s*(${NUMBER_PART})\\s*\\]\\s*,\\s*\\[[^\\]]{1,80}\\]\\s*,\\s*\\[[^\\]]{1,80}\\]\\s*,\\s*(${NUMBER_PART})\\s*\\]`,
+  "i",
+);
+const GOOGLE_STATICMAP_CENTER_RE = new RegExp(
+  `center=(${NUMBER_PART})(?:%2c|%2C|,)(${NUMBER_PART})`,
+  "i",
+);
 
 type ExpandedShortMapUrlResult = {
   expandedUrl: string;
@@ -154,7 +162,15 @@ function parseSharedMapLinkFromUrl(url: URL, rawUrl: string): ParsedSharedMapLin
 function parseGooglePreviewCoordinatesFromText(input: string): { lat: number; lon: number } | null {
   if (!input) return null;
 
-  const match = input.match(GOOGLE_PB_COORD_RE);
+  const match =
+    input.match(GOOGLE_PB_COORD_RE) ??
+    (() => {
+      try {
+        return decodeURIComponent(input).match(GOOGLE_PB_COORD_RE);
+      } catch {
+        return null;
+      }
+    })();
   if (!match) return null;
 
   const [, lonRaw = "", latRaw = ""] = match;
@@ -168,7 +184,7 @@ function parseGooglePreviewCoordinatesFromText(input: string): { lat: number; lo
 function parseGoogleStateCoordinatesFromText(input: string): { lat: number; lon: number } | null {
   if (!input) return null;
 
-  const match = input.match(GOOGLE_STATE_COORD_RE);
+  const match = input.match(GOOGLE_STATE_COORD_RE) ?? input.match(GOOGLE_STATE_COORD_FALLBACK_RE);
   if (!match) return null;
 
   const [, _distanceRaw = "", lonRaw = "", latRaw = "", _zoomRaw = ""] = match;
@@ -180,8 +196,27 @@ function parseGoogleStateCoordinatesFromText(input: string): { lat: number; lon:
   return sanitizeCoordinates({ lat, lon });
 }
 
+function parseGoogleStaticMapCenterFromText(input: string): { lat: number; lon: number } | null {
+  if (!input) return null;
+
+  const match = input.match(GOOGLE_STATICMAP_CENTER_RE);
+  if (!match) return null;
+
+  const [, latRaw = "", lonRaw = ""] = match;
+  const lat = Number(latRaw);
+  const lon = Number(lonRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+
+  return sanitizeCoordinates({ lat, lon });
+}
+
 function parseGoogleCoordinatesFromText(input: string): { lat: number; lon: number } | null {
-  return parseGooglePreviewCoordinatesFromText(input) ?? parseGoogleStateCoordinatesFromText(input);
+  return (
+    parseGooglePreviewCoordinatesFromText(input) ??
+    parseGoogleStateCoordinatesFromText(input) ??
+    parseGoogleStaticMapCenterFromText(input)
+  );
 }
 
 async function expandShortMapUrlWithResponse(
@@ -364,9 +399,12 @@ export async function parseSharedMapLinkAsync(
   }
 
   let parsedFromPreviewPayload = parseGoogleCoordinatesFromText(responseText ?? "");
-  if (!parsedFromPreviewPayload && expandedUrl !== extracted) {
-    const expandedPageText = await fetchMapPageText(expandedUrl, options);
-    parsedFromPreviewPayload = parseGoogleCoordinatesFromText(expandedPageText ?? "");
+  if (!parsedFromPreviewPayload) {
+    const fallbackText = await fetchMapPageText(
+      expandedUrl !== extracted ? expandedUrl : extracted,
+      options,
+    );
+    parsedFromPreviewPayload = parseGoogleCoordinatesFromText(fallbackText ?? "");
   }
 
   if (!parsedFromPreviewPayload) return null;
